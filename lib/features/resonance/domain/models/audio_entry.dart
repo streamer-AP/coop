@@ -12,6 +12,9 @@ class AudioEntry with _$AudioEntry {
     String? coverPath,
     @Default(0) int durationMs,
     String? signalFilePath,
+    @Default('audio') String mediaType,
+    @Default([]) List<String> subtitleRefs,
+    DateTime? createdAt,
   }) = _AudioEntry;
 
   factory AudioEntry.fromJson(Map<String, dynamic> json) =>

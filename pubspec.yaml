@@ -28,6 +28,12 @@ dependencies:
   # Audio
   just_audio: ^0.9.43
   audio_service: ^0.18.17
+  audio_session: ^0.1.21
+
+  # File Import
+  file_picker: ^8.1.6
+  archive: ^4.0.2
+  ffmpeg_kit_flutter_audio: ^6.0.3
 
   # Bluetooth
   flutter_blue_plus: ^1.35.3

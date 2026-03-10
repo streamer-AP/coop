@@ -7,6 +7,8 @@ class RouteNames {
   static const register = 'register';
   static const resonance = 'resonance';
   static const resonancePlayer = 'resonance-player';
+  static const collectionDetail = 'collection-detail';
+  static const importScreen = 'import-screen';
   static const controller = 'controller';
   static const waveformEditor = 'waveform-editor';
   static const story = 'story';

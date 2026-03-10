@@ -7,6 +7,7 @@ class AudioEntries extends Table {
   TextColumn get coverPath => text().nullable()();
   IntColumn get durationMs => integer().withDefault(const Constant(0))();
   TextColumn get signalFilePath => text().nullable()();
+  TextColumn get mediaType => text().withDefault(const Constant('audio'))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
@@ -46,6 +47,7 @@ class Subtitles extends Table {
   IntColumn get entryId => integer().references(AudioEntries, #id)();
   TextColumn get language => text()();
   TextColumn get filePath => text()();
+  TextColumn get format => text().withDefault(const Constant('srt'))();
 }
 
 class SignalFiles extends Table {
