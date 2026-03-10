@@ -1,4 +1,4 @@
-/// Common extension methods.
+/// Common extension methods used across the app.
 extension StringExtensions on String {
   /// Capitalize the first letter.
   String capitalize() {
