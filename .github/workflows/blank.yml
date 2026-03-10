@@ -21,6 +21,7 @@ on:
   push:
     # 审查所有分支，只触发代码文件变更
     paths:
+      - '**/*.dart'
       - '**/*.py'
       - '**/*.js'
       - '**/*.ts'
@@ -55,7 +56,7 @@ jobs:
 
           # 获取变更的代码文件
           CHANGED_FILES=$(git diff --name-only ${DIFF_BASE} HEAD -- \
-            '*.py' '*.js' '*.ts' '*.svelte' '*.go' '*.java' '*.rs' \
+            '*.dart' '*.py' '*.js' '*.ts' '*.svelte' '*.go' '*.java' '*.rs' \
             ':!*.test.*' ':!*.spec.*' ':!**/tests/**' \
             2>/dev/null || echo "")
 
@@ -83,7 +84,7 @@ jobs:
 
           # 获取 diff 内容（限制大小 15KB）
           DIFF_CONTENT=$(git diff ${DIFF_BASE} HEAD -- \
-            '*.py' '*.js' '*.ts' '*.svelte' '*.go' '*.java' '*.rs' \
+            '*.dart' '*.py' '*.js' '*.ts' '*.svelte' '*.go' '*.java' '*.rs' \
             ':!*.test.*' ':!*.spec.*' ':!**/tests/**' \
             2>/dev/null | head -c 15000 || echo "")
 
