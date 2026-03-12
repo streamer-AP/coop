@@ -51,14 +51,15 @@ class LocalMusicScannerService {
 
       final entries = <AudioEntry>[];
       for (final song in songs) {
-        if (song.data == null || song.data!.isEmpty) continue;
+        if (song.data.isEmpty) continue;
 
         entries.add(AudioEntry(
           id: song.id,
           title: song.title,
-          filePath: song.data!,
+          filePath: song.data,
           durationMs: song.duration ?? 0,
           coverPath: null, // Will be loaded separately
+          artist: song.artist != '<unknown>' ? song.artist : null,
           createdAt: DateTime.now(),
         ));
       }

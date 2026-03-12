@@ -23,6 +23,7 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
       durationMs: row.durationMs,
       signalFilePath: row.signalFilePath,
       mediaType: row.mediaType,
+      artist: row.artist,
       createdAt: row.createdAt,
     );
   }
@@ -36,6 +37,7 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
       durationMs: Value(entry.durationMs),
       signalFilePath: Value(entry.signalFilePath),
       mediaType: Value(entry.mediaType),
+      artist: Value(entry.artist),
       createdAt:
           entry.createdAt != null ? Value(entry.createdAt!) : const Value.absent(),
     );

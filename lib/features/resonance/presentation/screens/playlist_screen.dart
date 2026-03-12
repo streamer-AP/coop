@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../application/providers/player_providers.dart';
 import '../../domain/models/playlist.dart';
-import '../widgets/audio_entry_tile.dart';
 
 class PlaylistScreen extends ConsumerWidget {
   const PlaylistScreen({super.key});
@@ -12,7 +12,6 @@ class PlaylistScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final playlistSvc = ref.watch(playlistServiceProvider);
     final playlist = playlistSvc.currentPlaylist;
-    final theme = Theme.of(context);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
@@ -21,68 +20,48 @@ class PlaylistScreen extends ConsumerWidget {
       expand: false,
       builder: (context, scrollController) {
         return Container(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(
             children: [
-              _buildHandle(theme),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Playlist (${playlist.length})',
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    _buildRepeatModeChip(ref, playlist.repeatMode, theme),
-                  ],
-                ),
-              ),
+              _buildHandle(),
+              _buildHeader(context, ref, playlist),
+              const Divider(height: 1),
               Expanded(
                 child: playlist.isEmpty
-                    ? const Center(child: Text('Playlist is empty'))
+                    ? const Center(
+                        child: Text(
+                          '播放列表为空',
+                          style: TextStyle(
+                            color: Color(0xFF79747E),
+                            fontSize: 14,
+                          ),
+                        ),
+                      )
                     : ListView.builder(
                         controller: scrollController,
+                        padding: const EdgeInsets.only(top: 4),
                         itemCount: playlist.items.length,
                         itemBuilder: (context, index) {
                           final item = playlist.items[index];
                           final isCurrent = index == playlist.currentIndex;
 
-                          return Dismissible(
-                            key: ValueKey(item.uid),
-                            direction: DismissDirection.endToStart,
-                            background: Container(
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.only(right: 16),
-                              color: theme.colorScheme.errorContainer,
-                              child: Icon(
-                                Icons.delete,
-                                color: theme.colorScheme.onErrorContainer,
-                              ),
-                            ),
-                            onDismissed: (_) {
+                          return _PlaylistItem(
+                            title: item.entry.title,
+                            artist: item.entry.artist ?? '',
+                            isCurrent: isCurrent,
+                            onTap: () {
+                              ref
+                                  .read(playerStateNotifierProvider.notifier)
+                                  .playEntry(item.entry);
+                            },
+                            onRemove: () {
                               ref
                                   .read(playlistServiceProvider)
                                   .removeItem(item.uid);
                             },
-                            child: AudioEntryTile(
-                              entry: item.entry,
-                              onTap: () {
-                                ref
-                                    .read(playerStateNotifierProvider.notifier)
-                                    .playEntry(item.entry);
-                              },
-                              trailing: isCurrent
-                                  ? Icon(
-                                      Icons.equalizer,
-                                      color: theme.colorScheme.primary,
-                                    )
-                                  : null,
-                            ),
                           );
                         },
                       ),
@@ -94,37 +73,193 @@ class PlaylistScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHandle(ThemeData theme) {
+  Widget _buildHandle() {
     return Center(
       child: Container(
         margin: const EdgeInsets.only(top: 8),
         width: 40,
         height: 4,
         decoration: BoxDecoration(
-          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+          color: const Color(0xFFE0E0E0),
           borderRadius: BorderRadius.circular(2),
         ),
       ),
     );
   }
 
-  Widget _buildRepeatModeChip(
+  Widget _buildHeader(
+    BuildContext context,
     WidgetRef ref,
-    RepeatMode mode,
-    ThemeData theme,
+    Playlist playlist,
   ) {
-    final (icon, label) = switch (mode) {
-      RepeatMode.sequential => (Icons.repeat, 'Sequential'),
-      RepeatMode.single => (Icons.repeat_one, 'Single'),
-      RepeatMode.shuffle => (Icons.shuffle, 'Shuffle'),
-    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Row(
+        children: [
+          // Repeat mode button
+          IconButton(
+            icon: _repeatModeIcon(playlist.repeatMode),
+            onPressed: () {
+              ref.read(playerStateNotifierProvider.notifier).cycleRepeatMode();
+            },
+          ),
+          const Expanded(
+            child: Text(
+              '当前播放',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          // Clear button
+          IconButton(
+            icon: const Icon(
+              Icons.delete_outline,
+              color: Color(0xFF49454F),
+            ),
+            onPressed: () => _showClearDialog(context, ref),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return ActionChip(
-      avatar: Icon(icon, size: 18),
-      label: Text(label),
-      onPressed: () {
-        ref.read(playerStateNotifierProvider.notifier).cycleRepeatMode();
-      },
+  Icon _repeatModeIcon(RepeatMode mode) {
+    return switch (mode) {
+      RepeatMode.sequential => const Icon(
+          Icons.repeat,
+          color: Color(0xFF49454F),
+        ),
+      RepeatMode.single => const Icon(
+          Icons.repeat_one,
+          color: AppColors.primary,
+        ),
+      RepeatMode.shuffle => const Icon(
+          Icons.shuffle,
+          color: AppColors.primary,
+        ),
+    };
+  }
+
+  void _showClearDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清空列表'),
+        content: const Text('确定要清空当前播放列表吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(playlistServiceProvider).clear();
+              Navigator.of(ctx).pop();
+            },
+            child: const Text(
+              '清空',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlaylistItem extends StatelessWidget {
+  const _PlaylistItem({
+    required this.title,
+    required this.artist,
+    required this.isCurrent,
+    required this.onTap,
+    required this.onRemove,
+  });
+
+  final String title;
+  final String artist;
+  final bool isCurrent;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: isCurrent
+            ? BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.06),
+              )
+            : null,
+        child: Row(
+          children: [
+            if (isCurrent) ...[
+              const Icon(
+                Icons.equalizer,
+                color: AppColors.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: RichText(
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight:
+                            isCurrent ? FontWeight.w600 : FontWeight.w400,
+                        color: isCurrent
+                            ? AppColors.primary
+                            : const Color(0xFF1C1B1F),
+                      ),
+                    ),
+                    if (artist.isNotEmpty) ...[
+                      TextSpan(
+                        text: ' · ',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isCurrent
+                              ? AppColors.primary.withValues(alpha: 0.7)
+                              : const Color(0xFF79747E),
+                        ),
+                      ),
+                      TextSpan(
+                        text: artist,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isCurrent
+                              ? AppColors.primary.withValues(alpha: 0.7)
+                              : const Color(0xFF79747E),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(
+                Icons.close,
+                size: 18,
+                color: Color(0xFF79747E),
+              ),
+              onPressed: onRemove,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

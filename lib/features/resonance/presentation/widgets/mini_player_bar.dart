@@ -3,118 +3,173 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../application/providers/player_providers.dart';
 
 class MiniPlayerBar extends ConsumerWidget {
   const MiniPlayerBar({
     super.key,
     this.onTap,
+    this.onPlaylistTap,
   });
 
   final VoidCallback? onTap;
+  final VoidCallback? onPlaylistTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerStateNotifierProvider);
     final currentEntry = playerState.currentEntry;
-    final theme = Theme.of(context);
-
-    if (currentEntry == null) return const SizedBox.shrink();
-
-    final progress = playerState.duration.inMilliseconds > 0
-        ? playerState.position.inMilliseconds /
-            playerState.duration.inMilliseconds
-        : 0.0;
+    final hasEntry = currentEntry != null;
+    final isPlaying = playerState.isPlaying;
 
     return GestureDetector(
-      onTap: onTap,
-      onHorizontalDragEnd: (details) {
-        final notifier = ref.read(playerStateNotifierProvider.notifier);
-        if (details.primaryVelocity != null) {
-          if (details.primaryVelocity! < -200) {
-            notifier.next();
-          } else if (details.primaryVelocity! > 200) {
-            notifier.previous();
-          }
-        }
-      },
+      onTap: hasEntry ? onTap : null,
+      onHorizontalDragEnd: hasEntry
+          ? (details) {
+              final notifier =
+                  ref.read(playerStateNotifierProvider.notifier);
+              if (details.primaryVelocity != null) {
+                if (details.primaryVelocity! < -200) {
+                  notifier.next();
+                } else if (details.primaryVelocity! > 200) {
+                  notifier.previous();
+                }
+              }
+            }
+          : null,
       child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHigh,
-          border: Border(
-            top: BorderSide(color: theme.colorScheme.outlineVariant),
-          ),
+          gradient: hasEntry
+              ? AppColors.miniPlayerGradient
+              : const LinearGradient(
+                  colors: [Color(0xFFD0D0D0), Color(0xFFC0C0C0)],
+                ),
+          borderRadius: BorderRadius.circular(40),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            LinearProgressIndicator(
-              value: progress.clamp(0.0, 1.0),
-              minHeight: 2,
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
+            _buildCover(currentEntry?.coverPath, hasEntry),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildCover(theme, currentEntry.coverPath),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      currentEntry.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall,
+                  Text(
+                    hasEntry ? currentEntry.title : '无播放',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: hasEntry ? Colors.white : const Color(0xFF9E9E9E),
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(
-                      playerState.isPlaying ? Icons.pause : Icons.play_arrow,
+                  Text(
+                    hasEntry ? (currentEntry.artist ?? '') : 'nobody',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: hasEntry
+                          ? Colors.white.withValues(alpha: 0.7)
+                          : const Color(0xFFBDBDBD),
                     ),
-                    onPressed: () {
-                      final notifier =
-                          ref.read(playerStateNotifierProvider.notifier);
-                      playerState.isPlaying
-                          ? notifier.pause()
-                          : notifier.play();
-                    },
                   ),
                 ],
               ),
             ),
+            _buildPlayButton(ref, hasEntry, isPlaying),
+            const SizedBox(width: 4),
+            _buildPlaylistButton(hasEntry),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCover(ThemeData theme, String? coverPath) {
+  Widget _buildCover(String? coverPath, bool hasEntry) {
     if (coverPath != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(4),
+      return ClipOval(
         child: Image.file(
           File(coverPath),
-          width: 40,
-          height: 40,
+          width: 44,
+          height: 44,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _placeholderCover(theme),
+          errorBuilder: (_, __, ___) => _placeholderCover(hasEntry),
         ),
       );
     }
-    return _placeholderCover(theme);
+    return _placeholderCover(hasEntry);
   }
 
-  Widget _placeholderCover(ThemeData theme) {
+  Widget _placeholderCover(bool hasEntry) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: hasEntry
+            ? Colors.white.withValues(alpha: 0.2)
+            : const Color(0xFFE0E0E0),
+      ),
+      child: Icon(
+        Icons.music_note,
+        size: 22,
+        color: hasEntry ? Colors.white : const Color(0xFFBDBDBD),
+      ),
+    );
+  }
+
+  Widget _buildPlayButton(WidgetRef ref, bool hasEntry, bool isPlaying) {
     return Container(
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(4),
+        shape: BoxShape.circle,
+        color: hasEntry
+            ? Colors.white.withValues(alpha: 0.2)
+            : const Color(0xFFE0E0E0),
       ),
-      child: Icon(
-        Icons.music_note,
-        size: 20,
-        color: theme.colorScheme.onSurfaceVariant,
+      child: IconButton(
+        icon: Icon(
+          isPlaying ? Icons.pause : Icons.play_arrow,
+          color: hasEntry ? Colors.white : const Color(0xFFBDBDBD),
+          size: 22,
+        ),
+        padding: EdgeInsets.zero,
+        onPressed: hasEntry
+            ? () {
+                final notifier =
+                    ref.read(playerStateNotifierProvider.notifier);
+                isPlaying ? notifier.pause() : notifier.play();
+              }
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildPlaylistButton(bool hasEntry) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: hasEntry
+            ? Colors.white.withValues(alpha: 0.2)
+            : const Color(0xFFE0E0E0),
+      ),
+      child: IconButton(
+        icon: Icon(
+          Icons.queue_music,
+          color: hasEntry ? Colors.white : const Color(0xFFBDBDBD),
+          size: 22,
+        ),
+        padding: EdgeInsets.zero,
+        onPressed: hasEntry ? onPlaylistTap : null,
       ),
     );
   }

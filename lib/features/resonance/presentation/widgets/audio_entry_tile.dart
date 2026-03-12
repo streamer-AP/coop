@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../application/providers/player_providers.dart';
 import '../../domain/models/audio_entry.dart';
 
@@ -11,78 +12,150 @@ class AudioEntryTile extends ConsumerWidget {
     super.key,
     required this.entry,
     this.onTap,
-    this.onLongPress,
+    this.onMoreTap,
     this.trailing,
+    this.showMoreButton = true,
   });
 
   final AudioEntry entry;
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
+  final VoidCallback? onMoreTap;
   final Widget? trailing;
+  final bool showMoreButton;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerStateNotifierProvider);
-    final isPlaying = playerState.currentEntry?.id == entry.id;
+    final isCurrent = playerState.currentEntry?.id == entry.id;
     final theme = Theme.of(context);
 
-    return ListTile(
-      leading: _buildCover(theme),
-      title: Text(
-        entry.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: isPlaying
-            ? TextStyle(color: theme.colorScheme.primary)
-            : null,
-      ),
-      subtitle: Text(
-        _formatDuration(Duration(milliseconds: entry.durationMs)),
-        style: theme.textTheme.bodySmall,
-      ),
-      trailing: trailing ??
-          (isPlaying
-              ? Icon(Icons.equalizer, color: theme.colorScheme.primary)
-              : null),
+    return InkWell(
       onTap: onTap,
-      onLongPress: onLongPress,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: isCurrent
+            ? BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              )
+            : null,
+        child: Row(
+          children: [
+            _buildCover(theme, isCurrent),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    entry.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: isCurrent
+                          ? AppColors.primary
+                          : const Color(0xFF1C1B1F),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    entry.artist ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isCurrent
+                          ? AppColors.primary.withValues(alpha: 0.7)
+                          : const Color(0xFF79747E),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (trailing != null) trailing!,
+            if (trailing == null && showMoreButton)
+              IconButton(
+                icon: const Icon(
+                  Icons.more_vert,
+                  color: Color(0xFF79747E),
+                  size: 20,
+                ),
+                onPressed: onMoreTap,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildCover(ThemeData theme) {
+  Widget _buildCover(ThemeData theme, bool isCurrent) {
+    Widget cover;
     if (entry.coverPath != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(4),
+      cover = ClipRRect(
+        borderRadius: BorderRadius.circular(12),
         child: Image.file(
           File(entry.coverPath!),
-          width: 48,
-          height: 48,
+          width: 56,
+          height: 56,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => _placeholderCover(theme),
         ),
       );
+    } else {
+      cover = _placeholderCover(theme);
     }
-    return _placeholderCover(theme);
+
+    if (isCurrent) {
+      return Stack(
+        children: [
+          cover,
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.equalizer,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return cover;
   }
 
   Widget _placeholderCover(ThemeData theme) {
     return Container(
-      width: 48,
-      height: 48,
+      width: 56,
+      height: 56,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(4),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFD4C4E8),
+            Color(0xFFE8E0F0),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Icon(
+      child: const Icon(
         Icons.music_note,
-        color: theme.colorScheme.onSurfaceVariant,
+        color: Colors.white,
+        size: 28,
       ),
     );
-  }
-
-  String _formatDuration(Duration d) {
-    final minutes = d.inMinutes;
-    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
   }
 }

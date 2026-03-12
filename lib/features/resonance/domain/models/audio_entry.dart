@@ -14,6 +14,7 @@ class AudioEntry with _$AudioEntry {
     String? signalFilePath,
     @Default('audio') String mediaType,
     @Default([]) List<String> subtitleRefs,
+    String? artist,
     DateTime? createdAt,
   }) = _AudioEntry;
 

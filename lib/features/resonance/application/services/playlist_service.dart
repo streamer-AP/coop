@@ -108,6 +108,14 @@ class PlaylistService {
     );
   }
 
+  /// Add an entry to the end of the playlist without changing playhead.
+  void addEntry(AudioEntry entry) {
+    final newItems = List<PlaylistItem>.of(_playlist.items)
+      ..add(PlaylistItem(uid: _uuid.v4(), entry: entry));
+    _playlist = _playlist.copyWith(items: newItems);
+    _emit();
+  }
+
   /// Move to next track. Returns true if there is a next track.
   bool next() {
     if (_playlist.isEmpty) return false;
