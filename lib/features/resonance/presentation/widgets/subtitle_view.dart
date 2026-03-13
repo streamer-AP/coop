@@ -26,14 +26,14 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
     final subtitle = ref.watch(currentSubtitleNotifierProvider);
     final activeCueIndex = ref.watch(activeCueNotifierProvider);
     final followMode = ref.watch(followModeNotifierProvider);
-    final theme = Theme.of(context);
 
     if (subtitle == null || subtitle.cues.isEmpty) {
       return Center(
         child: Text(
-          'No subtitle available',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+          '暂无字幕',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.white.withValues(alpha: 0.5),
           ),
         ),
       );
@@ -69,6 +69,7 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
         controller: _scrollController,
         itemCount: subtitle.cues.length,
         itemExtent: _itemHeight,
+        padding: const EdgeInsets.symmetric(vertical: 8),
         itemBuilder: (context, index) {
           final cue = subtitle.cues[index];
           final isActive = index == activeCueIndex;
@@ -87,11 +88,12 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: isActive
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurfaceVariant,
+                style: TextStyle(
+                  fontSize: isActive ? 18 : 15,
                   fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                  color: isActive
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.45),
                 ),
               ),
             ),

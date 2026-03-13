@@ -1,8 +1,23 @@
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../features/auth/application/providers/auth_providers.dart';
+import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
+import '../../features/message/presentation/screens/message_detail_screen.dart';
+import '../../features/profile/presentation/screens/account_security_screen.dart';
+import '../../features/profile/presentation/screens/app_info_screen.dart';
+import '../../features/profile/presentation/screens/change_password_code_screen.dart';
+import '../../features/profile/presentation/screens/change_password_screen.dart';
+import '../../features/profile/presentation/screens/change_phone_screen.dart';
+import '../../features/profile/presentation/screens/contact_screen.dart';
+import '../../features/profile/presentation/screens/deactivate_account_screen.dart';
+import '../../features/profile/presentation/screens/feedback_screen.dart';
+import '../../features/profile/presentation/screens/privacy_policy_screen.dart';
+import '../../features/profile/presentation/screens/profile_edit_screen.dart';
+import '../../features/profile/presentation/screens/user_agreement_screen.dart';
 import '../../features/resonance/presentation/screens/collection_detail_screen.dart';
 import '../../features/resonance/presentation/screens/import_screen.dart';
 import '../../features/resonance/presentation/screens/player_screen.dart';
@@ -12,14 +27,24 @@ part 'app_router.g.dart';
 
 @riverpod
 GoRouter appRouter(Ref ref) {
+  final notifier = _AuthChangeNotifier(ref);
+
   return GoRouter(
     initialLocation: '/',
+    refreshListenable: notifier,
     routes: [
       GoRoute(
         path: '/',
         name: RouteNames.home,
         builder: (context, state) => const HomeScreen(),
       ),
+      GoRoute(
+        path: '/login',
+        name: RouteNames.login,
+        builder: (context, state) => const LoginScreen(),
+      ),
+
+      // Resonance
       GoRoute(
         path: '/player',
         name: RouteNames.resonancePlayer,
@@ -29,7 +54,7 @@ GoRouter appRouter(Ref ref) {
         path: '/collection/:id',
         name: RouteNames.collectionDetail,
         builder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
           return CollectionDetailScreen(collectionId: id);
         },
       ),
@@ -38,10 +63,109 @@ GoRouter appRouter(Ref ref) {
         name: RouteNames.importScreen,
         builder: (context, state) => const ImportScreen(),
       ),
+
+      // Message
+      GoRoute(
+        path: '/message/:id',
+        name: RouteNames.messageDetail,
+        builder: (context, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return MessageDetailScreen(messageId: id);
+        },
+      ),
+
+      // Profile sub-pages
+      GoRoute(
+        path: '/profile/edit',
+        name: RouteNames.profileEdit,
+        builder: (context, state) => const ProfileEditScreen(),
+      ),
+      GoRoute(
+        path: '/profile/account-security',
+        name: RouteNames.accountSecurity,
+        builder: (context, state) => const AccountSecurityScreen(),
+      ),
+      GoRoute(
+        path: '/profile/change-password',
+        name: RouteNames.changePassword,
+        builder: (context, state) => const ChangePasswordScreen(),
+      ),
+      GoRoute(
+        path: '/profile/change-password-code',
+        name: RouteNames.changePasswordCode,
+        builder: (context, state) => const ChangePasswordCodeScreen(),
+      ),
+      GoRoute(
+        path: '/profile/change-phone',
+        name: RouteNames.changePhone,
+        builder: (context, state) => const ChangePhoneScreen(),
+      ),
+      GoRoute(
+        path: '/profile/feedback',
+        name: RouteNames.feedback,
+        builder: (context, state) => const FeedbackScreen(),
+      ),
+      GoRoute(
+        path: '/profile/contact',
+        name: RouteNames.contact,
+        builder: (context, state) => const ContactScreen(),
+      ),
+      GoRoute(
+        path: '/profile/user-agreement',
+        name: RouteNames.userAgreement,
+        builder: (context, state) => const UserAgreementScreen(),
+      ),
+      GoRoute(
+        path: '/profile/privacy-policy',
+        name: RouteNames.privacyPolicy,
+        builder: (context, state) => const PrivacyPolicyScreen(),
+      ),
+      GoRoute(
+        path: '/profile/app-info',
+        name: RouteNames.appInfo,
+        builder: (context, state) => const AppInfoScreen(),
+      ),
+      GoRoute(
+        path: '/profile/deactivate',
+        name: RouteNames.deactivateAccount,
+        builder: (context, state) => const DeactivateAccountScreen(),
+      ),
     ],
     redirect: (context, state) {
-      // TODO: implement auth guard
+      final authState = ref.read(authNotifierProvider);
+
+      // Don't redirect while auth state is still loading
+      if (authState.isLoading) return null;
+
+      final isLoggedIn = authState.valueOrNull != null;
+      final isLoginRoute = state.matchedLocation == '/login';
+
+      if (!isLoggedIn && !isLoginRoute) {
+        return '/login';
+      }
+
+      if (isLoggedIn && isLoginRoute) {
+        return '/';
+      }
+
       return null;
     },
   );
+}
+
+class _AuthChangeNotifier extends ChangeNotifier {
+  _AuthChangeNotifier(this._ref) {
+    _sub = _ref.listen(authNotifierProvider, (_, __) {
+      notifyListeners();
+    });
+  }
+
+  final Ref _ref;
+  late final ProviderSubscription _sub;
+
+  @override
+  void dispose() {
+    _sub.close();
+    super.dispose();
+  }
 }

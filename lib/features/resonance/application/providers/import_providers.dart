@@ -19,39 +19,99 @@ Future<ImportService> importService(Ref ref) async {
 
 enum ImportStatus { idle, picking, importing, done, error }
 
+typedef ImportState = ({
+  ImportStatus status,
+  ImportResult? result,
+  String? error,
+  int current,
+  int total,
+});
+
+ImportState _importState({
+  required ImportStatus status,
+  ImportResult? result,
+  String? error,
+  int current = 0,
+  int total = 0,
+}) =>
+    (status: status, result: result, error: error, current: current, total: total);
+
 @riverpod
 class ImportProgressNotifier extends _$ImportProgressNotifier {
   @override
-  ({ImportStatus status, ImportResult? result, String? error}) build() {
-    return (status: ImportStatus.idle, result: null, error: null);
+  ImportState build() {
+    return _importState(status: ImportStatus.idle);
   }
 
+  /// Pick regular files and import.
   Future<void> pickAndImport({String? zipPassword}) async {
-    state = (status: ImportStatus.picking, result: null, error: null);
+    state = _importState(status: ImportStatus.picking);
 
     try {
       final importSvc = await ref.read(importServiceProvider.future);
       final paths = await importSvc.pickFiles();
 
       if (paths == null || paths.isEmpty) {
-        state = (status: ImportStatus.idle, result: null, error: null);
+        state = _importState(status: ImportStatus.idle);
         return;
       }
 
-      state = (status: ImportStatus.importing, result: null, error: null);
-
-      final importResult = await importSvc.importFiles(
-        paths,
-        zipPassword: zipPassword,
-      );
-
-      // Persist imported items to database
-      await _persistImportedItems(importResult);
-
-      state = (status: ImportStatus.done, result: importResult, error: null);
+      await _doImport(importSvc, paths, zipPassword: zipPassword);
     } catch (e) {
-      state = (status: ImportStatus.error, result: null, error: '$e');
+      state = _importState(status: ImportStatus.error, error: '$e');
     }
+  }
+
+  /// Pick a zip archive and import.
+  Future<void> pickZipAndImport({String? zipPassword}) async {
+    state = _importState(status: ImportStatus.picking);
+
+    try {
+      final importSvc = await ref.read(importServiceProvider.future);
+      final zipPath = await importSvc.pickZipFile();
+
+      if (zipPath == null) {
+        state = _importState(status: ImportStatus.idle);
+        return;
+      }
+
+      await _doImport(importSvc, [zipPath], zipPassword: zipPassword);
+    } catch (e) {
+      state = _importState(status: ImportStatus.error, error: '$e');
+    }
+  }
+
+  Future<void> _doImport(
+    ImportService importSvc,
+    List<String> paths, {
+    String? zipPassword,
+  }) async {
+    state = _importState(status: ImportStatus.importing);
+
+    // Get existing titles for deduplication (lightweight, titles only)
+    final repo = ref.read(resonanceRepositoryProvider);
+    final existingTitles = await repo.getAllEntryTitles();
+
+    final importResult = await importSvc.importFiles(
+      paths,
+      zipPassword: zipPassword,
+      existingTitles: existingTitles,
+      onProgress: (current, total) {
+        state = _importState(
+          status: ImportStatus.importing,
+          current: current,
+          total: total,
+        );
+      },
+    );
+
+    // Persist imported items to database
+    await _persistImportedItems(importResult);
+
+    // Cleanup extracted zip temp dirs
+    await importSvc.cleanupExtractedDirs();
+
+    state = _importState(status: ImportStatus.done, result: importResult);
   }
 
   Future<void> _persistImportedItems(ImportResult result) async {
@@ -63,6 +123,7 @@ class ImportProgressNotifier extends _$ImportProgressNotifier {
         title: item.title,
         filePath: item.filePath,
         coverPath: item.coverPath,
+        mediaType: item.mediaType,
       ));
 
       if (item.subtitlePath != null) {
@@ -85,6 +146,6 @@ class ImportProgressNotifier extends _$ImportProgressNotifier {
   }
 
   void reset() {
-    state = (status: ImportStatus.idle, result: null, error: null);
+    state = _importState(status: ImportStatus.idle);
   }
 }

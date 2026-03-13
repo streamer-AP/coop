@@ -1,5 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'verification_status.dart';
+
 part 'user.freezed.dart';
 part 'user.g.dart';
 
@@ -10,6 +12,8 @@ class User with _$User {
     required String phone,
     String? nickname,
     @Default(false) bool isVerified,
+    @Default(VerificationStatus.unverified)
+    VerificationStatus verificationStatus,
   }) = _User;
 
   factory User.fromJson(Map<String, dynamic> json) => _$UserFromJson(json);

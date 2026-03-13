@@ -8,6 +8,9 @@ import 'package:path/path.dart' as p;
 import '../../../../core/logging/app_logger.dart';
 import '../../domain/models/import_result.dart';
 
+/// Callback for reporting import progress: (current, total).
+typedef ImportProgressCallback = void Function(int current, int total);
+
 /// File import service: handles file selection, zip extraction,
 /// and automatic matching of audio with subtitle/cover/signal files.
 class ImportService {
@@ -18,23 +21,25 @@ class ImportService {
     'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm',
   };
   static const _subtitleExtensions = {
-    'srt', 'vtt', 'lrc', 'sub', 'stl',
+    'srt', 'vtt', 'lrc', 'sub', 'stl', 'txt',
   };
   static const _coverExtensions = {
     'jpg', 'jpeg', 'png', 'tiff', 'tif', 'bmp', 'webp',
+    'gif', 'heif', 'heic', 'hdr',
   };
   static const _signalExtensions = {'json'};
 
-  static const _subtitlePriority = ['srt', 'vtt', 'sub', 'stl', 'lrc'];
+  static const _subtitlePriority = ['srt', 'vtt', 'sub', 'stl', 'lrc', 'txt'];
   static const _coverPriority = [
-    'jpeg', 'jpg', 'png', 'tiff', 'tif', 'bmp', 'webp',
+    'jpeg', 'jpg', 'png', 'tiff', 'tif', 'gif', 'webp',
+    'bmp', 'heif', 'heic', 'hdr',
   ];
 
   final String _importDir;
 
   ImportService({required String importDirectory}) : _importDir = importDirectory;
 
-  /// Pick files using the system file picker.
+  /// Pick regular files (non-zip) using the system file picker.
   Future<List<String>?> pickFiles() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
@@ -46,11 +51,24 @@ class ImportService {
         .toList();
   }
 
+  /// Pick a single zip archive.
+  Future<String?> pickZipFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: ['zip'],
+    );
+    if (result == null || result.files.isEmpty) return null;
+    return result.files.first.path;
+  }
+
   /// Import files from a list of paths.
   /// For zip files, extracts and processes contents.
   Future<ImportResult> importFiles(
     List<String> paths, {
     String? zipPassword,
+    ImportProgressCallback? onProgress,
+    List<String>? existingTitles,
   }) async {
     final succeeded = <ImportedItem>[];
     final failed = <ImportFailure>[];
@@ -75,7 +93,7 @@ class ImportService {
       } catch (e) {
         failed.add(ImportFailure(
           fileName: p.basename(zipPath),
-          reason: 'Failed to extract: $e',
+          reason: '解压失败: $e',
         ));
       }
     }
@@ -86,37 +104,49 @@ class ImportService {
     final coverFiles = <String>[];
     final signalFiles = <String>[];
 
-    for (final path in regularFiles) {
-      final ext = p.extension(path).toLowerCase().replaceFirst('.', '');
+    for (final filePath in regularFiles) {
+      final ext = p.extension(filePath).toLowerCase().replaceFirst('.', '');
       if (_audioExtensions.contains(ext) || _videoExtensions.contains(ext)) {
-        audioFiles.add(path);
+        audioFiles.add(filePath);
       } else if (_subtitleExtensions.contains(ext)) {
-        subtitleFiles.add(path);
+        subtitleFiles.add(filePath);
       } else if (_coverExtensions.contains(ext)) {
-        coverFiles.add(path);
+        coverFiles.add(filePath);
       } else if (_signalExtensions.contains(ext)) {
-        signalFiles.add(path);
+        signalFiles.add(filePath);
       }
     }
 
+    // Track used titles for deduplication
+    final usedTitles = <String>{...?existingTitles};
+
     // Auto-match for each audio file
-    for (final audioPath in audioFiles) {
+    for (var i = 0; i < audioFiles.length; i++) {
+      final audioPath = audioFiles[i];
+      onProgress?.call(i + 1, audioFiles.length);
+
       try {
         final destPath = await _copyToImportDir(audioPath);
-        final baseName = _baseName(audioPath);
+        final rawTitle = _baseName(audioPath);
+        final title = _deduplicateTitle(rawTitle, usedTitles);
+        usedTitles.add(title);
+
+        // Determine media type
+        final ext = p.extension(audioPath).toLowerCase().replaceFirst('.', '');
+        final mediaType = _videoExtensions.contains(ext) ? 'video' : 'audio';
 
         final matchedSubtitle = _findBestMatch(
-          baseName,
+          rawTitle,
           subtitleFiles,
           _subtitlePriority,
         );
         final matchedCover = _findBestMatch(
-          baseName,
+          rawTitle,
           coverFiles,
           _coverPriority,
         );
         final matchedSignal = _findBestMatch(
-          baseName,
+          rawTitle,
           signalFiles,
           null,
         );
@@ -136,11 +166,12 @@ class ImportService {
         }
 
         succeeded.add(ImportedItem(
-          title: _baseName(audioPath),
+          title: title,
           filePath: destPath,
           coverPath: coverDest,
           subtitlePath: subtitleDest,
           signalPath: signalDest,
+          mediaType: mediaType,
         ));
       } catch (e) {
         failed.add(ImportFailure(
@@ -155,6 +186,18 @@ class ImportService {
     );
 
     return ImportResult(succeeded: succeeded, failed: failed);
+  }
+
+  /// Deduplicate title by appending numeric suffix.
+  /// e.g. "file" → "file", "file" → "file1", "file" → "file2"
+  String _deduplicateTitle(String title, Set<String> usedTitles) {
+    if (!usedTitles.contains(title)) return title;
+
+    var counter = 1;
+    while (usedTitles.contains('$title$counter')) {
+      counter++;
+    }
+    return '$title$counter';
   }
 
   /// Auto-matching algorithm:
@@ -218,11 +261,26 @@ class ImportService {
 
   Future<String> _copyToImportDir(String sourcePath) async {
     final fileName = p.basename(sourcePath);
-    final destPath = p.join(_importDir, fileName);
+    var destPath = p.join(_importDir, fileName);
     final destFile = File(destPath);
 
     if (!await destFile.parent.exists()) {
       await destFile.parent.create(recursive: true);
+    }
+
+    // Handle file name conflicts
+    if (await File(destPath).exists()) {
+      final baseName = p.basenameWithoutExtension(fileName);
+      final ext = p.extension(fileName);
+      var counter = 1;
+      const maxAttempts = 100;
+      do {
+        destPath = p.join(_importDir, '$baseName($counter)$ext');
+        counter++;
+      } while (await File(destPath).exists() && counter <= maxAttempts);
+      if (counter > maxAttempts && await File(destPath).exists()) {
+        throw Exception('文件名冲突次数超过上限: $fileName');
+      }
     }
 
     await File(sourcePath).copy(destPath);
@@ -258,5 +316,17 @@ class ImportService {
     }
 
     return extractedPaths;
+  }
+
+  /// Clean up extracted zip temp directories.
+  Future<void> cleanupExtractedDirs() async {
+    final dir = Directory(_importDir);
+    if (!await dir.exists()) return;
+
+    await for (final entity in dir.list()) {
+      if (entity is Directory && p.basename(entity.path).startsWith('_extracted_')) {
+        await entity.delete(recursive: true);
+      }
+    }
   }
 }

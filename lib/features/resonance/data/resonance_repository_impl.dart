@@ -77,6 +77,12 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
   }
 
   @override
+  Future<List<String>> getAllEntryTitles() async {
+    final rows = await _dao.getAllEntries();
+    return rows.map((r) => r.title).toList();
+  }
+
+  @override
   Stream<List<AudioEntry>> watchAllEntries() {
     return _dao.watchAllEntries().map(
           (rows) => rows.map(_mapEntry).toList(),

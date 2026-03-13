@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../application/providers/player_providers.dart';
 
 class SeekBar extends ConsumerStatefulWidget {
@@ -18,7 +19,6 @@ class _SeekBarState extends ConsumerState<SeekBar> {
     final playerState = ref.watch(playerStateNotifierProvider);
     final position = playerState.position;
     final duration = playerState.duration;
-    final theme = Theme.of(context);
 
     final maxSeconds = duration.inMilliseconds > 0
         ? duration.inMilliseconds.toDouble()
@@ -27,18 +27,29 @@ class _SeekBarState extends ConsumerState<SeekBar> {
 
     return Column(
       children: [
-        Slider(
-          value: currentValue.clamp(0, maxSeconds),
-          max: maxSeconds,
-          onChanged: (value) {
-            setState(() => _dragValue = value);
-          },
-          onChangeEnd: (value) {
-            ref
-                .read(playerStateNotifierProvider.notifier)
-                .seekTo(Duration(milliseconds: value.toInt()));
-            setState(() => _dragValue = null);
-          },
+        SliderTheme(
+          data: SliderThemeData(
+            trackHeight: 3,
+            activeTrackColor: Colors.white,
+            inactiveTrackColor: Colors.white.withValues(alpha: 0.25),
+            thumbColor: Colors.white,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            overlayColor: AppColors.primary.withValues(alpha: 0.2),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+          ),
+          child: Slider(
+            value: currentValue.clamp(0, maxSeconds),
+            max: maxSeconds,
+            onChanged: (value) {
+              setState(() => _dragValue = value);
+            },
+            onChangeEnd: (value) {
+              ref
+                  .read(playerStateNotifierProvider.notifier)
+                  .seekTo(Duration(milliseconds: value.toInt()));
+              setState(() => _dragValue = null);
+            },
+          ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -51,11 +62,17 @@ class _SeekBarState extends ConsumerState<SeekBar> {
                       ? Duration(milliseconds: _dragValue!.toInt())
                       : position,
                 ),
-                style: theme.textTheme.bodySmall,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
               ),
               Text(
                 _formatDuration(duration),
-                style: theme.textTheme.bodySmall,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
               ),
             ],
           ),

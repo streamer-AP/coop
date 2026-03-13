@@ -9,6 +9,8 @@ class Profile with _$Profile {
     required String userId,
     String? nickname,
     String? avatarUrl,
+    String? phone,
+    String? avatarPreset,
     @Default(false) bool isVerified,
     @Default([]) List<String> boundDeviceIds,
   }) = _Profile;

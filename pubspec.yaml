@@ -55,6 +55,9 @@ dependencies:
   collection: ^1.19.1
   logger: ^2.5.0
 
+  # Image
+  image_picker: ^1.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -67,3 +70,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/avatars/

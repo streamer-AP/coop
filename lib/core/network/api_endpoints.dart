@@ -8,6 +8,7 @@ class ApiEndpoints {
   static const String login = '/auth/login';
   static const String register = '/auth/register';
   static const String verifyIdentity = '/auth/verify-identity';
+  static const String sendCode = '/auth/send-code';
 
   // Permission
   static const String permissions = '/permissions';
@@ -22,4 +23,20 @@ class ApiEndpoints {
 
   // Story
   static const String storyProgress = '/story/progress';
+
+  // Profile
+  static const String profile = '/user/profile';
+  static const String updateNickname = '/user/nickname';
+  static const String updateAvatar = '/user/avatar';
+  static const String changePassword = '/user/change-password';
+  static const String changePasswordByCode = '/user/change-password-code';
+  static const String changePhone = '/user/change-phone';
+  static const String feedback = '/user/feedback';
+  static const String checkUpdate = '/app/check-update';
+  static const String deactivateAccount = '/user/deactivate';
+
+  // Message
+  static const String messages = '/messages';
+  static const String markMessageRead = '/messages/read';
+  static const String markAllMessagesRead = '/messages/read-all';
 }

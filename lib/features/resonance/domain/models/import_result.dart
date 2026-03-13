@@ -10,6 +10,7 @@ class ImportedItem with _$ImportedItem {
     String? coverPath,
     String? subtitlePath,
     String? signalPath,
+    @Default('audio') String mediaType,
   }) = _ImportedItem;
 }
 

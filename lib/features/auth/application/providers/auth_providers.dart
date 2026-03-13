@@ -1,9 +1,12 @@
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import '../../domain/models/user.dart';
-import '../../domain/repositories/auth_repository.dart';
-import '../../data/auth_repository_impl.dart';
+
 import '../../../../core/network/api_client.dart';
+import '../../data/auth_repository_impl.dart';
+import '../../domain/models/user.dart';
+import '../../domain/models/verification_result.dart';
+import '../../domain/models/verification_status.dart';
+import '../../domain/repositories/auth_repository.dart';
 
 part 'auth_providers.g.dart';
 
@@ -35,5 +38,32 @@ class AuthNotifier extends _$AuthNotifier {
   Future<void> logout() async {
     await ref.read(authRepositoryProvider).logout();
     state = const AsyncData(null);
+  }
+
+  Future<VerificationResult> verifyIdentity({
+    required String name,
+    required String idNumber,
+  }) async {
+    final result = await ref
+        .read(authRepositoryProvider)
+        .verifyIdentity(name: name, idNumber: idNumber);
+
+    if (result.status == VerificationStatus.verified) {
+      final currentUser = state.valueOrNull;
+      if (currentUser != null) {
+        state = AsyncData(
+          currentUser.copyWith(
+            isVerified: true,
+            verificationStatus: VerificationStatus.verified,
+          ),
+        );
+      }
+    }
+
+    return result;
+  }
+
+  Future<void> sendVerificationCode(String phone) async {
+    await ref.read(authRepositoryProvider).sendVerificationCode(phone);
   }
 }

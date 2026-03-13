@@ -6,6 +6,7 @@ abstract class ResonanceRepository {
   // ── AudioEntries ──────────────────────────────────────────────────────
 
   Future<List<AudioEntry>> getAllEntries();
+  Future<List<String>> getAllEntryTitles();
   Stream<List<AudioEntry>> watchAllEntries();
   Future<AudioEntry?> getEntry(int id);
   Future<int> insertEntry(AudioEntry entry);

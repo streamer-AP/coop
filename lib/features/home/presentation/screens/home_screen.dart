@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../../core/router/route_names.dart';
-import '../../../resonance/presentation/screens/resonance_screen.dart';
-import '../../../resonance/presentation/widgets/mini_player_bar.dart';
+import '../../../../shared/widgets/omao_tab_bar.dart';
+import '../../../message/presentation/screens/message_list_screen.dart';
+import '../../../profile/presentation/screens/profile_screen.dart';
+import '../widgets/home_page.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -17,88 +17,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
 
   static const _tabs = [
-    _HomePlaceholder(),
-    ResonanceScreen(),
-    _ControllerPlaceholder(),
-    _ProfilePlaceholder(),
+    HomePage(),
+    MessageListScreen(),
+    ProfileScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _tabs,
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
+      body: Stack(
         children: [
-          MiniPlayerBar(
-            onTap: () => context.pushNamed(RouteNames.resonancePlayer),
+          IndexedStack(
+            index: _currentIndex,
+            children: _tabs,
           ),
-          NavigationBar(
-            selectedIndex: _currentIndex,
-            onDestinationSelected: (index) {
-              setState(() => _currentIndex = index);
-            },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home),
-                label: 'Home',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.music_note_outlined),
-                selectedIcon: Icon(Icons.music_note),
-                label: 'Resonance',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.gamepad_outlined),
-                selectedIcon: Icon(Icons.gamepad),
-                label: 'Controller',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.person_outline),
-                selectedIcon: Icon(Icons.person),
-                label: 'Profile',
-              ),
-            ],
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: OmaoTabBar(
+              currentIndex: _currentIndex,
+              onTap: (index) {
+                setState(() => _currentIndex = index);
+              },
+            ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _HomePlaceholder extends StatelessWidget {
-  const _HomePlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text('Home')),
-    );
-  }
-}
-
-class _ControllerPlaceholder extends StatelessWidget {
-  const _ControllerPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text('Controller')),
-    );
-  }
-}
-
-class _ProfilePlaceholder extends StatelessWidget {
-  const _ProfilePlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text('Profile')),
     );
   }
 }
