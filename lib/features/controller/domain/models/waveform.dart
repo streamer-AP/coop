@@ -1,19 +1,20 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
-part 'custom_waveform.freezed.dart';
-part 'custom_waveform.g.dart';
+part 'waveform.freezed.dart';
+part 'waveform.g.dart';
 
 @freezed
-class CustomWaveform with _$CustomWaveform {
-  const factory CustomWaveform({
+class Waveform with _$Waveform {
+  const factory Waveform({
     required int id,
     required String name,
-    @Default(32000) int durationMs,
+    @Default(8000) int durationMs,
+    @Default(true) bool isBuiltIn,
     @Default([]) List<WaveformKeyframe> keyframes,
-  }) = _CustomWaveform;
+  }) = _Waveform;
 
-  factory CustomWaveform.fromJson(Map<String, dynamic> json) =>
-      _$CustomWaveformFromJson(json);
+  factory Waveform.fromJson(Map<String, dynamic> json) =>
+      _$WaveformFromJson(json);
 }
 
 @freezed
