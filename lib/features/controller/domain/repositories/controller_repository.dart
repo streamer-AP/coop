@@ -1,10 +1,33 @@
-import '../models/waveform_preset.dart';
-import '../models/custom_waveform.dart';
+import '../models/waveform.dart';
+import '../models/favorite_slot.dart';
+import '../models/device_binding.dart';
+import '../models/usage_log.dart';
 
 abstract class ControllerRepository {
-  Future<List<WaveformPreset>> getAllPresets();
-  Future<List<CustomWaveform>> getAllCustomWaveforms();
-  Future<int> saveCustomWaveform(CustomWaveform waveform);
-  Future<void> deleteCustomWaveform(int id);
+  // --- 波形 CRUD ---
+  Future<List<Waveform>> getAllWaveforms();
+  Future<Waveform?> getWaveformById(int id);
+  Future<int> saveWaveform(Waveform waveform);
+  Future<void> deleteWaveform(int id);
+
+  // --- 常用波形配置（12 槽位）---
+  Future<List<FavoriteSlot>> getAllFavoriteSlots();
+  Future<void> setFavoriteSlot(FavoriteSlot slot);
+  Future<void> removeFavoriteSlot({required int page, required int index});
+  Future<void> reorderFavoriteSlotsOnPage(int page, List<FavoriteSlot> slots);
+
+  // --- 设备绑定 ---
+  Future<DeviceBinding?> getActiveDeviceBinding();
+  Future<List<DeviceBinding>> getAllDeviceBindings();
+  Future<void> saveDeviceBinding(DeviceBinding binding);
+  Future<void> deactivateAllBindings();
+
+  // --- 使用日志 ---
+  Future<void> insertUsageLog(UsageLog log);
+  Future<List<UsageLog>> getUnsynced();
+  Future<void> markSynced(List<int> ids);
+
+  // --- 云同步 ---
   Future<void> syncToCloud();
+  Future<void> syncFromCloud();
 }

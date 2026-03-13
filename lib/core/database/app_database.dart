@@ -24,9 +24,10 @@ part 'app_database.g.dart';
     Subtitles,
     SignalFiles,
     // Controller
-    WaveformPresets,
-    CustomWaveforms,
+    Waveforms,
     WaveformKeyframes,
+    FavoriteSlots,
+    UsageLogs,
     // Story
     StoryProgresses,
     StoryCheckpoints,
@@ -41,13 +42,26 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (m) async {
         await m.createAll();
+      },
+      onUpgrade: (m, from, to) async {
+        if (from < 2) {
+          // v1 → v2: 统一波形表，新增常用槽位和使用日志
+          // TODO: implement migration —
+          //   1. 创建新的 Waveforms 表并迁移 WaveformPresets + CustomWaveforms 数据
+          //   2. 迁移 WaveformKeyframes 的外键引用
+          //   3. 创建 FavoriteSlots 表
+          //   4. 创建 UsageLogs 表
+          //   5. 删除旧的 WaveformPresets 和 CustomWaveforms 表
+          await m.createTable(favoriteSlots);
+          await m.createTable(usageLogs);
+        }
       },
     );
   }

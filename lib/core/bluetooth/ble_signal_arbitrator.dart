@@ -1,6 +1,8 @@
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'models/ble_signal.dart';
+import 'ble_connection_manager.dart';
+import 'ble_device_protocol.dart';
 import 'ble_signal_sender.dart';
 
 part 'ble_signal_arbitrator.g.dart';
@@ -40,5 +42,8 @@ class BleSignalArbitrator {
 
 @Riverpod(keepAlive: true)
 BleSignalArbitrator bleSignalArbitrator(Ref ref) {
-  return BleSignalArbitrator(BleSignalSender());
+  final connectionManager = ref.watch(bleConnectionManagerProvider);
+  final protocol = BleDeviceProtocol();
+  final sender = BleSignalSender(connectionManager, protocol);
+  return BleSignalArbitrator(sender);
 }
