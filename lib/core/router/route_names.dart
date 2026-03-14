@@ -5,6 +5,8 @@ class RouteNames {
   static const home = 'home';
   static const login = 'login';
   static const register = 'register';
+  static const setupPassword = 'setup-password';
+  static const forgotPassword = 'forgot-password';
   static const resonance = 'resonance';
   static const resonancePlayer = 'resonance-player';
   static const collectionDetail = 'collection-detail';

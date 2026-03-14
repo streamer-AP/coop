@@ -4,7 +4,10 @@ import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../features/auth/application/providers/auth_providers.dart';
+import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/auth/presentation/screens/setup_password_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/message/presentation/screens/message_detail_screen.dart';
 import '../../features/profile/presentation/screens/account_security_screen.dart';
@@ -42,6 +45,21 @@ GoRouter appRouter(Ref ref) {
         path: '/login',
         name: RouteNames.login,
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/register',
+        name: RouteNames.register,
+        builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/setup-password',
+        name: RouteNames.setupPassword,
+        builder: (context, state) => const SetupPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        name: RouteNames.forgotPassword,
+        builder: (context, state) => const ForgotPasswordScreen(),
       ),
 
       // Resonance
@@ -138,13 +156,22 @@ GoRouter appRouter(Ref ref) {
       if (authState.isLoading) return null;
 
       final isLoggedIn = authState.valueOrNull != null;
-      final isLoginRoute = state.matchedLocation == '/login';
+      final location = state.matchedLocation;
+      const publicRoutes = [
+        '/login',
+        '/register',
+        '/setup-password',
+        '/forgot-password',
+        '/profile/user-agreement',
+        '/profile/privacy-policy',
+      ];
+      final isPublicRoute = publicRoutes.contains(location);
 
-      if (!isLoggedIn && !isLoginRoute) {
+      if (!isLoggedIn && !isPublicRoute) {
         return '/login';
       }
 
-      if (isLoggedIn && isLoginRoute) {
+      if (isLoggedIn && location == '/login') {
         return '/';
       }
 

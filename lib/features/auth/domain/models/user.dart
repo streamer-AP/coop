@@ -11,7 +11,9 @@ class User with _$User {
     required String id,
     required String phone,
     String? nickname,
+    String? token,
     @Default(false) bool isVerified,
+    @Default(false) bool needsPasswordSetup,
     @Default(VerificationStatus.unverified)
     VerificationStatus verificationStatus,
   }) = _User;

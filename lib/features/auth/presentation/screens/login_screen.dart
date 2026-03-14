@@ -9,6 +9,9 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../application/providers/auth_providers.dart';
+import '../../domain/models/auth_exception.dart';
+
+enum _LoginMode { code, password }
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -20,22 +23,30 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
+  final _passwordController = TextEditingController();
   Timer? _timer;
   int _remaining = 0;
   bool _agreedToTerms = false;
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  _LoginMode _mode = _LoginMode.code;
 
   bool get _canSendCode =>
       _remaining == 0 && _phoneController.text.length >= 11;
 
-  bool get _canLogin =>
-      _phoneController.text.length >= 11 &&
-      _codeController.text.length == 6 &&
-      _agreedToTerms;
+  bool get _canLogin {
+    if (_phoneController.text.length < 11 || !_agreedToTerms) return false;
+    return switch (_mode) {
+      _LoginMode.code => _codeController.text.length == 6,
+      _LoginMode.password => _passwordController.text.length >= 6,
+    };
+  }
 
   @override
   void dispose() {
     _phoneController.dispose();
     _codeController.dispose();
+    _passwordController.dispose();
     _timer?.cancel();
     super.dispose();
   }
@@ -45,12 +56,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref
           .read(authNotifierProvider.notifier)
           .sendVerificationCode(_phoneController.text);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('验证码发送失败，请重试')),
-        );
-      }
+    } catch (e) {
+      if (mounted) _showError(_extractErrorMessage(e));
       return;
     }
     setState(() => _remaining = 60);
@@ -67,19 +74,63 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _login() async {
-    await ref.read(authNotifierProvider.notifier).login(
-          phone: _phoneController.text,
-          code: _codeController.text,
-        );
-    _timer?.cancel();
-    final authState = ref.read(authNotifierProvider);
-    if (authState.hasError && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('登录失败，请重试')),
-      );
+    if (!_agreedToTerms) {
+      _showError('请先阅读并同意用户协议和隐私政策');
       return;
     }
-    // Navigation handled by GoRouter redirect via refreshListenable
+    setState(() => _isLoading = true);
+
+    try {
+      if (_mode == _LoginMode.code) {
+        await ref.read(authNotifierProvider.notifier).loginWithCode(
+              phone: _phoneController.text,
+              code: _codeController.text,
+            );
+      } else {
+        await ref.read(authNotifierProvider.notifier).loginWithPassword(
+              phone: _phoneController.text,
+              password: _passwordController.text,
+            );
+      }
+    } catch (_) {
+      // Error handled below
+    }
+
+    _timer?.cancel();
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    final authState = ref.read(authNotifierProvider);
+    if (authState.hasError) {
+      _showError(_extractErrorMessage(authState.error));
+      return;
+    }
+
+    // Check if user needs password setup
+    final user = authState.valueOrNull;
+    if (user?.needsPasswordSetup == true && mounted) {
+      context.pushNamed(RouteNames.setupPassword);
+    }
+    // Otherwise navigation handled by GoRouter redirect
+  }
+
+  String _extractErrorMessage(Object? error) {
+    if (error is AuthException) return error.displayMessage;
+    return '操作失败，请重试';
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
   }
 
   @override
@@ -91,7 +142,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -115,39 +166,78 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 48),
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '手机号登录',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      _buildPhoneField(),
-                      const SizedBox(height: 20),
-                      _buildCodeField(),
-                      const SizedBox(height: 28),
-                      _buildLoginButton(),
-                    ],
-                  ),
-                ),
+                _buildCard(),
                 const SizedBox(height: 24),
                 _buildAgreement(),
+                const SizedBox(height: 40),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildModeSwitch(),
+          const SizedBox(height: 24),
+          _buildPhoneField(),
+          const SizedBox(height: 20),
+          if (_mode == _LoginMode.code) _buildCodeField(),
+          if (_mode == _LoginMode.password) _buildPasswordField(),
+          const SizedBox(height: 28),
+          _buildLoginButton(),
+          const SizedBox(height: 16),
+          _buildFooterLinks(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeSwitch() {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _mode = _LoginMode.code),
+          child: Text(
+            '验证码登录',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: _mode == _LoginMode.code
+                  ? FontWeight.w600
+                  : FontWeight.w400,
+              color: _mode == _LoginMode.code
+                  ? AppColors.textPrimary
+                  : AppColors.textHint,
+            ),
+          ),
+        ),
+        const SizedBox(width: 24),
+        GestureDetector(
+          onTap: () => setState(() => _mode = _LoginMode.password),
+          child: Text(
+            '密码登录',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: _mode == _LoginMode.password
+                  ? FontWeight.w600
+                  : FontWeight.w400,
+              color: _mode == _LoginMode.password
+                  ? AppColors.textPrimary
+                  : AppColors.textHint,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -234,15 +324,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  Widget _buildPasswordField() {
+    return TextField(
+      controller: _passwordController,
+      obscureText: _obscurePassword,
+      decoration: InputDecoration(
+        hintText: '请输入密码',
+        hintStyle: const TextStyle(color: AppColors.textHint),
+        suffixIcon: IconButton(
+          icon: Icon(
+            _obscurePassword ? Icons.visibility_off : Icons.visibility,
+            size: 20,
+            color: AppColors.textHint,
+          ),
+          onPressed: () =>
+              setState(() => _obscurePassword = !_obscurePassword),
+        ),
+        border: const UnderlineInputBorder(),
+        enabledBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+        ),
+      ),
+      onChanged: (_) => setState(() {}),
+    );
+  }
+
   Widget _buildLoginButton() {
+    final enabled = _canLogin && !_isLoading;
     return SizedBox(
       width: double.infinity,
       child: GestureDetector(
-        onTap: _canLogin ? _login : null,
+        onTap: enabled ? _login : null,
         child: Container(
           height: 48,
           decoration: BoxDecoration(
-            gradient: _canLogin
+            gradient: enabled
                 ? AppColors.purpleButtonGradient
                 : const LinearGradient(
                     colors: [Color(0xFFCCCCCC), Color(0xFFDDDDDD)],
@@ -250,16 +366,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             borderRadius: BorderRadius.circular(24),
           ),
           alignment: Alignment.center,
-          child: const Text(
-            '登录',
+          child: _isLoading
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text(
+                  '登录',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFooterLinks() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        if (_mode == _LoginMode.password)
+          GestureDetector(
+            onTap: () => context.pushNamed(RouteNames.forgotPassword),
+            child: const Text(
+              '忘记密码',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          )
+        else
+          const SizedBox.shrink(),
+        GestureDetector(
+          onTap: () => context.pushNamed(RouteNames.register),
+          child: Text(
+            '注册账号',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
+              fontSize: 13,
+              color: AppColors.primary.withValues(alpha: 0.8),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 

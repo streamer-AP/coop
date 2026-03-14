@@ -58,6 +58,9 @@ dependencies:
   # Image
   image_picker: ^1.1.2
 
+  # Storage
+  shared_preferences: ^2.3.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
