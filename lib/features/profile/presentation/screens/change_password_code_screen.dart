@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/purple_gradient_button.dart';
 import '../../../../shared/widgets/verification_code_input.dart';
+import '../../../auth/application/providers/auth_providers.dart';
+import '../../application/providers/profile_providers.dart';
 
 class ChangePasswordCodeScreen extends ConsumerStatefulWidget {
   const ChangePasswordCodeScreen({super.key});
@@ -54,7 +56,9 @@ class _ChangePasswordCodeScreenState
                 phoneController: _phoneController,
                 codeController: _codeController,
                 onSendCode: () {
-                  // TODO: send verification code
+                  ref
+                      .read(authNotifierProvider.notifier)
+                      .sendVerificationCode(_phoneController.text);
                 },
               ),
               const SizedBox(height: 24),
@@ -104,8 +108,25 @@ class _ChangePasswordCodeScreenState
     );
   }
 
-  void _submit() {
-    // TODO: validate and call provider
-    Navigator.of(context).pop();
+  void _submit() async {
+    try {
+      await ref.read(profileRepositoryProvider).changePasswordByCode(
+            phone: _phoneController.text,
+            code: _codeController.text,
+            newPassword: _newPasswordController.text,
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('密码修改成功')),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('修改失败，请重试')),
+        );
+      }
+    }
   }
 }

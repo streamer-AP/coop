@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/api_endpoints.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../application/providers/auth_providers.dart';
@@ -72,8 +74,21 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   }
 
   Future<void> _resetPassword(String code) async {
-    // TODO(api): call resetPassword API with phone, code, newPassword
-    await Future.delayed(const Duration(milliseconds: 500));
+    try {
+      await ref.read(apiClientProvider).post(
+        ApiEndpoints.resetPassword,
+        data: {
+          'mobile': _phoneController.text,
+          'code': code,
+          'newPassword': _passwordController.text,
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        TopBannerToast.show(context, message: '重置失败，请重试');
+      }
+      return;
+    }
 
     if (!mounted) return;
 

@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/purple_gradient_button.dart';
 import '../../../../shared/widgets/verification_code_input.dart';
+import '../../../auth/application/providers/auth_providers.dart';
+import '../../application/providers/profile_providers.dart';
 
 class ChangePhoneScreen extends ConsumerStatefulWidget {
   const ChangePhoneScreen({super.key});
@@ -77,7 +79,9 @@ class _ChangePhoneScreenState extends ConsumerState<ChangePhoneScreen> {
             phoneController: _oldPhoneController,
             codeController: _oldCodeController,
             onSendCode: () {
-              // TODO: send code to old phone
+              ref
+                  .read(authNotifierProvider.notifier)
+                  .sendVerificationCode(_oldPhoneController.text);
             },
           ),
           const SizedBox(height: 40),
@@ -108,7 +112,9 @@ class _ChangePhoneScreenState extends ConsumerState<ChangePhoneScreen> {
             phoneController: _newPhoneController,
             codeController: _newCodeController,
             onSendCode: () {
-              // TODO: send code to new phone
+              ref
+                  .read(authNotifierProvider.notifier)
+                  .sendVerificationCode(_newPhoneController.text);
             },
           ),
           const SizedBox(height: 40),
@@ -116,9 +122,27 @@ class _ChangePhoneScreenState extends ConsumerState<ChangePhoneScreen> {
             width: double.infinity,
             child: PurpleGradientButton(
               text: '确定修改',
-              onPressed: () {
-                // TODO: call change phone provider
-                Navigator.of(context).pop();
+              onPressed: () async {
+                try {
+                  await ref.read(profileRepositoryProvider).changePhone(
+                        oldPhone: _oldPhoneController.text,
+                        oldCode: _oldCodeController.text,
+                        newPhone: _newPhoneController.text,
+                        newCode: _newCodeController.text,
+                      );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('手机号修改成功')),
+                    );
+                    Navigator.of(context).pop();
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('修改失败，请重试')),
+                    );
+                  }
+                }
               },
             ),
           ),

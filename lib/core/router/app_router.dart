@@ -9,6 +9,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/password_login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/setup_password_screen.dart';
+import '../../features/controller/presentation/screens/controller_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/message/presentation/screens/message_detail_screen.dart';
 import '../../features/profile/presentation/screens/account_security_screen.dart';
@@ -25,6 +26,8 @@ import '../../features/profile/presentation/screens/user_agreement_screen.dart';
 import '../../features/resonance/presentation/screens/collection_detail_screen.dart';
 import '../../features/resonance/presentation/screens/import_screen.dart';
 import '../../features/resonance/presentation/screens/player_screen.dart';
+import '../../features/resonance/presentation/screens/resonance_screen.dart';
+import '../../features/story/presentation/screens/story_screen.dart';
 import 'route_names.dart';
 
 part 'app_router.g.dart';
@@ -70,6 +73,11 @@ GoRouter appRouter(Ref ref) {
 
       // Resonance
       GoRoute(
+        path: '/resonance',
+        name: RouteNames.resonance,
+        builder: (context, state) => const ResonanceScreen(),
+      ),
+      GoRoute(
         path: '/player',
         name: RouteNames.resonancePlayer,
         builder: (context, state) => const PlayerScreen(),
@@ -96,6 +104,20 @@ GoRouter appRouter(Ref ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
           return MessageDetailScreen(messageId: id);
         },
+      ),
+
+      // Controller
+      GoRoute(
+        path: '/controller',
+        name: RouteNames.controller,
+        builder: (context, state) => const ControllerScreen(),
+      ),
+
+      // Story
+      GoRoute(
+        path: '/story',
+        name: RouteNames.story,
+        builder: (context, state) => const StoryScreen(),
       ),
 
       // Profile sub-pages

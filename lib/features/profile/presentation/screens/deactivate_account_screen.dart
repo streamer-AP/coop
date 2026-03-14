@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/purple_gradient_button.dart';
 import '../../../../shared/widgets/verification_code_input.dart';
+import '../../../auth/application/providers/auth_providers.dart';
+import '../../application/providers/profile_providers.dart';
 
 class DeactivateAccountScreen extends ConsumerStatefulWidget {
   const DeactivateAccountScreen({super.key});
@@ -49,7 +51,9 @@ class _DeactivateAccountScreenState
                 phoneController: _phoneController,
                 codeController: _codeController,
                 onSendCode: () {
-                  // TODO: send verification code
+                  ref
+                      .read(authNotifierProvider.notifier)
+                      .sendVerificationCode(_phoneController.text);
                 },
               ),
               const SizedBox(height: 40),
@@ -127,7 +131,8 @@ class _DeactivateAccountScreenState
                     child: GestureDetector(
                       onTap: () {
                         Navigator.of(ctx).pop();
-                        // TODO: export resources then deactivate
+                        // Export then deactivate — for now just deactivate
+                        _doDeactivate();
                       },
                       child: Container(
                         height: 44,
@@ -155,8 +160,21 @@ class _DeactivateAccountScreenState
     );
   }
 
-  void _doDeactivate() {
-    // TODO: call deactivate provider
-    Navigator.of(context).pop();
+  void _doDeactivate() async {
+    try {
+      await ref.read(profileRepositoryProvider).deactivateAccount(
+            phone: _phoneController.text,
+            code: _codeController.text,
+          );
+      if (context.mounted) {
+        await ref.read(authNotifierProvider.notifier).logout();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('注销失败，请重试')),
+        );
+      }
+    }
   }
 }

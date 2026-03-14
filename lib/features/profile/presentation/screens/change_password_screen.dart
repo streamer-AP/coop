@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../application/providers/profile_providers.dart';
 
 class ChangePasswordScreen extends ConsumerWidget {
   const ChangePasswordScreen({super.key});
@@ -211,7 +212,7 @@ class _OriginalPasswordScreenState
     );
   }
 
-  void _submit() {
+  void _submit() async {
     if (_newPasswordController.text != _confirmPasswordController.text) {
       setState(() => _errorText = '两次输入的密码不一致');
       return;
@@ -220,7 +221,19 @@ class _OriginalPasswordScreenState
       setState(() => _errorText = '密码长度至少6位');
       return;
     }
-    // TODO: call changePassword via provider
-    Navigator.of(context).pop();
+    try {
+      await ref.read(profileRepositoryProvider).changePassword(
+            oldPassword: _oldPasswordController.text,
+            newPassword: _newPasswordController.text,
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('密码修改成功')),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      setState(() => _errorText = '原密码输入错误');
+    }
   }
 }

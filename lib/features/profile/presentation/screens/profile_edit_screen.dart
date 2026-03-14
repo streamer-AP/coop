@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../application/providers/profile_providers.dart';
@@ -135,13 +136,22 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     showModalBottomSheet(
       context: context,
       builder: (_) => AvatarPickerSheet(
-        onGallerySelected: () {
-          // TODO: implement image picker
-        },
-        onCameraSelected: () {
-          // TODO: implement camera
-        },
+        onGallerySelected: () => _pickImage(ImageSource.gallery),
+        onCameraSelected: () => _pickImage(ImageSource.camera),
       ),
     );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: source,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 80,
+    );
+    if (image != null) {
+      ref.read(profileNotifierProvider.notifier).updateAvatar(image.path);
+    }
   }
 }

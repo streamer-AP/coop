@@ -28,7 +28,6 @@ class AudioEntryTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerStateNotifierProvider);
     final isCurrent = playerState.currentEntry?.id == entry.id;
-    final isPlaying = isCurrent && playerState.isPlaying;
     final theme = Theme.of(context);
 
     return InkWell(
