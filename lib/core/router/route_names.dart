@@ -4,6 +4,7 @@ class RouteNames {
 
   static const home = 'home';
   static const login = 'login';
+  static const passwordLogin = 'password-login';
   static const register = 'register';
   static const setupPassword = 'setup-password';
   static const forgotPassword = 'forgot-password';

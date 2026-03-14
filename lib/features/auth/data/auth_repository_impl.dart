@@ -1,5 +1,8 @@
+import 'package:dio/dio.dart';
+
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_endpoints.dart';
 import '../../../core/storage/token_storage.dart';
 import '../domain/models/auth_exception.dart';
 import '../domain/models/user.dart';
@@ -18,26 +21,14 @@ class AuthRepositoryImpl implements AuthRepository {
     required String phone,
     required String code,
   }) async {
-    // TODO(api): replace mock with real API call
-    _logMock('loginWithCode');
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    if (code != '123456' && code != '000000') {
-      throw const AuthException(
-        code: AuthErrorCode.invalidCode,
-        message: '验证码错误',
-        errorCount: 1,
-      );
+    final json = await _post(ApiEndpoints.loginByCode, {
+      'mobile': phone,
+      'code': code,
+    });
+    final user = _parseUserResponse(json);
+    if (user.token != null) {
+      await _tokenStorage.saveToken(user.token!);
     }
-
-    final user = User(
-      id: 'demo_${phone.hashCode}',
-      phone: phone,
-      nickname: '昵称${phone.substring(phone.length - 4)}',
-      token: 'mock_token_$phone',
-      needsPasswordSetup: false,
-    );
-    await _tokenStorage.saveToken(user.token!);
     return user;
   }
 
@@ -46,25 +37,14 @@ class AuthRepositoryImpl implements AuthRepository {
     required String phone,
     required String password,
   }) async {
-    // TODO(api): replace mock with real API call
-    _logMock('loginWithPassword');
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    if (password.length < 6) {
-      throw const AuthException(
-        code: AuthErrorCode.invalidPassword,
-        message: '密码错误',
-        errorCount: 1,
-      );
+    final json = await _post(ApiEndpoints.loginByPassword, {
+      'mobile': phone,
+      'password': password,
+    });
+    final user = _parseUserResponse(json);
+    if (user.token != null) {
+      await _tokenStorage.saveToken(user.token!);
     }
-
-    final user = User(
-      id: 'demo_${phone.hashCode}',
-      phone: phone,
-      nickname: '昵称${phone.substring(phone.length - 4)}',
-      token: 'mock_token_$phone',
-    );
-    await _tokenStorage.saveToken(user.token!);
     return user;
   }
 
@@ -73,40 +53,29 @@ class AuthRepositoryImpl implements AuthRepository {
     required String phone,
     required String code,
   }) async {
-    // TODO(api): replace mock with real API call
-    _logMock('register');
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    if (code != '123456' && code != '000000') {
-      throw const AuthException(
-        code: AuthErrorCode.invalidCode,
-        message: '验证码错误',
-      );
+    final json = await _post(ApiEndpoints.register, {
+      'mobile': phone,
+      'code': code,
+    });
+    final user = _parseUserResponse(json).copyWith(needsPasswordSetup: true);
+    if (user.token != null) {
+      await _tokenStorage.saveToken(user.token!);
     }
-
-    final user = User(
-      id: 'new_${phone.hashCode}',
-      phone: phone,
-      nickname: '昵称${phone.substring(phone.length - 4)}',
-      token: 'mock_token_$phone',
-      needsPasswordSetup: true,
-    );
-    await _tokenStorage.saveToken(user.token!);
     return user;
   }
 
   @override
   Future<void> setupPassword({required String password}) async {
-    // TODO(api): replace mock with real API call
-    _logMock('setupPassword');
-    await Future.delayed(const Duration(milliseconds: 300));
+    await _post(ApiEndpoints.setupPassword, {
+      'password': password,
+    });
   }
 
   @override
   Future<void> sendVerificationCode(String phone) async {
-    // TODO(api): replace mock with real API call
-    _logMock('sendVerificationCode');
-    await Future.delayed(const Duration(milliseconds: 300));
+    await _post(ApiEndpoints.sendCode, {
+      'mobile': phone,
+    });
   }
 
   @override
@@ -114,16 +83,48 @@ class AuthRepositoryImpl implements AuthRepository {
     required String name,
     required String idNumber,
   }) async {
-    // TODO(api): replace mock with real API call
-    _logMock('verifyIdentity');
-    await Future.delayed(const Duration(milliseconds: 500));
-    return const VerificationResult(
-      status: VerificationStatus.verified,
-    );
+    final json = await _post(ApiEndpoints.realNameVerify, {
+      'residentIdCard': idNumber,
+      'residentIdCardName': name,
+    });
+
+    final code = json['code'] as int?;
+    final data = json['data'] as Map<String, dynamic>?;
+
+    if (code == 200 && data != null) {
+      final isAdult = data['isAdult'] as bool? ?? false;
+      return VerificationResult(
+        status: isAdult
+            ? VerificationStatus.verified
+            : VerificationStatus.underage,
+        message: data['message'] as String?,
+      );
+    }
+
+    // Error codes from docs
+    return switch (code) {
+      1007 => const VerificationResult(
+          status: VerificationStatus.underage,
+          message: '您仍然未成年',
+        ),
+      1000 => const VerificationResult(
+          status: VerificationStatus.verified,
+          message: '您实名验证已成功',
+        ),
+      _ => VerificationResult(
+          status: VerificationStatus.failed,
+          message: json['message'] as String? ?? '认证失败',
+        ),
+    };
   }
 
   @override
   Future<void> logout() async {
+    try {
+      await _post(ApiEndpoints.logout, {});
+    } catch (_) {
+      // Logout locally even if server call fails
+    }
     await _tokenStorage.clearToken();
   }
 
@@ -132,14 +133,36 @@ class AuthRepositoryImpl implements AuthRepository {
     final token = await _tokenStorage.getToken();
     if (token == null) return null;
 
-    // TODO(api): validate token with server, return user profile
-    _logMock('getCurrentUser (from token)');
-    return User(
-      id: 'restored',
-      phone: '***',
-      nickname: '已登录用户',
-      token: token,
-    );
+    try {
+      final json = await _apiClient.get(ApiEndpoints.getCurrentUserInfo);
+      final code = json['code'] as int?;
+      if (code == 200 && json['data'] != null) {
+        final data = json['data'] as Map<String, dynamic>;
+        final residentStatus = data['residentStatus'] as String? ?? '0';
+        return User(
+          id: '${data['id'] ?? ''}',
+          phone: data['mobile'] as String? ?? '',
+          nickname: data['userName'] as String?,
+          token: token,
+          verificationStatus: switch (residentStatus) {
+            '1' => VerificationStatus.verified,
+            '2' => VerificationStatus.underage,
+            _ => VerificationStatus.unverified,
+          },
+          isVerified: residentStatus == '1',
+        );
+      }
+    } catch (e) {
+      AppLogger().warning('getCurrentUser failed: $e');
+      // Token might be expired
+      if (e is DioException && e.response?.statusCode == 401) {
+        await _tokenStorage.clearToken();
+        return null;
+      }
+    }
+
+    // Fallback: return minimal user from token
+    return User(id: '', phone: '', token: token);
   }
 
   @override
@@ -151,10 +174,83 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<String?> getToken() => _tokenStorage.getToken();
 
-  void _logMock(String method) {
-    assert(() {
-      AppLogger().warning('AuthRepositoryImpl.$method() using mock data');
-      return true;
-    }());
+  // ── Helpers ──
+
+  Future<Map<String, dynamic>> _post(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final json = await _apiClient.post(path, data: body);
+      final code = json['code'] as int?;
+
+      if (code == 200) return json;
+
+      // Map server error codes to AuthException
+      throw AuthException.fromServerError({
+        'code': _mapServerCode(code),
+        'message': json['message'] as String? ?? '请求失败',
+        'error_count': json['errorCount'],
+        'retry_after': json['retryAfter'],
+      });
+    } on AuthException {
+      rethrow;
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.connectionError) {
+        throw const AuthException(
+          code: AuthErrorCode.networkError,
+          message: '网络连接失败',
+        );
+      }
+      final data = e.response?.data;
+      if (data is Map<String, dynamic>) {
+        throw AuthException.fromServerError({
+          'code': _mapServerCode(data['code'] as int?),
+          'message': data['message'] as String? ?? '请求失败',
+        });
+      }
+      throw AuthException(
+        code: AuthErrorCode.unknown,
+        message: e.message ?? '请求失败',
+      );
+    }
+  }
+
+  String? _mapServerCode(int? code) {
+    return switch (code) {
+      1001 => 'ACCOUNT_NOT_REGISTERED',
+      1002 => 'INVALID_PHONE',
+      1003 => 'INVALID_CODE',
+      1004 => 'INVALID_PASSWORD',
+      1005 => 'ACCOUNT_ALREADY_REGISTERED',
+      1006 => 'INVALID_PHONE',
+      1008 => 'ACCOUNT_LOCKED',
+      1009 => 'TOO_MANY_REQUESTS',
+      1010 => 'PASSWORD_MISMATCH',
+      1011 => 'NEEDS_PASSWORD_SETUP',
+      _ => null,
+    };
+  }
+
+  User _parseUserResponse(Map<String, dynamic> json) {
+    final data = json['data'] as Map<String, dynamic>? ?? {};
+    final token = data['token'] as String? ?? data['accessToken'] as String?;
+    final residentStatus = data['residentStatus'] as String? ?? '0';
+
+    return User(
+      id: '${data['id'] ?? data['userId'] ?? ''}',
+      phone: data['mobile'] as String? ?? '',
+      nickname: data['userName'] as String?,
+      token: token,
+      needsPasswordSetup: data['needsPasswordSetup'] as bool? ?? false,
+      verificationStatus: switch (residentStatus) {
+        '1' => VerificationStatus.verified,
+        '2' => VerificationStatus.underage,
+        _ => VerificationStatus.unverified,
+      },
+      isVerified: residentStatus == '1',
+    );
   }
 }

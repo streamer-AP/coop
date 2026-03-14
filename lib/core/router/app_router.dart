@@ -6,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../features/auth/application/providers/auth_providers.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/password_login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/setup_password_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
@@ -45,6 +46,11 @@ GoRouter appRouter(Ref ref) {
         path: '/login',
         name: RouteNames.login,
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/password-login',
+        name: RouteNames.passwordLogin,
+        builder: (context, state) => const PasswordLoginScreen(),
       ),
       GoRoute(
         path: '/register',
@@ -159,6 +165,7 @@ GoRouter appRouter(Ref ref) {
       final location = state.matchedLocation;
       const publicRoutes = [
         '/login',
+        '/password-login',
         '/register',
         '/setup-password',
         '/forgot-password',

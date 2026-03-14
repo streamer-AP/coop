@@ -1,12 +1,12 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../shared/widgets/purple_gradient_button.dart';
+import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../application/providers/auth_providers.dart';
+import '../../domain/models/auth_exception.dart';
+import 'verification_code_screen.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -18,88 +18,135 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _phoneController = TextEditingController();
-  final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
-  Timer? _timer;
-  int _remaining = 0;
   bool _isLoading = false;
-  bool _obscure1 = true;
-  bool _obscure2 = true;
-  String? _errorText;
 
-  bool get _canSendCode =>
-      _remaining == 0 && _phoneController.text.length >= 11;
-
-  bool get _canSubmit =>
+  bool get _canProceed =>
       _phoneController.text.length >= 11 &&
-      _codeController.text.length == 6 &&
       _passwordController.text.length >= 6 &&
       _confirmController.text.isNotEmpty;
 
   @override
   void dispose() {
     _phoneController.dispose();
-    _codeController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
-    _timer?.cancel();
     super.dispose();
   }
 
-  Future<void> _startCountdown() async {
+  Future<void> _sendCodeAndNavigate() async {
+    if (_passwordController.text != _confirmController.text) {
+      TopBannerToast.show(context, message: '密码输入不一致，请重新输入');
+      return;
+    }
+
+    setState(() => _isLoading = true);
     try {
       await ref
           .read(authNotifierProvider.notifier)
           .sendVerificationCode(_phoneController.text);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('验证码发送失败')),
-        );
-      }
-      return;
-    }
-    setState(() => _remaining = 60);
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      setState(() {
-        _remaining--;
-        if (_remaining <= 0) timer.cancel();
-      });
-    });
-  }
-
-  Future<void> _submit() async {
-    if (_passwordController.text != _confirmController.text) {
-      setState(() => _errorText = '两次密码不一致');
-      return;
-    }
-    setState(() {
-      _isLoading = true;
-      _errorText = null;
-    });
-
-    try {
-      // TODO(api): call resetPassword API
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('密码重置成功，请重新登录')),
-        );
-        Navigator.of(context).pop();
-      }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorText = '重置失败，请重试';
-        });
+        setState(() => _isLoading = false);
+        TopBannerToast.show(
+          context,
+          message: e is AuthException ? e.displayMessage : '验证码发送失败',
+        );
       }
+      return;
     }
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VerificationCodeScreen(
+          phone: _phoneController.text,
+          title: '重置密码',
+          onVerified: (code) => _resetPassword(code),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _resetPassword(String code) async {
+    // TODO(api): call resetPassword API with phone, code, newPassword
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (!mounted) return;
+
+    // Show success dialog
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppColors.primary.withValues(alpha: 0.08),
+                Colors.white,
+              ],
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.check_circle,
+                size: 48,
+                color: AppColors.success,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '密码重置成功',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  // Pop back to login
+                  Navigator.of(context)
+                    ..pop() // pop verification code screen
+                    ..pop(); // pop forgot password screen
+                },
+                child: Container(
+                  width: 160,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.purpleButtonGradient,
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    '确定',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -112,17 +159,35 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
-          title: const Text('忘记密码'),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios, size: 20),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ),
         body: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const SizedBox(height: 16),
+              const Text(
+                '重置密码',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                'Password',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontStyle: FontStyle.italic,
+                  color: AppColors.textHint.withValues(alpha: 0.5),
+                ),
+              ),
+              const SizedBox(height: 40),
+              // Phone
               const Text(
                 '输入手机号码',
                 style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
@@ -135,12 +200,25 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(11),
                 ],
+                style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
                 decoration: InputDecoration(
                   prefixText: '+86 | ',
                   prefixStyle: const TextStyle(
                     fontSize: 16,
                     color: AppColors.textPrimary,
                   ),
+                  hintText: '请输入手机号码',
+                  hintStyle: const TextStyle(color: AppColors.textHint),
+                  suffixIcon: _phoneController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.cancel,
+                              size: 18, color: AppColors.textHint),
+                          onPressed: () {
+                            _phoneController.clear();
+                            setState(() {});
+                          },
+                        )
+                      : null,
                   border: const UnderlineInputBorder(),
                   enabledBorder: const UnderlineInputBorder(
                     borderSide: BorderSide(color: Color(0xFFE0E0E0)),
@@ -149,58 +227,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 24),
-              const Text(
-                '输入验证码',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _codeController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(6),
-                      ],
-                      decoration: const InputDecoration(
-                        border: UnderlineInputBorder(),
-                        enabledBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFFE0E0E0)),
-                        ),
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: _canSendCode ? _startCountdown : null,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _canSendCode
-                            ? AppColors.primary.withValues(alpha: 0.1)
-                            : const Color(0xFFF0F0F0),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _remaining > 0 ? '已发送(${_remaining}s)' : '获取验证码',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: _canSendCode
-                              ? AppColors.primary
-                              : AppColors.textHint,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
+              // New password
               const Text(
                 '输入新密码',
                 style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
@@ -208,24 +235,30 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _passwordController,
-                obscureText: _obscure1,
+                obscureText: true,
+                style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
                 decoration: InputDecoration(
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscure1 ? Icons.visibility_off : Icons.visibility,
-                      size: 20,
-                      color: AppColors.textHint,
-                    ),
-                    onPressed: () => setState(() => _obscure1 = !_obscure1),
-                  ),
+                  hintText: '请输入新密码',
+                  hintStyle: const TextStyle(color: AppColors.textHint),
+                  suffixIcon: _passwordController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.cancel,
+                              size: 18, color: AppColors.textHint),
+                          onPressed: () {
+                            _passwordController.clear();
+                            setState(() {});
+                          },
+                        )
+                      : null,
                   border: const UnderlineInputBorder(),
                   enabledBorder: const UnderlineInputBorder(
                     borderSide: BorderSide(color: Color(0xFFE0E0E0)),
                   ),
                 ),
-                onChanged: (_) => setState(() => _errorText = null),
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 24),
+              // Confirm password
               const Text(
                 '再次输入新密码',
                 style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
@@ -233,38 +266,65 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _confirmController,
-                obscureText: _obscure2,
+                obscureText: true,
+                style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
                 decoration: InputDecoration(
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscure2 ? Icons.visibility_off : Icons.visibility,
-                      size: 20,
-                      color: AppColors.textHint,
-                    ),
-                    onPressed: () => setState(() => _obscure2 = !_obscure2),
-                  ),
+                  hintText: '再次输入新密码',
+                  hintStyle: const TextStyle(color: AppColors.textHint),
+                  suffixIcon: _confirmController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.cancel,
+                              size: 18, color: AppColors.textHint),
+                          onPressed: () {
+                            _confirmController.clear();
+                            setState(() {});
+                          },
+                        )
+                      : null,
                   border: const UnderlineInputBorder(),
                   enabledBorder: const UnderlineInputBorder(
                     borderSide: BorderSide(color: Color(0xFFE0E0E0)),
                   ),
                 ),
-                onChanged: (_) => setState(() => _errorText = null),
+                onChanged: (_) => setState(() {}),
               ),
-              if (_errorText != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    _errorText!,
-                    style: const TextStyle(fontSize: 13, color: AppColors.error),
-                  ),
-                ),
               const SizedBox(height: 40),
+              // Send code button
               SizedBox(
                 width: double.infinity,
-                child: PurpleGradientButton(
-                  text: '确认',
-                  enabled: _canSubmit && !_isLoading,
-                  onPressed: _submit,
+                child: GestureDetector(
+                  onTap: (_canProceed && !_isLoading)
+                      ? _sendCodeAndNavigate
+                      : null,
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: _canProceed
+                          ? AppColors.purpleButtonGradient
+                          : const LinearGradient(
+                              colors: [Color(0xFFCCCCCC), Color(0xFFDDDDDD)],
+                            ),
+                      borderRadius: BorderRadius.circular(26),
+                    ),
+                    alignment: Alignment.center,
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            '发送验证码',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
                 ),
               ),
             ],

@@ -5,10 +5,19 @@ class ApiEndpoints {
   static const String baseUrl = 'https://api.omao.com'; // TODO: configure
 
   // Auth
-  static const String login = '/auth/login';
+  static const String loginByCode = '/auth/loginByCode';
+  static const String loginByPassword = '/auth/loginByPassword';
   static const String register = '/auth/register';
-  static const String verifyIdentity = '/auth/verify-identity';
-  static const String sendCode = '/auth/send-code';
+  static const String setupPassword = '/auth/setupPassword';
+  static const String resetPassword = '/auth/resetPassword';
+  static const String changePassword = '/auth/changePassword';
+  static const String sendCode = '/auth/sendCode';
+  static const String logout = '/auth/logout';
+  static const String deactivateAccount = '/auth/deactivate';
+  static const String getCurrentUserInfo = '/auth/getCurrentUserInfo';
+
+  // Identity verification
+  static const String realNameVerify = '/userAccounts/realNameVerify';
 
   // Permission
   static const String permissions = '/permissions';
@@ -28,15 +37,15 @@ class ApiEndpoints {
   static const String profile = '/user/profile';
   static const String updateNickname = '/user/nickname';
   static const String updateAvatar = '/user/avatar';
-  static const String changePassword = '/user/change-password';
-  static const String changePasswordByCode = '/user/change-password-code';
   static const String changePhone = '/user/change-phone';
   static const String feedback = '/user/feedback';
   static const String checkUpdate = '/app/check-update';
-  static const String deactivateAccount = '/user/deactivate';
 
   // Message
   static const String messages = '/messages';
   static const String markMessageRead = '/messages/read';
   static const String markAllMessagesRead = '/messages/read-all';
+
+  // Resource
+  static const String downloadUrl = '/encrypted/downloadUrl';
 }

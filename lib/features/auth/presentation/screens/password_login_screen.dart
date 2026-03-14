@@ -9,85 +9,60 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../application/providers/auth_providers.dart';
 import '../../domain/models/auth_exception.dart';
-import 'verification_code_screen.dart';
 
-class RegisterScreen extends ConsumerStatefulWidget {
-  const RegisterScreen({super.key});
+class PasswordLoginScreen extends ConsumerStatefulWidget {
+  const PasswordLoginScreen({super.key});
 
   @override
-  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
+  ConsumerState<PasswordLoginScreen> createState() =>
+      _PasswordLoginScreenState();
 }
 
-class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+class _PasswordLoginScreenState extends ConsumerState<PasswordLoginScreen> {
   final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _agreedToTerms = false;
   bool _isLoading = false;
+  bool _obscure = true;
+
+  bool get _canLogin =>
+      _phoneController.text.length >= 11 &&
+      _passwordController.text.length >= 6;
 
   @override
   void dispose() {
     _phoneController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _sendCodeAndNavigate() async {
+  Future<void> _login() async {
     if (!_agreedToTerms) {
-      TopBannerToast.show(context, message: '注册前请先阅读并同意相关协议');
+      TopBannerToast.show(context, message: '登录或注册前请先阅读并同意相关协议');
       return;
     }
-    if (_phoneController.text.length < 11) return;
 
     setState(() => _isLoading = true);
     try {
-      await ref
-          .read(authNotifierProvider.notifier)
-          .sendVerificationCode(_phoneController.text);
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        TopBannerToast.show(
-          context,
-          message: e is AuthException ? e.displayMessage : '验证码发送失败',
-        );
-      }
-      return;
-    }
+      await ref.read(authNotifierProvider.notifier).loginWithPassword(
+            phone: _phoneController.text,
+            password: _passwordController.text,
+          );
+    } catch (_) {}
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => VerificationCodeScreen(
-          phone: _phoneController.text,
-          title: '验证码注册',
-          onVerified: (code) => _registerWithCode(code),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _registerWithCode(String code) async {
-    await ref.read(authNotifierProvider.notifier).register(
-          phone: _phoneController.text,
-          code: code,
-        );
-
-    if (!mounted) return;
     final authState = ref.read(authNotifierProvider);
     if (authState.hasError) {
       TopBannerToast.show(
         context,
         message: authState.error is AuthException
             ? (authState.error as AuthException).displayMessage
-            : '注册失败',
+            : '手机号或密码错误，请重新输入',
       );
-      return;
     }
-
-    // Navigate to setup username + password
-    if (mounted) {
-      context.goNamed(RouteNames.setupPassword);
-    }
+    // GoRouter redirect handles successful navigation
   }
 
   @override
@@ -112,7 +87,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             children: [
               const SizedBox(height: 16),
               const Text(
-                '账号注册',
+                '密码登录',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
@@ -120,7 +95,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
               ),
               Text(
-                'Sign Up',
+                'Password',
                 style: TextStyle(
                   fontSize: 16,
                   fontStyle: FontStyle.italic,
@@ -128,6 +103,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
               ),
               const SizedBox(height: 40),
+              // Phone field
               const Text(
                 '手机号码',
                 style: TextStyle(
@@ -155,6 +131,69 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                   hintText: '请输入手机号码',
                   hintStyle: const TextStyle(color: AppColors.textHint),
+                  suffixIcon: _phoneController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.cancel,
+                              size: 18, color: AppColors.textHint),
+                          onPressed: () {
+                            _phoneController.clear();
+                            setState(() {});
+                          },
+                        )
+                      : null,
+                  border: const UnderlineInputBorder(),
+                  enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 24),
+              // Password field
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    '密码',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () =>
+                        context.pushNamed(RouteNames.forgotPassword),
+                    child: const Text(
+                      '忘记密码',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscure,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: AppColors.textPrimary,
+                ),
+                decoration: InputDecoration(
+                  hintText: '请输入密码',
+                  hintStyle: const TextStyle(color: AppColors.textHint),
+                  suffixIcon: _passwordController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.cancel,
+                              size: 18, color: AppColors.textHint),
+                          onPressed: () {
+                            _passwordController.clear();
+                            setState(() {});
+                          },
+                        )
+                      : null,
                   border: const UnderlineInputBorder(),
                   enabledBorder: const UnderlineInputBorder(
                     borderSide: BorderSide(color: Color(0xFFE0E0E0)),
@@ -163,19 +202,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 40),
+              // Login button
               SizedBox(
                 width: double.infinity,
                 child: GestureDetector(
-                  onTap: (_phoneController.text.length >= 11 && !_isLoading)
-                      ? _sendCodeAndNavigate
-                      : null,
+                  onTap: (_canLogin && !_isLoading) ? _login : null,
                   child: Container(
                     height: 52,
                     decoration: BoxDecoration(
-                      gradient: _phoneController.text.length >= 11
+                      gradient: _canLogin
                           ? AppColors.purpleButtonGradient
                           : const LinearGradient(
-                              colors: [Color(0xFFCCCCCC), Color(0xFFDDDDDD)],
+                              colors: [
+                                Color(0xFFCCCCCC),
+                                Color(0xFFDDDDDD),
+                              ],
                             ),
                       borderRadius: BorderRadius.circular(26),
                     ),
@@ -190,7 +231,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             ),
                           )
                         : const Text(
-                            '发送验证码',
+                            '登录',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
