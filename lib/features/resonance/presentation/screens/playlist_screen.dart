@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../application/providers/player_providers.dart';
 import '../../domain/models/playlist.dart';
+import '../widgets/audio_wave_animation.dart';
 
 class PlaylistScreen extends ConsumerWidget {
   const PlaylistScreen({super.key});
@@ -146,25 +147,95 @@ class PlaylistScreen extends ConsumerWidget {
   void _showClearDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('清空列表'),
-        content: const Text('确定要清空当前播放列表吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              ref.read(playlistServiceProvider).clear();
-              Navigator.of(ctx).pop();
-            },
-            child: const Text(
-              '清空',
-              style: TextStyle(color: Colors.red),
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppColors.primary.withValues(alpha: 0.08),
+                Colors.white,
+              ],
             ),
           ),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '提示',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '确定要清空播放列表吗？',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Color(0xFF1C1B1F),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(ctx).pop(),
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F0F0),
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Text(
+                          '取消',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Color(0xFF1C1B1F),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        ref.read(playlistServiceProvider).clear();
+                        Navigator.of(ctx).pop();
+                      },
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.purpleButtonGradient,
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Text(
+                          '清空',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -199,10 +270,9 @@ class _PlaylistItem extends StatelessWidget {
         child: Row(
           children: [
             if (isCurrent) ...[
-              const Icon(
-                Icons.equalizer,
+              const AudioWaveAnimation(
                 color: AppColors.primary,
-                size: 20,
+                size: 18,
               ),
               const SizedBox(width: 8),
             ],

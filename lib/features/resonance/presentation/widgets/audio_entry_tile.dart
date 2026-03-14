@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../application/providers/player_providers.dart';
 import '../../domain/models/audio_entry.dart';
+import 'audio_wave_animation.dart';
 
 class AudioEntryTile extends ConsumerWidget {
   const AudioEntryTile({
@@ -27,6 +28,7 @@ class AudioEntryTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerStateNotifierProvider);
     final isCurrent = playerState.currentEntry?.id == entry.id;
+    final isPlaying = isCurrent && playerState.isPlaying;
     final theme = Theme.of(context);
 
     return InkWell(
@@ -121,8 +123,7 @@ class AudioEntryTile extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Center(
-                child: Icon(
-                  Icons.equalizer,
+                child: AudioWaveAnimation(
                   color: Colors.white,
                   size: 24,
                 ),

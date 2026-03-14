@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../application/providers/player_providers.dart';
 
-class MiniPlayerBar extends ConsumerWidget {
+class MiniPlayerBar extends ConsumerStatefulWidget {
   const MiniPlayerBar({
     super.key,
     this.onTap,
@@ -17,14 +17,46 @@ class MiniPlayerBar extends ConsumerWidget {
   final VoidCallback? onPlaylistTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MiniPlayerBar> createState() => _MiniPlayerBarState();
+}
+
+class _MiniPlayerBarState extends ConsumerState<MiniPlayerBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _rotationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    );
+  }
+
+  @override
+  void dispose() {
+    _rotationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final playerState = ref.watch(playerStateNotifierProvider);
     final currentEntry = playerState.currentEntry;
     final hasEntry = currentEntry != null;
     final isPlaying = playerState.isPlaying;
 
+    // Sync rotation with playback state
+    if (isPlaying) {
+      if (!_rotationController.isAnimating) {
+        _rotationController.repeat();
+      }
+    } else {
+      _rotationController.stop();
+    }
+
     return GestureDetector(
-      onTap: hasEntry ? onTap : null,
+      onTap: hasEntry ? widget.onTap : null,
       onHorizontalDragEnd: hasEntry
           ? (details) {
               final notifier =
@@ -92,8 +124,9 @@ class MiniPlayerBar extends ConsumerWidget {
   }
 
   Widget _buildCover(String? coverPath, bool hasEntry) {
+    Widget coverImage;
     if (coverPath != null) {
-      return ClipOval(
+      coverImage = ClipOval(
         child: Image.file(
           File(coverPath),
           width: 44,
@@ -102,8 +135,15 @@ class MiniPlayerBar extends ConsumerWidget {
           errorBuilder: (_, __, ___) => _placeholderCover(hasEntry),
         ),
       );
+    } else {
+      coverImage = _placeholderCover(hasEntry);
     }
-    return _placeholderCover(hasEntry);
+
+    // Wrap with rotation animation
+    return RotationTransition(
+      turns: _rotationController,
+      child: coverImage,
+    );
   }
 
   Widget _placeholderCover(bool hasEntry) {
@@ -169,7 +209,7 @@ class MiniPlayerBar extends ConsumerWidget {
           size: 22,
         ),
         padding: EdgeInsets.zero,
-        onPressed: hasEntry ? onPlaylistTap : null,
+        onPressed: hasEntry ? widget.onPlaylistTap : null,
       ),
     );
   }
