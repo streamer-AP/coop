@@ -46,6 +46,7 @@ Dio dio(Ref ref) {
     ),
   );
   dio.interceptors.add(AuthInterceptor(TokenStorage()));
+  dio.interceptors.add(LogInterceptor());
   return dio;
 }
 

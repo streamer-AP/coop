@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 全局网络配置 -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- 信任系统默认证书 + 自定义证书（调试用） -->
+            <certificates src="system" />
+            <certificates src="user" /> <!-- 信任用户安装的证书（如代理工具的抓包证书） -->
+        </trust-anchors>
+    </base-config>
+</network-security-config>
