@@ -40,7 +40,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     try {
       await ref
           .read(authNotifierProvider.notifier)
-          .sendVerificationCode(_phoneController.text);
+          .sendVerificationCode(_phoneController.text, isRegister: true);
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -60,6 +60,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         builder: (_) => VerificationCodeScreen(
           phone: _phoneController.text,
           title: '验证码注册',
+          isRegister: true,
           onVerified: (code) => _registerWithCode(code),
         ),
       ),

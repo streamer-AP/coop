@@ -77,10 +77,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     try {
       await ref.read(apiClientProvider).post(
         ApiEndpoints.resetPassword,
-        data: {
+        queryParameters: {
           'mobile': _phoneController.text,
           'code': code,
-          'newPassword': _passwordController.text,
+          'password': _passwordController.text,
+          'veryPassword': _passwordController.text,
         },
       );
     } catch (e) {

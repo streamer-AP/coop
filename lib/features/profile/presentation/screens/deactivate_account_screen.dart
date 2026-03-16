@@ -57,12 +57,37 @@ class _DeactivateAccountScreenState
                 },
               ),
               const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                child: PurpleGradientButton(
-                  text: '确认注销',
-                  onPressed: () => _showExportDialog(context),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: PurpleGradientButton(
+                      text: '取消',
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _showExportDialog(context),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5F5F5),
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Text(
+                          '确定注销',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

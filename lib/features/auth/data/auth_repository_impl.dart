@@ -21,7 +21,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String phone,
     required String code,
   }) async {
-    final json = await _post(ApiEndpoints.loginByCode, {
+    final json = await _postWithQuery(ApiEndpoints.loginByCode, {
       'mobile': phone,
       'code': code,
     });
@@ -37,7 +37,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String phone,
     required String password,
   }) async {
-    final json = await _post(ApiEndpoints.loginByPassword, {
+    final json = await _postWithQuery(ApiEndpoints.loginByPassword, {
       'mobile': phone,
       'password': password,
     });
@@ -52,12 +52,15 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<User> register({
     required String phone,
     required String code,
+    String? password,
   }) async {
-    final json = await _post(ApiEndpoints.register, {
+    final json = await _postWithQuery(ApiEndpoints.register, {
       'mobile': phone,
       'code': code,
+      if (password != null) 'password': password,
+      if (password != null) 'veryPassword': password,
     });
-    final user = _parseUserResponse(json).copyWith(needsPasswordSetup: true);
+    final user = _parseUserResponse(json).copyWith(needsPasswordSetup: password == null);
     if (user.token != null) {
       await _tokenStorage.saveToken(user.token!);
     }
@@ -66,14 +69,21 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> setupPassword({required String password}) async {
-    await _post(ApiEndpoints.setupPassword, {
+    await _postWithQuery(ApiEndpoints.setupPassword, {
       'password': password,
+      'veryPassword': password,
     });
   }
 
   @override
-  Future<void> sendVerificationCode(String phone) async {
-    await _post(ApiEndpoints.sendCode, {
+  Future<void> sendVerificationCode(
+    String phone, {
+    bool isRegister = false,
+  }) async {
+    final endpoint = isRegister
+        ? ApiEndpoints.sendRegisterCode
+        : ApiEndpoints.sendLoginCode;
+    await _postWithQuery(endpoint, {
       'mobile': phone,
     });
   }
@@ -83,7 +93,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String name,
     required String idNumber,
   }) async {
-    final json = await _post(ApiEndpoints.realNameVerify, {
+    final json = await _postWithQuery(ApiEndpoints.realNameVerify, {
       'residentIdCard': idNumber,
       'residentIdCardName': name,
     });
@@ -121,7 +131,7 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> logout() async {
     try {
-      await _post(ApiEndpoints.logout, {});
+      await _postWithQuery(ApiEndpoints.logout, {});
     } catch (_) {
       // Logout locally even if server call fails
     }
@@ -176,12 +186,12 @@ class AuthRepositoryImpl implements AuthRepository {
 
   // ── Helpers ──
 
-  Future<Map<String, dynamic>> _post(
+  Future<Map<String, dynamic>> _postWithQuery(
     String path,
-    Map<String, dynamic> body,
+    Map<String, dynamic> params,
   ) async {
     try {
-      final json = await _apiClient.post(path, data: body);
+      final json = await _apiClient.post(path, queryParameters: params);
       final code = json['code'] as int?;
 
       if (code == 200) return json;
@@ -236,11 +246,14 @@ class AuthRepositoryImpl implements AuthRepository {
 
   User _parseUserResponse(Map<String, dynamic> json) {
     final data = json['data'] as Map<String, dynamic>? ?? {};
-    final token = data['token'] as String? ?? data['accessToken'] as String?;
+    final token = data['token'] as String? ??
+        data['accessToken'] as String? ??
+        data['tokenValue'] as String? ??
+        data['satoken'] as String?;
     final residentStatus = data['residentStatus'] as String? ?? '0';
 
     return User(
-      id: '${data['id'] ?? data['userId'] ?? ''}',
+      id: '${data['id'] ?? data['userId'] ?? data['loginId'] ?? ''}',
       phone: data['mobile'] as String? ?? '',
       nickname: data['userName'] as String?,
       token: token,

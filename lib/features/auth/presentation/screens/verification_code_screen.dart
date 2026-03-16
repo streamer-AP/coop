@@ -13,11 +13,13 @@ class VerificationCodeScreen extends ConsumerStatefulWidget {
     required this.phone,
     required this.title,
     required this.onVerified,
+    this.isRegister = false,
   });
 
   final String phone;
   final String title;
   final ValueChanged<String> onVerified;
+  final bool isRegister;
 
   @override
   ConsumerState<VerificationCodeScreen> createState() =>
@@ -60,7 +62,7 @@ class _VerificationCodeScreenState
     try {
       await ref
           .read(authNotifierProvider.notifier)
-          .sendVerificationCode(widget.phone);
+          .sendVerificationCode(widget.phone, isRegister: widget.isRegister);
       _startCountdown();
     } catch (_) {}
   }

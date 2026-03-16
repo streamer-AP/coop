@@ -37,7 +37,7 @@ class MessageCard extends StatelessWidget {
                     height: 6,
                     margin: const EdgeInsets.only(right: 8),
                     decoration: const BoxDecoration(
-                      color: AppColors.primary,
+                      color: AppColors.unreadDot,
                       shape: BoxShape.circle,
                     ),
                   ),

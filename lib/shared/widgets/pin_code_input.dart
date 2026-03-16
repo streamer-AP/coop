@@ -40,34 +40,12 @@ class _PinCodeInputState extends State<PinCodeInput> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // Hidden text field for keyboard input
-        Opacity(
-          opacity: 0,
-          child: SizedBox(
-            height: 1,
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(widget.length),
-              ],
-              onChanged: (value) {
-                setState(() {});
-                if (value.length == widget.length) {
-                  widget.onCompleted(value);
-                }
-              },
-            ),
-          ),
-        ),
-        // Visual PIN boxes
-        GestureDetector(
-          onTap: () => _focusNode.requestFocus(),
-          child: Row(
+    return GestureDetector(
+      onTap: () => _focusNode.requestFocus(),
+      child: Stack(
+        children: [
+          // Visual PIN boxes
+          Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(widget.length, (index) {
               final hasValue = index < _controller.text.length;
@@ -104,8 +82,35 @@ class _PinCodeInputState extends State<PinCodeInput> {
               );
             }),
           ),
-        ),
-      ],
+          // Hidden text field for keyboard input — must have real size for keyboard to appear
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0,
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                keyboardType: TextInputType.number,
+                showCursor: false,
+                enableInteractiveSelection: false,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(widget.length),
+                ],
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  counterText: '',
+                ),
+                onChanged: (value) {
+                  setState(() {});
+                  if (value.length == widget.length) {
+                    widget.onCompleted(value);
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
