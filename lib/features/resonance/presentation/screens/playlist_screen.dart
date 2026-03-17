@@ -11,12 +11,25 @@ class PlaylistScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final playlistSvc = ref.watch(playlistServiceProvider);
-    final playlist = playlistSvc.currentPlaylist;
+    final playlist =
+        ref.watch(playlistStateProvider).valueOrNull ??
+        ref.read(playlistServiceProvider).currentPlaylist;
     final notifier = ref.read(playerStateNotifierProvider.notifier);
 
+    Future<void> playItem(String uid) async {
+      try {
+        await notifier.playPlaylistItem(uid);
+      } catch (error) {
+        if (!context.mounted) return;
+        final message = '$error'.replaceFirst('Exception: ', '').trim();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message.isEmpty ? '当前音频无法播放' : message)),
+        );
+      }
+    }
+
     return DraggableScrollableSheet(
-      initialChildSize: 0.74,
+      initialChildSize: 0.75,
       minChildSize: 0.32,
       maxChildSize: 0.9,
       expand: false,
@@ -24,13 +37,14 @@ class PlaylistScreen extends ConsumerWidget {
         return Container(
           decoration: const BoxDecoration(
             color: Color(0xFFF5F5F5),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
           ),
           child: Column(
             children: [
+              const SizedBox(height: 12),
               _buildHandle(),
+              const SizedBox(height: 12),
               _buildHeader(context, ref, playlist),
-              const Divider(height: 1),
               Expanded(
                 child:
                     playlist.isEmpty
@@ -38,28 +52,33 @@ class PlaylistScreen extends ConsumerWidget {
                           child: Text(
                             '播放列表为空',
                             style: TextStyle(
-                              color: Color(0xFF79747E),
+                              color: Color(0xFF797979),
                               fontSize: 14,
                             ),
                           ),
                         )
-                        : ListView.builder(
+                        : Scrollbar(
                           controller: scrollController,
-                          padding: const EdgeInsets.only(top: 4),
-                          itemCount: playlist.items.length,
-                          itemBuilder: (context, index) {
-                            final item = playlist.items[index];
-                            final isCurrent = index == playlist.currentIndex;
+                          thumbVisibility: true,
+                          radius: const Radius.circular(20),
+                          child: ListView.builder(
+                            controller: scrollController,
+                            padding: const EdgeInsets.only(top: 8, bottom: 24),
+                            itemCount: playlist.items.length,
+                            itemBuilder: (context, index) {
+                              final item = playlist.items[index];
+                              final isCurrent = index == playlist.currentIndex;
 
-                            return _PlaylistItem(
-                              title: item.entry.title,
-                              artist: item.entry.artist ?? '',
-                              isCurrent: isCurrent,
-                              onTap: () => notifier.playPlaylistItem(item.uid),
-                              onRemove:
-                                  () => notifier.removeFromPlaylist(item.uid),
-                            );
-                          },
+                              return _PlaylistItem(
+                                title: item.entry.title,
+                                artist: item.entry.artist ?? '',
+                                isCurrent: isCurrent,
+                                onTap: () => playItem(item.uid),
+                                onRemove:
+                                    () => notifier.removeFromPlaylist(item.uid),
+                              );
+                            },
+                          ),
                         ),
               ),
             ],
@@ -70,26 +89,24 @@ class PlaylistScreen extends ConsumerWidget {
   }
 
   Widget _buildHandle() {
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.only(top: 8),
-        width: 40,
-        height: 6,
-        decoration: BoxDecoration(
-          color: const Color(0xFFDBD4EE),
-          borderRadius: BorderRadius.circular(6),
-        ),
+    return Container(
+      width: 40,
+      height: 6,
+      decoration: BoxDecoration(
+        color: const Color(0xFFDBD4EE),
+        borderRadius: BorderRadius.circular(6),
       ),
     );
   }
 
   Widget _buildHeader(BuildContext context, WidgetRef ref, Playlist playlist) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+      padding: const EdgeInsets.fromLTRB(18, 6, 18, 10),
       child: Row(
         children: [
           IconButton(
             icon: _repeatModeIcon(playlist.repeatMode),
+            color: const Color(0xFF797979),
             onPressed: () {
               ref.read(playerStateNotifierProvider.notifier).cycleRepeatMode();
             },
@@ -107,7 +124,8 @@ class PlaylistScreen extends ConsumerWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: Color(0xFF797979)),
+            icon: const Icon(Icons.delete_outline_rounded),
+            color: const Color(0xFF797979),
             onPressed: () => _showClearDialog(context, ref),
           ),
         ],
@@ -117,15 +135,9 @@ class PlaylistScreen extends ConsumerWidget {
 
   Icon _repeatModeIcon(RepeatMode mode) {
     return switch (mode) {
-      RepeatMode.sequential => const Icon(
-        Icons.repeat,
-        color: Color(0xFF797979),
-      ),
-      RepeatMode.single => const Icon(
-        Icons.repeat_one,
-        color: Color(0xFF797979),
-      ),
-      RepeatMode.shuffle => const Icon(Icons.shuffle, color: Color(0xFF797979)),
+      RepeatMode.sequential => const Icon(Icons.repeat_rounded),
+      RepeatMode.single => const Icon(Icons.repeat_one_rounded),
+      RepeatMode.shuffle => const Icon(Icons.shuffle_rounded),
     };
   }
 
@@ -135,12 +147,12 @@ class PlaylistScreen extends ConsumerWidget {
       builder:
           (ctx) => Dialog(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -154,44 +166,32 @@ class PlaylistScreen extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    '提示',
+                    '清空播放列表',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: AppColors.primary,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   const Text(
-                    '确定要清空播放列表吗？',
+                    '确定要删除当前播放队列吗？',
                     style: TextStyle(fontSize: 15, color: Color(0xFF1C1B1F)),
                   ),
                   const SizedBox(height: 24),
                   Row(
                     children: [
                       Expanded(
-                        child: GestureDetector(
+                        child: _DialogButton(
+                          label: '取消',
                           onTap: () => Navigator.of(ctx).pop(),
-                          child: Container(
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF0F0F0),
-                              borderRadius: BorderRadius.circular(22),
-                            ),
-                            alignment: Alignment.center,
-                            child: const Text(
-                              '取消',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Color(0xFF1C1B1F),
-                              ),
-                            ),
-                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: GestureDetector(
+                        child: _DialogButton(
+                          label: '清空',
+                          isPrimary: true,
                           onTap: () async {
                             await ref
                                 .read(playerStateNotifierProvider.notifier)
@@ -203,22 +203,6 @@ class PlaylistScreen extends ConsumerWidget {
                               Navigator.of(context).maybePop();
                             }
                           },
-                          child: Container(
-                            height: 44,
-                            decoration: BoxDecoration(
-                              gradient: AppColors.purpleButtonGradient,
-                              borderRadius: BorderRadius.circular(22),
-                            ),
-                            alignment: Alignment.center,
-                            child: const Text(
-                              '清空',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
                         ),
                       ),
                     ],
@@ -248,73 +232,106 @@ class _PlaylistItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final primaryColor =
+        isCurrent ? AppColors.primary : const Color(0xFF000000);
+    final secondaryColor =
+        isCurrent
+            ? AppColors.primary.withValues(alpha: 0.72)
+            : const Color(0xFFC0C0C0);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration:
+              isCurrent
+                  ? BoxDecoration(color: Colors.black.withValues(alpha: 0.06))
+                  : null,
+          child: Row(
+            children: [
+              if (isCurrent) ...[
+                const AudioWaveAnimation(color: AppColors.primary, size: 12),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: RichText(
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: title,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          color: primaryColor,
+                        ),
+                      ),
+                      if (artist.isNotEmpty) ...[
+                        TextSpan(
+                          text: ' • ',
+                          style: TextStyle(fontSize: 14, color: secondaryColor),
+                        ),
+                        TextSpan(
+                          text: artist,
+                          style: TextStyle(fontSize: 14, color: secondaryColor),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: Color(0xFFC0C0C0),
+                ),
+                onPressed: onRemove,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DialogButton extends StatelessWidget {
+  const _DialogButton({
+    required this.label,
+    required this.onTap,
+    this.isPrimary = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool isPrimary;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
       onTap: onTap,
       child: Container(
         height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration:
-            isCurrent
-                ? BoxDecoration(
-                  color: const Color(0xFF000000).withValues(alpha: 0.06),
-                )
-                : null,
-        child: Row(
-          children: [
-            if (isCurrent) ...[
-              const AudioWaveAnimation(color: AppColors.primary, size: 12),
-              const SizedBox(width: 6),
-            ],
-            Expanded(
-              child: RichText(
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: title,
-                      style: TextStyle(
-                        fontSize: 32 / 2,
-                        fontWeight: FontWeight.w400,
-                        color:
-                            isCurrent
-                                ? AppColors.primary
-                                : const Color(0xFF000000),
-                      ),
-                    ),
-                    if (artist.isNotEmpty) ...[
-                      TextSpan(
-                        text: ' · ',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color:
-                              isCurrent
-                                  ? AppColors.primary.withValues(alpha: 0.7)
-                                  : const Color(0xFFC0C0C0),
-                        ),
-                      ),
-                      TextSpan(
-                        text: artist,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color:
-                              isCurrent
-                                  ? AppColors.primary.withValues(alpha: 0.7)
-                                  : const Color(0xFFC0C0C0),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, size: 18, color: Color(0xFFC0C0C0)),
-              onPressed: onRemove,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            ),
-          ],
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isPrimary ? null : const Color(0xFFF0F0F0),
+          gradient: isPrimary ? AppColors.purpleButtonGradient : null,
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: isPrimary ? FontWeight.w600 : FontWeight.w400,
+            color: isPrimary ? Colors.white : const Color(0xFF1C1B1F),
+          ),
         ),
       ),
     );

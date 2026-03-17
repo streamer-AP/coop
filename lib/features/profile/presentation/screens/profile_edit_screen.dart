@@ -55,10 +55,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
               onPressed: _save,
               child: const Text(
                 '保存',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: AppColors.textPrimary,
-                ),
+                style: TextStyle(fontSize: 16, color: AppColors.textPrimary),
               ),
             ),
           ],
@@ -104,8 +101,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                 maxLength: _maxLength,
                 decoration: InputDecoration(
                   counterText: '',
-                  suffixText:
-                      '${_nicknameController.text.length}/$_maxLength',
+                  suffixText: '${_nicknameController.text.length}/$_maxLength',
                   suffixStyle: const TextStyle(
                     fontSize: 14,
                     color: AppColors.textHint,
@@ -135,10 +131,11 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   void _showAvatarPicker(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      builder: (_) => AvatarPickerSheet(
-        onGallerySelected: () => _pickImage(ImageSource.gallery),
-        onCameraSelected: () => _pickImage(ImageSource.camera),
-      ),
+      builder:
+          (_) => AvatarPickerSheet(
+            onGallerySelected: () => _pickImage(ImageSource.gallery),
+            onCameraSelected: () => _pickImage(ImageSource.camera),
+          ),
     );
   }
 
@@ -151,7 +148,21 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
       imageQuality: 80,
     );
     if (image != null) {
-      ref.read(profileNotifierProvider.notifier).updateAvatar(image.path);
+      try {
+        await ref
+            .read(profileNotifierProvider.notifier)
+            .updateAvatar(image.path);
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('头像更新成功')));
+      } catch (e) {
+        if (!mounted) return;
+        final message = '$e'.replaceFirst('Exception: ', '').trim();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message.isEmpty ? '头像更新失败' : message)),
+        );
+      }
     }
   }
 }

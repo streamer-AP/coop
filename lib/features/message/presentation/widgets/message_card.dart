@@ -4,11 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../domain/models/message.dart';
 
 class MessageCard extends StatelessWidget {
-  const MessageCard({
-    super.key,
-    required this.message,
-    required this.onTap,
-  });
+  const MessageCard({super.key, required this.message, required this.onTap});
 
   final Message message;
   final VoidCallback onTap;
@@ -18,13 +14,22 @@ class MessageCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: message.isRead
-              ? AppColors.cardBg.withValues(alpha: 0.7)
-              : AppColors.cardBg,
-          borderRadius: BorderRadius.circular(12),
+          color:
+              message.isRead
+                  ? AppColors.cardBg.withValues(alpha: 0.76)
+                  : AppColors.cardBg.withValues(alpha: 0.94),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,7 +50,7 @@ class MessageCard extends StatelessWidget {
                   child: Text(
                     message.title,
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight:
                           message.isRead ? FontWeight.w400 : FontWeight.w600,
                       color: AppColors.textPrimary,
@@ -60,7 +65,8 @@ class MessageCard extends StatelessWidget {
             Text(
               message.body,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 13,
+                height: 1.45,
                 color: AppColors.textSecondary,
               ),
               maxLines: 2,

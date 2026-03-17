@@ -4,11 +4,7 @@ import 'audio_entry.dart';
 
 part 'player_state.freezed.dart';
 
-enum SignalMode {
-  off,
-  resonance,
-  preset,
-}
+enum SignalMode { off, resonance, preset }
 
 @freezed
 class PlayerState with _$PlayerState {
@@ -17,6 +13,7 @@ class PlayerState with _$PlayerState {
     @Default(Duration.zero) Duration position,
     @Default(Duration.zero) Duration duration,
     AudioEntry? currentEntry,
+    @Default('全部音频') String playlistTitle,
     @Default(SignalMode.off) SignalMode signalMode,
   }) = _PlayerState;
 }

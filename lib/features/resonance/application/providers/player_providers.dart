@@ -26,6 +26,12 @@ PlaylistService playlistService(Ref ref) {
 }
 
 @Riverpod(keepAlive: true)
+Stream<Playlist> playlistState(Ref ref) {
+  final service = ref.watch(playlistServiceProvider);
+  return service.playlistStream;
+}
+
+@Riverpod(keepAlive: true)
 class PlayerStateNotifier extends _$PlayerStateNotifier {
   final List<StreamSubscription<dynamic>> _subscriptions = [];
 
@@ -82,6 +88,18 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
   }
 
   Future<void> playEntry(AudioEntry entry, {List<AudioEntry>? context}) async {
+    await playEntryWithTitle(
+      entry,
+      context: context,
+      playlistTitle: context != null ? '合集播放' : '全部音频',
+    );
+  }
+
+  Future<void> playEntryWithTitle(
+    AudioEntry entry, {
+    List<AudioEntry>? context,
+    required String playlistTitle,
+  }) async {
     final audioPlayer = ref.read(audioPlayerServiceProvider);
     final playlistSvc = ref.read(playlistServiceProvider);
 
@@ -93,8 +111,9 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
       playlistSvc.playEntryFromAll(entry);
     }
 
-    await audioPlayer.setSource(entry);
-    await audioPlayer.play();
+    state = state.copyWith(playlistTitle: playlistTitle);
+
+    await _loadEntry(entry, autoplay: true);
   }
 
   Future<void> play() async {
@@ -111,26 +130,22 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
 
   Future<void> next() async {
     final playlistSvc = ref.read(playlistServiceProvider);
-    final audioPlayer = ref.read(audioPlayerServiceProvider);
 
     if (playlistSvc.next()) {
       final entry = playlistSvc.currentPlaylist.currentItem?.entry;
       if (entry != null) {
-        await audioPlayer.setSource(entry);
-        await audioPlayer.play();
+        await _loadEntry(entry, autoplay: true);
       }
     }
   }
 
   Future<void> previous() async {
     final playlistSvc = ref.read(playlistServiceProvider);
-    final audioPlayer = ref.read(audioPlayerServiceProvider);
 
     if (playlistSvc.previous()) {
       final entry = playlistSvc.currentPlaylist.currentItem?.entry;
       if (entry != null) {
-        await audioPlayer.setSource(entry);
-        await audioPlayer.play();
+        await _loadEntry(entry, autoplay: true);
       }
     }
   }
@@ -145,7 +160,6 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
 
   Future<void> playPlaylistItem(String uid) async {
     final playlistSvc = ref.read(playlistServiceProvider);
-    final audioPlayer = ref.read(audioPlayerServiceProvider);
 
     final changed = playlistSvc.playItem(uid);
     if (!changed) return;
@@ -153,8 +167,7 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
     final entry = playlistSvc.currentPlaylist.currentItem?.entry;
     if (entry == null) return;
 
-    await audioPlayer.setSource(entry);
-    await audioPlayer.play();
+    await _loadEntry(entry, autoplay: true);
   }
 
   Future<void> removeFromPlaylist(String uid) async {
@@ -177,6 +190,7 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
         position: Duration.zero,
         duration: Duration.zero,
         currentEntry: null,
+        playlistTitle: '全部音频',
       );
       return;
     }
@@ -184,12 +198,7 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
     if (wasCurrent) {
       final nextEntry = nextPlaylist.currentItem?.entry;
       if (nextEntry != null) {
-        await audioPlayer.setSource(nextEntry);
-        if (wasPlaying) {
-          await audioPlayer.play();
-        } else {
-          await audioPlayer.pause();
-        }
+        await _loadEntry(nextEntry, autoplay: wasPlaying);
       }
     }
   }
@@ -203,6 +212,7 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
       position: Duration.zero,
       duration: Duration.zero,
       currentEntry: null,
+      playlistTitle: '全部音频',
     );
   }
 
@@ -219,6 +229,16 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
       ref.read(audioPlayerServiceProvider).play();
     } else {
       next();
+    }
+  }
+
+  Future<void> _loadEntry(AudioEntry entry, {required bool autoplay}) async {
+    final audioPlayer = ref.read(audioPlayerServiceProvider);
+    await audioPlayer.setSource(entry);
+    if (autoplay) {
+      await audioPlayer.play();
+    } else {
+      await audioPlayer.pause();
     }
   }
 }

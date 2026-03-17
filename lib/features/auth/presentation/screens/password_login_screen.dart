@@ -24,11 +24,11 @@ class _PasswordLoginScreenState extends ConsumerState<PasswordLoginScreen> {
   bool _agreedToTerms = false;
   bool _isLoading = false;
 
-  String get _phoneDigits => _phoneController.text.replaceAll(RegExp(r'\D'), '');
+  String get _phoneDigits =>
+      _phoneController.text.replaceAll(RegExp(r'\D'), '');
 
   bool get _canLogin =>
-      _phoneDigits.length >= 11 &&
-      _passwordController.text.length >= 6;
+      _phoneDigits.length >= 11 && _passwordController.text.length >= 6;
 
   @override
   void initState() {
@@ -85,17 +85,20 @@ class _PasswordLoginScreenState extends ConsumerState<PasswordLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
     return AuthBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: keyboardInset),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 22),
+                    padding: const EdgeInsets.fromLTRB(28, 12, 28, 24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -103,17 +106,11 @@ class _PasswordLoginScreenState extends ConsumerState<PasswordLoginScreen> {
                           iconColor: AuthPalette.title,
                           backgroundColor: Color(0x40FFFFFF),
                         ),
-                        const SizedBox(height: 76),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 10),
-                          child: AuthTitleBlock(
-                            title: '密码登录',
-                            subtitle: 'Password',
-                          ),
-                        ),
-                        const SizedBox(height: 76),
+                        const SizedBox(height: 78),
+                        const _PasswordTitleArt(),
+                        const SizedBox(height: 74),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -217,5 +214,14 @@ class _PasswordLoginScreenState extends ConsumerState<PasswordLoginScreen> {
         ),
       ),
     );
+  }
+}
+
+class _PasswordTitleArt extends StatelessWidget {
+  const _PasswordTitleArt();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AuthTitleBlock(title: '密码登录', subtitle: 'Password');
   }
 }

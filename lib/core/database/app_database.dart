@@ -52,7 +52,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -79,6 +79,10 @@ class AppDatabase extends _$AppDatabase {
         // v3 → v4: 新增台本文件表
         if (from < 4) {
           await m.createTable(scriptFiles);
+        }
+        // v4 → v5: 消息表新增服务端消息 ID，用于远端同步去重
+        if (from >= 3 && from < 5) {
+          await m.addColumn(messages, messages.serverId);
         }
       },
     );

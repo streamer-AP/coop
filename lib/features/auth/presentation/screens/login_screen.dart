@@ -23,7 +23,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _agreedToTerms = false;
   bool _isLoading = false;
 
-  String get _phoneDigits => _phoneController.text.replaceAll(RegExp(r'\D'), '');
+  String get _phoneDigits =>
+      _phoneController.text.replaceAll(RegExp(r'\D'), '');
 
   bool get _canSubmit => _phoneDigits.length >= 11;
 
@@ -117,131 +118,123 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         backgroundColor: Colors.transparent,
         body: LayoutBuilder(
           builder: (context, constraints) {
-            final sheetGap = (constraints.maxHeight * 0.15).clamp(64.0, 138.0);
-
             return SingleChildScrollView(
               padding: EdgeInsets.only(bottom: keyboardInset),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(left: 4),
-                          child: AuthBackButton(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(24, 12, 24, 0),
+                        child: AuthBackButton(),
+                      ),
+                      const SizedBox(height: 52),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 30),
+                        child: _GreetingBlock(),
+                      ),
+                      SizedBox(
+                        height: (constraints.maxHeight * 0.088).clamp(
+                          28.0,
+                          56.0,
                         ),
-                        const SizedBox(height: 54),
-                        const Padding(
-                          padding: EdgeInsets.only(left: 16, right: 16),
-                          child: _GreetingBlock(),
-                        ),
-                        SizedBox(height: sheetGap + 6),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
+                      ),
+                      _LoginSheet(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(30, 56, 30, 32),
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Expanded(
-                                child: AuthTitleBlock(
-                                  title: '验证码登录',
-                                  subtitle: 'Sign In',
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.only(top: 10),
-                                child: AuthGhostLink(
-                                  label: '注册账号',
-                                  onTap:
-                                      () => context.pushNamed(
-                                        RouteNames.register,
-                                      ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 50),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: AuthUnderlineField(
-                            label: '输入手机号码',
-                            controller: _phoneController,
-                            hintText: '请输入手机号码',
-                            leadingText: '+86 |',
-                            keyboardType: TextInputType.phone,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              ChinesePhoneNumberFormatter(),
-                            ],
-                            trailing:
-                                _phoneController.text.isEmpty
-                                    ? null
-                                    : AuthClearButton(
-                                      onTap: () {
-                                        _phoneController.clear();
-                                        setState(() {});
-                                      },
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Expanded(child: _LoginTitleArt()),
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: AuthGhostLink(
+                                      label: '注册账号',
+                                      onTap:
+                                          () => context.pushNamed(
+                                            RouteNames.register,
+                                          ),
                                     ),
-                            onChanged: (_) => setState(() {}),
-                          ),
-                        ),
-                        const SizedBox(height: 42),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 18),
-                          child: AuthPrimaryButton(
-                            label: '发送验证码',
-                            enabled: _canSubmit,
-                            loading: _isLoading,
-                            onTap: _canSubmit ? _sendCodeAndNavigate : null,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: AuthAgreementRow(
-                            agreed: _agreedToTerms,
-                            onToggle:
-                                () => setState(
-                                  () => _agreedToTerms = !_agreedToTerms,
-                                ),
-                            onUserAgreementTap:
-                                () => context.pushNamed(
-                                  RouteNames.userAgreement,
-                                ),
-                            onPrivacyTap:
-                                () => context.pushNamed(
-                                  RouteNames.privacyPolicy,
-                                ),
-                          ),
-                        ),
-                        SizedBox(
-                          height: (constraints.maxHeight * 0.24).clamp(
-                            120.0,
-                            220.0,
-                          ),
-                        ),
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 24),
-                            child: AuthGhostLink(
-                              label: '密码登录',
-                              trailingIcon: const Icon(
-                                Icons.help_outline_rounded,
-                                size: 14,
-                                color: AuthPalette.link,
-                              ),
-                              onTap:
-                                  () => context.pushNamed(
-                                    RouteNames.passwordLogin,
                                   ),
-                            ),
+                                ],
+                              ),
+                              const SizedBox(height: 58),
+                              AuthUnderlineField(
+                                label: '输入手机号码',
+                                controller: _phoneController,
+                                hintText: '请输入手机号码',
+                                leadingText: '+86 |',
+                                keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  ChinesePhoneNumberFormatter(),
+                                ],
+                                trailing:
+                                    _phoneController.text.isEmpty
+                                        ? null
+                                        : AuthClearButton(
+                                          onTap: () {
+                                            _phoneController.clear();
+                                            setState(() {});
+                                          },
+                                        ),
+                                onChanged: (_) => setState(() {}),
+                              ),
+                              const SizedBox(height: 36),
+                              AuthPrimaryButton(
+                                label: '发送验证码',
+                                enabled: _canSubmit,
+                                loading: _isLoading,
+                                onTap: _canSubmit ? _sendCodeAndNavigate : null,
+                              ),
+                              const SizedBox(height: 14),
+                              AuthAgreementRow(
+                                agreed: _agreedToTerms,
+                                onToggle:
+                                    () => setState(
+                                      () => _agreedToTerms = !_agreedToTerms,
+                                    ),
+                                onUserAgreementTap:
+                                    () => context.pushNamed(
+                                      RouteNames.userAgreement,
+                                    ),
+                                onPrivacyTap:
+                                    () => context.pushNamed(
+                                      RouteNames.privacyPolicy,
+                                    ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      SizedBox(
+                        height: (constraints.maxHeight * 0.18).clamp(
+                          92.0,
+                          148.0,
+                        ),
+                      ),
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 22),
+                          child: AuthGhostLink(
+                            label: '密码登录',
+                            trailingIcon: const Icon(
+                              Icons.help_outline_rounded,
+                              size: 13,
+                              color: AuthPalette.link,
+                            ),
+                            onTap:
+                                () =>
+                                    context.pushNamed(RouteNames.passwordLogin),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -250,6 +243,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
     );
+  }
+}
+
+class _LoginSheet extends StatelessWidget {
+  const _LoginSheet({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xE8ECEEF7),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(36)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.58)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6B5D90).withValues(alpha: 0.06),
+            blurRadius: 24,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _LoginTitleArt extends StatelessWidget {
+  const _LoginTitleArt();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AuthTitleBlock(title: '验证码登录', subtitle: 'Sign In');
   }
 }
 
@@ -264,13 +292,20 @@ class _GreetingBlock extends StatelessWidget {
         Text(
           'Hello!',
           style: TextStyle(
-            fontSize: 36,
-            fontWeight: FontWeight.w700,
+            fontSize: 48,
+            fontWeight: FontWeight.w600,
             color: Colors.white.withValues(alpha: 0.95),
-            height: 1.04,
+            height: 1,
+            shadows: [
+              Shadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Text(
           '欢迎来到 OMAO',
           style: TextStyle(

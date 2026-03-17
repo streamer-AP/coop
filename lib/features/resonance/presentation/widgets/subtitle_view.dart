@@ -13,7 +13,7 @@ class SubtitleView extends ConsumerStatefulWidget {
 
 class _SubtitleViewState extends ConsumerState<SubtitleView> {
   final _scrollController = ScrollController();
-  static const _itemHeight = 56.0;
+  static const _itemHeight = 64.0;
   int _lastAutoFollowIndex = -1;
 
   @override
@@ -37,7 +37,7 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
           '暂无字幕',
           style: TextStyle(
             fontSize: 14,
-            color: Colors.white.withValues(alpha: 0.5),
+            color: const Color(0xFF4A4A4A).withValues(alpha: 0.45),
           ),
         ),
       );
@@ -67,8 +67,9 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
           },
           child: ListView.builder(
             controller: _scrollController,
+            physics: const BouncingScrollPhysics(),
             itemCount: subtitle.cues.length,
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 20),
             itemBuilder: (context, index) {
               final cue = subtitle.cues[index];
               final isActive = index == activeCueIndex;
@@ -87,23 +88,24 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
-                    vertical: 10,
+                    vertical: 12,
                   ),
                   child: Column(
                     children: [
                       Text(
                         cue.text,
                         textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: isActive ? 18 : 15,
+                          fontSize: isActive ? 16 : 14,
+                          height: 1.35,
                           fontWeight:
                               isActive ? FontWeight.w600 : FontWeight.w400,
                           color:
                               isActive
-                                  ? Colors.white
-                                  : Colors.white.withValues(alpha: 0.5),
+                                  ? const Color(0xFF4A4A4A)
+                                  : const Color(
+                                    0xFF4A4A4A,
+                                  ).withValues(alpha: 0.28),
                         ),
                       ),
                       if (translatedText != null &&
@@ -120,8 +122,12 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
                             fontWeight: FontWeight.w400,
                             color:
                                 isActive
-                                    ? Colors.white.withValues(alpha: 0.8)
-                                    : Colors.white.withValues(alpha: 0.35),
+                                    ? const Color(
+                                      0xFF797979,
+                                    ).withValues(alpha: 0.92)
+                                    : const Color(
+                                      0xFF797979,
+                                    ).withValues(alpha: 0.42),
                           ),
                         ),
                       ],
@@ -156,16 +162,21 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.18),
+                    color: Colors.white.withValues(alpha: 0.84),
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.28),
-                    ),
+                    border: Border.all(color: const Color(0xFFE8E3F2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.my_location_rounded,
                     size: 18,
-                    color: Colors.white.withValues(alpha: 0.92),
+                    color: Color(0xFF6A53A7),
                   ),
                 ),
               ),

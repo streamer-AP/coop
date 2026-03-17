@@ -221,9 +221,13 @@ class _AllEntriesTab extends ConsumerWidget {
             final entry = filtered[index];
             return AudioEntryTile(
               entry: entry,
-              onTap: () {
-                ref.read(playerStateNotifierProvider.notifier).playEntry(entry);
-              },
+              onTap:
+                  () => _playAndOpenPlayer(
+                    context,
+                    ref,
+                    entry,
+                    playlistTitle: '全部音频',
+                  ),
               onMoreTap: () {
                 AudioEntryActionSheet.show(context, entry: entry);
               },
@@ -281,6 +285,37 @@ class _AllEntriesTab extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+Future<void> _playAndOpenPlayer(
+  BuildContext context,
+  WidgetRef ref,
+  AudioEntry entry, {
+  List<AudioEntry>? playlistEntries,
+  required String playlistTitle,
+}) async {
+  String? errorMessage;
+  try {
+    await ref
+        .read(playerStateNotifierProvider.notifier)
+        .playEntryWithTitle(
+          entry,
+          context: playlistEntries,
+          playlistTitle: playlistTitle,
+        );
+  } catch (error) {
+    errorMessage = '$error'.replaceFirst('Exception: ', '').trim();
+  }
+
+  if (!context.mounted) return;
+  context.pushNamed(RouteNames.resonancePlayer);
+
+  final message = errorMessage;
+  if (message != null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message.isEmpty ? '当前音频无法播放' : message)),
     );
   }
 }

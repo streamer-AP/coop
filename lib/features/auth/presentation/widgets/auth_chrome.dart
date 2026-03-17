@@ -10,18 +10,18 @@ class AuthPalette {
 
   static const title = Color(0xFF252036);
   static const body = Color(0xFF5E5870);
-  static const hint = Color(0xFFAAA4BF);
-  static const line = Color(0xFFBDB7D0);
+  static const hint = Color(0xFFA7A1BD);
+  static const line = Color(0xFFC6C1D7);
   static const underline = line;
-  static const link = Color(0xFF8563E4);
+  static const link = Color(0xFF7761C8);
   static const action = link;
-  static const actionDark = Color(0xFF5B36C7);
-  static const buttonTop = Color(0xFFAA8FF5);
-  static const buttonBottom = Color(0xFF5B36C7);
-  static const buttonDisabledTop = Color(0xFFD5CAE9);
-  static const buttonDisabledBottom = Color(0xFFC4B7DE);
-  static const pageTop = Color(0xFFE2DFF0);
-  static const pageBottom = Color(0xFFF5F3FB);
+  static const actionDark = Color(0xFF5737B7);
+  static const buttonTop = Color(0xFFAA90F0);
+  static const buttonBottom = Color(0xFF5D3ABC);
+  static const buttonDisabledTop = Color(0xFFD7CCEA);
+  static const buttonDisabledBottom = Color(0xFFC7BBDD);
+  static const pageTop = Color(0xFFE2E0EE);
+  static const pageBottom = Color(0xFFF2F0FA);
   static const heroTop = Color(0xFF7E7AA4);
   static const heroMid = Color(0xFFC3BEDD);
   static const heroBottom = Color(0xFFF3F1FA);
@@ -39,76 +39,99 @@ class AuthBackground extends StatelessWidget {
   final bool heroMode;
   final bool showWatermark;
 
+  static const _backgroundAsset = 'assets/figma/home/home_bg.png';
+
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [AuthPalette.pageTop, AuthPalette.pageBottom],
+    if (!heroMode) {
+      return DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AuthPalette.pageTop, AuthPalette.pageBottom],
+          ),
         ),
-      ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const Positioned(
+              left: -88,
+              right: -88,
+              bottom: 14,
+              height: 208,
+              child: IgnorePointer(child: _WaveGlow(opacity: 0.2)),
+            ),
+            child,
+          ],
+        ),
+      );
+    }
+
+    return ColoredBox(
+      color: AuthPalette.pageBottom,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (heroMode)
-            const DecoratedBox(
+          const Positioned.fill(
+            child: Image(
+              image: AssetImage(_backgroundAsset),
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              filterQuality: FilterQuality.high,
+            ),
+          ),
+          const Positioned.fill(
+            child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    AuthPalette.heroTop,
-                    AuthPalette.heroMid,
-                    AuthPalette.heroBottom,
+                    Color(0x332A327A),
+                    Color(0x14515DA6),
+                    Color(0x0CEEF2FF),
                   ],
-                  stops: [0, 0.45, 1],
-                ),
-              ),
-            ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(painter: _AuthDustPainter(heroMode: heroMode)),
-            ),
-          ),
-          Positioned(
-            top: heroMode ? 162 : 214,
-            right: 18,
-            child: IgnorePointer(
-              child: Container(
-                width: heroMode ? 142 : 112,
-                height: heroMode ? 142 : 112,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(
-                      alpha: heroMode ? 0.18 : 0.12,
-                    ),
-                  ),
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.white.withValues(alpha: heroMode ? 0.14 : 0.08),
-                      Colors.white.withValues(alpha: 0),
-                    ],
-                  ),
+                  stops: [0, 0.46, 1],
                 ),
               ),
             ),
           ),
           Positioned(
-            top: heroMode ? -84 : -120,
-            left: -70,
-            right: -70,
-            height: heroMode ? 340 : 220,
+            top: heroMode ? -42 : -24,
+            left: -36,
+            right: -36,
+            height: heroMode ? 240 : 180,
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
                     center: Alignment.topCenter,
-                    radius: heroMode ? 1.2 : 0.95,
+                    radius: 1.12,
                     colors: [
-                      Colors.white.withValues(alpha: heroMode ? 0.3 : 0.2),
+                      Colors.white.withValues(alpha: 0.18),
+                      Colors.white.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 120,
+            right: 18,
+            child: IgnorePointer(
+              child: Container(
+                width: 126,
+                height: 126,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.16),
+                  ),
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: 0.08),
                       Colors.white.withValues(alpha: 0),
                     ],
                   ),
@@ -117,23 +140,16 @@ class AuthBackground extends StatelessWidget {
             ),
           ),
           const Positioned(
-            bottom: 120,
-            left: -110,
-            right: -110,
-            height: 180,
-            child: IgnorePointer(child: _WaveGlow(opacity: 0.26)),
-          ),
-          const Positioned(
-            bottom: 30,
-            left: -70,
-            right: -70,
-            height: 160,
-            child: IgnorePointer(child: _WaveGlow(opacity: 0.16)),
+            left: -80,
+            right: -80,
+            bottom: -6,
+            height: 250,
+            child: IgnorePointer(child: _WaveGlow(opacity: 0.3)),
           ),
           if (showWatermark)
             Positioned(
               right: -48,
-              top: 174,
+              top: 172,
               child: IgnorePointer(
                 child: Transform.rotate(
                   angle: math.pi / 2,
@@ -289,18 +305,21 @@ class AuthTitleBlock extends StatelessWidget {
             color: titleColor,
           ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          subtitle,
-          style: TextStyle(
-            fontSize: 22,
-            height: 1,
-            color: subtitleColor.withValues(alpha: 0.5),
-            fontStyle: FontStyle.italic,
-            fontWeight: FontWeight.w300,
-            letterSpacing: 0.3,
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.05,
+              color: subtitleColor.withValues(alpha: 0.62),
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 0.24,
+              fontFamilyFallback: const ['Snell Roundhand', 'Apple Chancery'],
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -624,52 +643,5 @@ class _WaveGlow extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class _AuthDustPainter extends CustomPainter {
-  _AuthDustPainter({required this.heroMode});
-
-  final bool heroMode;
-
-  static const _points = <Offset>[
-    Offset(0.08, 0.11),
-    Offset(0.15, 0.18),
-    Offset(0.23, 0.08),
-    Offset(0.31, 0.16),
-    Offset(0.42, 0.1),
-    Offset(0.56, 0.14),
-    Offset(0.65, 0.08),
-    Offset(0.77, 0.17),
-    Offset(0.86, 0.1),
-    Offset(0.91, 0.22),
-    Offset(0.14, 0.74),
-    Offset(0.28, 0.82),
-    Offset(0.48, 0.78),
-    Offset(0.62, 0.86),
-    Offset(0.8, 0.76),
-  ];
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..style = PaintingStyle.fill
-          ..color = Colors.white.withValues(alpha: heroMode ? 0.26 : 0.14);
-
-    for (var index = 0; index < _points.length; index++) {
-      final point = _points[index];
-      final radius = index < 10 ? 1.2 + (index % 3) * 0.55 : 0.9;
-      canvas.drawCircle(
-        Offset(size.width * point.dx, size.height * point.dy),
-        radius,
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _AuthDustPainter oldDelegate) {
-    return oldDelegate.heroMode != heroMode;
   }
 }

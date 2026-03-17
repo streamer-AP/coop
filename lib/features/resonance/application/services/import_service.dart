@@ -351,13 +351,17 @@ class ImportService {
     final ext = p.extension(mediaPath).toLowerCase().replaceFirst('.', '');
     if (_videoExtensions.contains(ext)) {
       final outputPath = await _reserveImportPath('$rawTitle.m4a');
-      return _mediaExtractionBridge.extractAudio(
+      final extractedPath = await _mediaExtractionBridge.extractAudio(
         inputPath: mediaPath,
         outputPath: outputPath,
       );
+      await _ensureReadableFile(extractedPath, label: '提取后的音频文件');
+      return extractedPath;
     }
 
-    return _copyToImportDir(mediaPath);
+    final copiedPath = await _copyToImportDir(mediaPath);
+    await _ensureReadableFile(copiedPath, label: '导入后的音频文件');
+    return copiedPath;
   }
 
   Future<String> _copyToImportDir(String sourcePath) async {
@@ -511,6 +515,17 @@ class ImportService {
       return message.substring('Unsupported operation: '.length);
     }
     return message;
+  }
+
+  Future<void> _ensureReadableFile(String path, {required String label}) async {
+    final file = File(path);
+    if (!await file.exists()) {
+      throw Exception('$label 不存在');
+    }
+
+    if (await file.length() <= 0) {
+      throw Exception('$label 为空');
+    }
   }
 
   Set<String> get subtitleExtensions => _subtitleExtensions;

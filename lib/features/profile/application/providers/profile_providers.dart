@@ -42,7 +42,14 @@ class ProfileNotifier extends _$ProfileNotifier {
       state = AsyncData(current.copyWith(avatarUrl: avatarUrl));
     }
     try {
-      await ref.read(profileRepositoryProvider).updateAvatar(avatarUrl);
+      final repository = ref.read(profileRepositoryProvider);
+      await repository.updateAvatar(avatarUrl);
+      final refreshed = await repository.getProfile();
+      final resolvedAvatar =
+          (refreshed.avatarUrl?.trim().isNotEmpty ?? false)
+              ? refreshed.avatarUrl
+              : avatarUrl;
+      state = AsyncData(refreshed.copyWith(avatarUrl: resolvedAvatar));
     } catch (_) {
       state = previous;
       rethrow;
