@@ -77,6 +77,12 @@ class AuthNotifier extends _$AuthNotifier {
     }
   }
 
+  void updateNicknameLocally(String nickname) {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    state = AsyncData(current.copyWith(nickname: nickname));
+  }
+
   Future<void> logout() async {
     await ref.read(authRepositoryProvider).logout();
     state = const AsyncData(null);

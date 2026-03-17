@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/pin_code_input.dart';
+import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../application/providers/auth_providers.dart';
+import '../../domain/models/auth_exception.dart';
+import '../widgets/auth_chrome.dart';
 
 class VerificationCodeScreen extends ConsumerStatefulWidget {
   const VerificationCodeScreen({
@@ -18,7 +20,7 @@ class VerificationCodeScreen extends ConsumerStatefulWidget {
 
   final String phone;
   final String title;
-  final ValueChanged<String> onVerified;
+  final FutureOr<void> Function(String code) onVerified;
   final bool isRegister;
 
   @override
@@ -30,6 +32,7 @@ class _VerificationCodeScreenState
     extends ConsumerState<VerificationCodeScreen> {
   Timer? _timer;
   int _remaining = 56;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -52,8 +55,11 @@ class _VerificationCodeScreenState
         return;
       }
       setState(() {
-        _remaining--;
-        if (_remaining <= 0) timer.cancel();
+        _remaining -= 1;
+        if (_remaining <= 0) {
+          _remaining = 0;
+          timer.cancel();
+        }
       });
     });
   }
@@ -64,97 +70,37 @@ class _VerificationCodeScreenState
           .read(authNotifierProvider.notifier)
           .sendVerificationCode(widget.phone, isRegister: widget.isRegister);
       _startCountdown();
-    } catch (_) {}
+      if (mounted) {
+        TopBannerToast.show(context, message: '验证码已重新发送', isError: false);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      TopBannerToast.show(
+        context,
+        message: error is AuthException ? error.displayMessage : '验证码发送失败',
+      );
+    }
+  }
+
+  Future<void> _submitCode(String code) async {
+    if (_isSubmitting) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      await widget.onVerified(code);
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   String get _maskedPhone {
-    final p = widget.phone;
-    if (p.length >= 11) {
-      return '+86 ${p.substring(0, 3)} ${p.substring(3, 7)} ${p.substring(7)}';
+    final digits = widget.phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 11) {
+      return '+86 ${digits.substring(0, 3)} ${digits.substring(3, 7)} ${digits.substring(7, 11)}';
     }
-    return '+86 $p';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.profileBackgroundGradient,
-      ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, size: 20),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ),
-        body: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              Text(
-                widget.title,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              Text(
-                _subtitleText,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontStyle: FontStyle.italic,
-                  color: AppColors.textHint.withValues(alpha: 0.6),
-                ),
-              ),
-              const SizedBox(height: 48),
-              const Text(
-                '输入6位验证码',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 24),
-              PinCodeInput(
-                onCompleted: widget.onVerified,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '已发送至 $_maskedPhone',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textHint,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _remaining <= 0 ? _resend : null,
-                    child: Text(
-                      _remaining > 0 ? '$_remaining 秒后再次发送' : '再次发送',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: _remaining > 0
-                            ? AppColors.primary
-                            : AppColors.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    return '+86 $digits';
   }
 
   String get _subtitleText {
@@ -164,5 +110,114 @@ class _VerificationCodeScreenState
       '重置密码' => 'Password',
       _ => '',
     };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return AuthBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: keyboardInset),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const AuthBackButton(
+                          iconColor: AuthPalette.title,
+                          backgroundColor: Color(0x40FFFFFF),
+                        ),
+                        const SizedBox(height: 76),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: AuthTitleBlock(
+                            title: widget.title,
+                            subtitle: _subtitleText,
+                          ),
+                        ),
+                        const SizedBox(height: 78),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '输入6位验证码',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: AuthPalette.body,
+                                ),
+                              ),
+                              const SizedBox(height: 28),
+                              IgnorePointer(
+                                ignoring: _isSubmitting,
+                                child: PinCodeInput(onCompleted: _submitCode),
+                              ),
+                              const SizedBox(height: 22),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '已发送至 $_maskedPhone',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: AuthPalette.hint,
+                                      ),
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: _remaining > 0 ? null : _resend,
+                                    child: Text(
+                                      _remaining > 0
+                                          ? '$_remaining 秒后再次发送'
+                                          : '再次发送',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color:
+                                            _remaining > 0
+                                                ? AuthPalette.hint
+                                                : AuthPalette.link,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (_isSubmitting) ...[
+                                const SizedBox(height: 24),
+                                const Center(
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      color: AuthPalette.actionDark,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 }

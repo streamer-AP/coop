@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:typed_data';
+
 import 'ble_connection_manager.dart';
 import 'ble_device_protocol.dart';
 import 'models/ble_signal.dart';
@@ -10,10 +12,13 @@ class BleSignalSender {
 
   Timer? _timer;
   BleSignal? _currentSignal;
+  Uint8List? _lastPayload;
 
   static const sendInterval = Duration(milliseconds: 200);
 
   BleSignalSender(this._connectionManager, this._protocol);
+
+  Uint8List? get lastPayload => _lastPayload;
 
   void start() {
     _timer = Timer.periodic(sendInterval, (_) => _sendSignal());
@@ -29,9 +34,11 @@ class BleSignalSender {
     _currentSignal = signal;
   }
 
-  void _sendSignal() {
+  Future<void> _sendSignal() async {
     if (_currentSignal == null) return;
     if (!_connectionManager.isConnected) return;
-    // TODO: encode via _protocol.encodeSignal() + write to BLE characteristic
+    final payload = _protocol.encodeSignal(_currentSignal!);
+    _lastPayload = payload;
+    await _connectionManager.writePayload(payload);
   }
 }

@@ -2,7 +2,7 @@
 class ApiEndpoints {
   ApiEndpoints._();
 
-  static const String baseUrl = 'http://106.14.99.175/api';
+  static const String baseUrl = 'https://app.erotouch.cn/api';
 
   // Auth (all auth endpoints use query parameters, not JSON body)
   static const String loginByCode = '/auth/loginByCode';

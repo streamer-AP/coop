@@ -73,50 +73,37 @@ class _TopBannerState extends State<_TopBanner>
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
     return Positioned(
-      top: 0,
+      top: topPadding + 8,
       left: 0,
       right: 0,
       child: SlideTransition(
         position: _slideAnimation,
-        child: Container(
-          padding: EdgeInsets.only(
-            top: topPadding + 8,
-            bottom: 12,
-            left: 24,
-            right: 24,
-          ),
-          decoration: BoxDecoration(
-            color: widget.isError
-                ? const Color(0xE6222222)
-                : const Color(0xE6222222),
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(16),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 320),
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xE02D2D33),
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x26000000),
+                  blurRadius: 24,
+                  offset: Offset(0, 8),
+                ),
+              ],
             ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (widget.isError)
-                const Padding(
-                  padding: EdgeInsets.only(right: 8),
-                  child: Icon(
-                    Icons.warning_amber_rounded,
-                    color: Color(0xFFFF3B30),
-                    size: 18,
-                  ),
-                ),
-              Flexible(
-                child: Text(
-                  widget.message,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+            child: Text(
+              widget.message,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
               ),
-            ],
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
       ),

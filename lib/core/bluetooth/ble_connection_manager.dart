@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -47,6 +49,12 @@ class BleConnectionManager {
   /// 断开当前连接
   Future<void> disconnect() async {
     // TODO: implement
+  }
+
+  /// 写入原始蓝牙负载。
+  Future<void> writePayload(Uint8List payload) async {
+    if (_connectedDevice == null) return;
+    // TODO: implement — discover writable characteristic and send payload.
   }
 
   /// 释放资源

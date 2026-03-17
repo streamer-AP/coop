@@ -9,14 +9,16 @@ class BleSignal with _$BleSignal {
     required int swing,
     required int vibration,
     required SignalSource source,
+    int? durationMs,
+    int? delayMs,
   }) = _BleSignal;
 
   factory BleSignal.fromJson(Map<String, dynamic> json) =>
       _$BleSignalFromJson(json);
 }
 
-enum SignalSource {
-  preset,
-  resonance,
-  story,
+enum SignalSource { preset, resonance, story }
+
+extension BleSignalX on BleSignal {
+  bool get usesTimedMode => durationMs != null || delayMs != null;
 }

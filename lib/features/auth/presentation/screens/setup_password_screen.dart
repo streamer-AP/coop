@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../application/providers/auth_providers.dart';
-import '../../../profile/presentation/widgets/glowing_avatar.dart';
+import '../../../profile/application/providers/profile_providers.dart';
+import '../widgets/auth_chrome.dart';
+import '../widgets/auth_fields.dart';
 
 class SetupPasswordScreen extends ConsumerStatefulWidget {
   const SetupPasswordScreen({super.key});
@@ -22,9 +23,6 @@ class _SetupPasswordScreenState extends ConsumerState<SetupPasswordScreen> {
   bool _isLoading = false;
   static const _maxNameLength = 8;
 
-  bool get _canSubmit =>
-      _passwordController.text.length >= 6;
-
   @override
   void dispose() {
     _usernameController.dispose();
@@ -33,160 +31,149 @@ class _SetupPasswordScreenState extends ConsumerState<SetupPasswordScreen> {
   }
 
   Future<void> _submit() async {
+    final username = _usernameController.text.trim();
+    if (username.isEmpty) {
+      TopBannerToast.show(context, message: '请输入用户名');
+      return;
+    }
+    if (_passwordController.text.length < 6) {
+      TopBannerToast.show(context, message: '请输入至少6位密码');
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
+      await ref.read(profileNotifierProvider.notifier).updateNickname(username);
+      ref.read(authNotifierProvider.notifier).updateNicknameLocally(username);
       await ref
           .read(authNotifierProvider.notifier)
           .setupPassword(_passwordController.text);
       if (mounted) {
         context.goNamed(RouteNames.home);
       }
-    } catch (e) {
+    } catch (_) {
+      if (mounted) {
+        TopBannerToast.show(context, message: '设置失败，请重试');
+      }
+    } finally {
       if (mounted) {
         setState(() => _isLoading = false);
-        TopBannerToast.show(context, message: '设置失败，请重试');
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.profileBackgroundGradient,
-      ),
+    return AuthBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, size: 20),
-            onPressed: () => Navigator.of(context).pop(),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AuthBackButton(onTap: () => Navigator.of(context).pop()),
+                const SizedBox(height: 88),
+                const Center(child: _SetupAvatar()),
+                const SizedBox(height: 86),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const AuthFieldLabel(label: '用户名'),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _usernameController,
+                        maxLength: _maxNameLength,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: AuthPalette.title,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        decoration: authUnderlineInputDecoration(
+                          hintText: '请输入不超过8个字符用户名',
+                          suffixText:
+                              '${_usernameController.text.length}/$_maxNameLength',
+                          counterText: '',
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 28),
+                      const AuthFieldLabel(label: '密码'),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: AuthPalette.title,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        decoration: authUnderlineInputDecoration(
+                          hintText: '请输入密码',
+                          suffixIcon:
+                              _passwordController.text.isNotEmpty
+                                  ? Padding(
+                                    padding: const EdgeInsets.only(right: 2),
+                                    child: AuthClearButton(
+                                      onTap: () {
+                                        _passwordController.clear();
+                                        setState(() {});
+                                      },
+                                    ),
+                                  )
+                                  : null,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 34),
+                      AuthPrimaryButton(
+                        label: '完成',
+                        loading: _isLoading,
+                        onTap: _submit,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            children: [
-              const SizedBox(height: 24),
-              // Avatar
-              const GlowingAvatar(size: 100),
-              const SizedBox(height: 40),
-              // Username
-              Align(
-                alignment: Alignment.centerLeft,
-                child: const Text(
-                  '用户名',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _usernameController,
-                maxLength: _maxNameLength,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppColors.textPrimary,
-                ),
-                decoration: InputDecoration(
-                  hintText: '请输入不超过8个字符用户名',
-                  hintStyle: const TextStyle(color: AppColors.textHint),
-                  counterText: '',
-                  suffixText:
-                      '${_usernameController.text.length}/$_maxNameLength',
-                  suffixStyle: const TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textHint,
-                  ),
-                  border: const UnderlineInputBorder(),
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFE0E0E0)),
-                  ),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 24),
-              // Password
-              Align(
-                alignment: Alignment.centerLeft,
-                child: const Text(
-                  '密码',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppColors.textPrimary,
-                ),
-                decoration: InputDecoration(
-                  hintText: '请输入密码',
-                  hintStyle: const TextStyle(color: AppColors.textHint),
-                  suffixIcon: _passwordController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.cancel,
-                              size: 18, color: AppColors.textHint),
-                          onPressed: () {
-                            _passwordController.clear();
-                            setState(() {});
-                          },
-                        )
-                      : null,
-                  border: const UnderlineInputBorder(),
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFE0E0E0)),
-                  ),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 40),
-              // Submit button
-              SizedBox(
-                width: double.infinity,
-                child: GestureDetector(
-                  onTap: (_canSubmit && !_isLoading) ? _submit : null,
-                  child: Container(
-                    height: 52,
-                    decoration: BoxDecoration(
-                      gradient: _canSubmit
-                          ? AppColors.purpleButtonGradient
-                          : const LinearGradient(
-                              colors: [Color(0xFFCCCCCC), Color(0xFFDDDDDD)],
-                            ),
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                    alignment: Alignment.center,
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            '完成',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-            ],
+      ),
+    );
+  }
+}
+
+class _SetupAvatar extends StatelessWidget {
+  const _SetupAvatar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 104,
+      height: 104,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const RadialGradient(
+          colors: [Color(0xFFF5B8CC), Color(0xFFC5B6F6), Color(0x44FFFFFF)],
+          stops: [0.0, 0.7, 1.0],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
+        boxShadow: [
+          const BoxShadow(
+            color: Color(0x66FFFFFF),
+            blurRadius: 18,
+            spreadRadius: 1,
           ),
+        ],
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.air_rounded,
+          size: 38,
+          color: Color(0xFFFFF2A0),
         ),
       ),
     );

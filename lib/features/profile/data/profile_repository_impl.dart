@@ -1,4 +1,5 @@
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_endpoints.dart';
 import '../domain/models/app_version.dart';
 import '../domain/models/profile.dart';
 import '../domain/repositories/profile_repository.dart';
@@ -10,11 +11,34 @@ class ProfileRepositoryImpl implements ProfileRepository {
 
   @override
   Future<Profile> getProfile() async {
-    // TODO: implement API call
+    try {
+      final json = await _apiClient.get(ApiEndpoints.getCurrentUserInfo);
+      final code = json['code'] as int?;
+      final data = json['data'] as Map<String, dynamic>?;
+
+      if (code == 200 && data != null) {
+        final residentStatus = '${data['residentStatus'] ?? '0'}';
+        final phone = data['mobile'] as String? ?? '';
+        return Profile(
+          userId: '${data['id'] ?? data['userId'] ?? ''}',
+          nickname: data['userName'] as String?,
+          avatarUrl:
+              data['avatarUrl'] as String? ??
+              data['avatar'] as String? ??
+              data['headImage'] as String?,
+          phone: _maskPhone(phone),
+          isVerified: residentStatus == '1',
+          avatarPreset: 'flower',
+        );
+      }
+    } catch (_) {
+      // Fall through to an empty profile so the profile page remains usable.
+    }
+
     return const Profile(
-      userId: 'demo',
-      nickname: '昵称3934',
-      phone: '136****5678',
+      userId: '',
+      nickname: null,
+      phone: '',
       avatarPreset: 'flower',
     );
   }
@@ -26,7 +50,15 @@ class ProfileRepositoryImpl implements ProfileRepository {
 
   @override
   Future<void> updateNickname(String nickname) async {
-    // TODO: implement
+    final json = await _apiClient.post(
+      ApiEndpoints.updateNickname,
+      data: {'userName': nickname},
+      queryParameters: {'userName': nickname},
+    );
+    final code = json['code'] as int?;
+    if (code != 200) {
+      throw Exception(json['message'] ?? '用户名更新失败');
+    }
   }
 
   @override
@@ -78,5 +110,10 @@ class ProfileRepositoryImpl implements ProfileRepository {
     required String code,
   }) async {
     // TODO: implement
+  }
+
+  String _maskPhone(String phone) {
+    if (phone.length != 11) return phone;
+    return '${phone.substring(0, 3)}****${phone.substring(7)}';
   }
 }
