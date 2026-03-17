@@ -20,22 +20,21 @@ class _SeekBarState extends ConsumerState<SeekBar> {
     final position = playerState.position;
     final duration = playerState.duration;
 
-    final maxSeconds = duration.inMilliseconds > 0
-        ? duration.inMilliseconds.toDouble()
-        : 1.0;
+    final maxSeconds =
+        duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
     final currentValue = _dragValue ?? position.inMilliseconds.toDouble();
 
     return Column(
       children: [
         SliderTheme(
           data: SliderThemeData(
-            trackHeight: 3,
-            activeTrackColor: Colors.white,
-            inactiveTrackColor: Colors.white.withValues(alpha: 0.25),
+            trackHeight: 8,
+            activeTrackColor: const Color(0xFF6A53A7),
+            inactiveTrackColor: const Color(0xFFD9D9D9),
             thumbColor: Colors.white,
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-            overlayColor: AppColors.primary.withValues(alpha: 0.2),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+            overlayColor: AppColors.primary.withValues(alpha: 0.12),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
           ),
           child: Slider(
             value: currentValue.clamp(0, maxSeconds),
@@ -62,17 +61,11 @@ class _SeekBarState extends ConsumerState<SeekBar> {
                       ? Duration(milliseconds: _dragValue!.toInt())
                       : position,
                 ),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xFFC0C0C0)),
               ),
               Text(
                 _formatDuration(duration),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xFFC0C0C0)),
               ),
             ],
           ),

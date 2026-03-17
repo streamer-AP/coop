@@ -56,3 +56,9 @@ class SignalFiles extends Table {
   IntColumn get entryId => integer().references(AudioEntries, #id)();
   TextColumn get filePath => text()();
 }
+
+class ScriptFiles extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get entryId => integer().references(AudioEntries, #id)();
+  TextColumn get filePath => text()();
+}

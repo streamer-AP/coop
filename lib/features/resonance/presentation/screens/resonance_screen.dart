@@ -47,18 +47,16 @@ class ResonanceScreen extends ConsumerWidget {
                     child: Container(
                       decoration: const BoxDecoration(
                         color: AppColors.listBackground,
-                        borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(30)),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(30),
+                        ),
                       ),
                       child: Column(
                         children: [
                           _buildTabBar(),
                           const Expanded(
                             child: TabBarView(
-                              children: [
-                                _AllEntriesTab(),
-                                _CollectionsTab(),
-                              ],
+                              children: [_AllEntriesTab(), _CollectionsTab()],
                             ),
                           ),
                         ],
@@ -79,47 +77,59 @@ class ResonanceScreen extends ConsumerWidget {
   }
 
   Widget _buildAppBar(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
-        children: [
-          // Back button
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFE0E0E0).withValues(alpha: 0.6),
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.chevron_left, size: 28),
-              onPressed: () => context.pop(),
-              color: const Color(0xFF49454F),
-            ),
-          ),
-          const Expanded(
-            child: Text(
-              '共鸣',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1C1B1F),
+    return Builder(
+      builder: (context) {
+        final tabController = DefaultTabController.of(context);
+        return AnimatedBuilder(
+          animation: tabController,
+          builder: (context, _) {
+            final showImport = tabController.index == 0;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0E0E0).withValues(alpha: 0.6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.chevron_left, size: 28),
+                      onPressed: () => context.pop(),
+                      color: const Color(0xFF49454F),
+                    ),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      '共鸣',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1C1B1F),
+                      ),
+                    ),
+                  ),
+                  if (showImport)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE0E0E0).withValues(alpha: 0.6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.add_box_outlined, size: 24),
+                        onPressed: () => _onImportTap(context, ref),
+                        color: const Color(0xFF49454F),
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 48),
+                ],
               ),
-            ),
-          ),
-          // Import button
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFE0E0E0).withValues(alpha: 0.6),
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.add_box_outlined, size: 24),
-              onPressed: () => _onImportTap(context, ref),
-              color: const Color(0xFF49454F),
-            ),
-          ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -134,10 +144,7 @@ class ResonanceScreen extends ConsumerWidget {
               tabAlignment: TabAlignment.start,
               padding: EdgeInsets.zero,
               labelPadding: EdgeInsets.only(right: 24),
-              tabs: [
-                Tab(text: '全部'),
-                Tab(text: '合集'),
-              ],
+              tabs: [Tab(text: '全部'), Tab(text: '合集')],
             ),
           ),
           _SortButton(),
@@ -191,11 +198,14 @@ class _AllEntriesTab extends ConsumerWidget {
         // Apply search filter
         if (searchQuery.isNotEmpty) {
           final query = searchQuery.toLowerCase();
-          filtered = filtered
-              .where((e) =>
-                  e.title.toLowerCase().contains(query) ||
-                  (e.artist?.toLowerCase().contains(query) ?? false))
-              .toList();
+          filtered =
+              filtered
+                  .where(
+                    (e) =>
+                        e.title.toLowerCase().contains(query) ||
+                        (e.artist?.toLowerCase().contains(query) ?? false),
+                  )
+                  .toList();
         }
 
         // Apply sorting
@@ -212,9 +222,7 @@ class _AllEntriesTab extends ConsumerWidget {
             return AudioEntryTile(
               entry: entry,
               onTap: () {
-                ref
-                    .read(playerStateNotifierProvider.notifier)
-                    .playEntry(entry, context: filtered);
+                ref.read(playerStateNotifierProvider.notifier).playEntry(entry);
               },
               onMoreTap: () {
                 AudioEntryActionSheet.show(context, entry: entry);
@@ -236,11 +244,17 @@ class _AllEntriesTab extends ConsumerWidget {
       case SortMode.alphabeticalDesc:
         sorted.sort((a, b) => b.title.compareTo(a.title));
       case SortMode.timeAsc:
-        sorted.sort((a, b) =>
-            (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
+        sorted.sort(
+          (a, b) => (a.createdAt ?? DateTime(0)).compareTo(
+            b.createdAt ?? DateTime(0),
+          ),
+        );
       case SortMode.timeDesc:
-        sorted.sort((a, b) =>
-            (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+        sorted.sort(
+          (a, b) => (b.createdAt ?? DateTime(0)).compareTo(
+            a.createdAt ?? DateTime(0),
+          ),
+        );
     }
     return sorted;
   }
@@ -258,18 +272,12 @@ class _AllEntriesTab extends ConsumerWidget {
           const SizedBox(height: 16),
           const Text(
             '还没有资源哦~',
-            style: TextStyle(
-              fontSize: 16,
-              color: Color(0xFF79747E),
-            ),
+            style: TextStyle(fontSize: 16, color: Color(0xFF79747E)),
           ),
           const SizedBox(height: 4),
           const Text(
             '点击右上角导入音频',
-            style: TextStyle(
-              fontSize: 14,
-              color: Color(0xFF79747E),
-            ),
+            style: TextStyle(fontSize: 14, color: Color(0xFF79747E)),
           ),
         ],
       ),
@@ -293,8 +301,10 @@ class _CollectionsTab extends ConsumerWidget {
             InkWell(
               onTap: () => _showNewCollectionDialog(context, ref),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     Container(
@@ -313,28 +323,25 @@ class _CollectionsTab extends ConsumerWidget {
                     const SizedBox(width: 12),
                     const Text(
                       '新建合集',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Color(0xFF79747E),
-                      ),
+                      style: TextStyle(fontSize: 16, color: Color(0xFF79747E)),
                     ),
                   ],
                 ),
               ),
             ),
-            ...collections.map((collection) => CollectionCard(
-                  collection: collection,
-                  onTap: () => context.pushNamed(
-                    RouteNames.collectionDetail,
-                    pathParameters: {'id': collection.id.toString()},
-                  ),
-                  onMoreTap: () {
-                    CollectionActionSheet.show(
-                      context,
-                      collection: collection,
-                    );
-                  },
-                )),
+            ...collections.map(
+              (collection) => CollectionCard(
+                collection: collection,
+                onTap:
+                    () => context.pushNamed(
+                      RouteNames.collectionDetail,
+                      pathParameters: {'id': collection.id.toString()},
+                    ),
+                onMoreTap: () {
+                  CollectionActionSheet.show(context, collection: collection);
+                },
+              ),
+            ),
           ],
         );
       },
@@ -347,34 +354,33 @@ class _CollectionsTab extends ConsumerWidget {
     final controller = TextEditingController();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('新建合集'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: '请输入合集名称',
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('新建合集'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: '请输入合集名称'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  final name = controller.text.trim();
+                  if (name.isEmpty) return;
+                  final service = ref.read(collectionServiceProvider);
+                  await service.createCollection(
+                    AudioCollection(id: 0, title: name),
+                  );
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                },
+                child: const Text('确定'),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final name = controller.text.trim();
-              if (name.isEmpty) return;
-              final service = ref.read(collectionServiceProvider);
-              await service.createCollection(
-                AudioCollection(id: 0, title: name),
-              );
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-            child: const Text('确定'),
-          ),
-        ],
-      ),
     );
   }
 }

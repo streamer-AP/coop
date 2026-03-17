@@ -9,9 +9,13 @@ class MainActivity : FlutterActivity() {
         UnityChannelHost.attach(
             messenger = flutterEngine.dartExecutor.binaryMessenger,
         )
+        MediaExtractionHost.attach(
+            messenger = flutterEngine.dartExecutor.binaryMessenger,
+        )
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        MediaExtractionHost.detach()
         UnityChannelHost.detach()
         super.cleanUpFlutterEngine(flutterEngine)
     }

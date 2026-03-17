@@ -5,13 +5,16 @@ import '../../application/providers/player_providers.dart';
 import '../../domain/models/playlist.dart';
 
 class PlayerControls extends ConsumerWidget {
-  const PlayerControls({super.key});
+  const PlayerControls({super.key, this.onPlaylistTap});
+
+  final VoidCallback? onPlaylistTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerStateNotifierProvider);
     final playlistSvc = ref.watch(playlistServiceProvider);
     final repeatMode = playlistSvc.currentPlaylist.repeatMode;
+    final hasEntry = playerState.currentEntry != null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -21,18 +24,26 @@ class PlayerControls extends ConsumerWidget {
           // Repeat mode
           IconButton(
             icon: _repeatIcon(repeatMode),
-            onPressed: () {
-              ref.read(playerStateNotifierProvider.notifier).cycleRepeatMode();
-            },
+            onPressed:
+                hasEntry
+                    ? () {
+                      ref
+                          .read(playerStateNotifierProvider.notifier)
+                          .cycleRepeatMode();
+                    }
+                    : null,
           ),
           // Previous
           IconButton(
             icon: const Icon(Icons.skip_previous_rounded),
             iconSize: 36,
             color: Colors.white,
-            onPressed: () {
-              ref.read(playerStateNotifierProvider.notifier).previous();
-            },
+            onPressed:
+                hasEntry
+                    ? () {
+                      ref.read(playerStateNotifierProvider.notifier).previous();
+                    }
+                    : null,
           ),
           // Play / Pause
           Container(
@@ -41,9 +52,7 @@ class PlayerControls extends ConsumerWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Colors.white.withValues(alpha: 0.2),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3),
-              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
             ),
             child: IconButton(
               icon: Icon(
@@ -51,12 +60,22 @@ class PlayerControls extends ConsumerWidget {
                     ? Icons.pause_rounded
                     : Icons.play_arrow_rounded,
                 size: 36,
-                color: Colors.white,
+                color:
+                    hasEntry
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.4),
               ),
-              onPressed: () {
-                final notifier = ref.read(playerStateNotifierProvider.notifier);
-                playerState.isPlaying ? notifier.pause() : notifier.play();
-              },
+              onPressed:
+                  hasEntry
+                      ? () {
+                        final notifier = ref.read(
+                          playerStateNotifierProvider.notifier,
+                        );
+                        playerState.isPlaying
+                            ? notifier.pause()
+                            : notifier.play();
+                      }
+                      : null,
             ),
           ),
           // Next
@@ -64,17 +83,22 @@ class PlayerControls extends ConsumerWidget {
             icon: const Icon(Icons.skip_next_rounded),
             iconSize: 36,
             color: Colors.white,
-            onPressed: () {
-              ref.read(playerStateNotifierProvider.notifier).next();
-            },
+            onPressed:
+                hasEntry
+                    ? () {
+                      ref.read(playerStateNotifierProvider.notifier).next();
+                    }
+                    : null,
           ),
-          // Invisible counterpart to balance the repeat button on the left
-          const Opacity(
-            opacity: 0,
-            child: IconButton(
-              icon: Icon(Icons.repeat),
-              onPressed: null,
+          IconButton(
+            icon: Icon(
+              Icons.queue_music_rounded,
+              color:
+                  hasEntry
+                      ? Colors.white.withValues(alpha: 0.9)
+                      : Colors.white.withValues(alpha: 0.35),
             ),
+            onPressed: hasEntry ? onPlaylistTap : null,
           ),
         ],
       ),

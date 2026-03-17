@@ -30,6 +30,7 @@ part 'app_database.g.dart';
     PlaylistItems,
     Subtitles,
     SignalFiles,
+    ScriptFiles,
     // Controller
     Waveforms,
     WaveformKeyframes,
@@ -51,7 +52,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -74,6 +75,10 @@ class AppDatabase extends _$AppDatabase {
         // v2 → v3: 新增消息表
         if (from < 3) {
           await m.createTable(messages);
+        }
+        // v3 → v4: 新增台本文件表
+        if (from < 4) {
+          await m.createTable(scriptFiles);
         }
       },
     );

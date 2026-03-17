@@ -4,15 +4,18 @@ import '../tables/resonance_tables.dart';
 
 part 'resonance_dao.g.dart';
 
-@DriftAccessor(tables: [
-  AudioEntries,
-  AudioCollections,
-  EntryCollectionCrossRef,
-  Playlists,
-  PlaylistItems,
-  Subtitles,
-  SignalFiles,
-])
+@DriftAccessor(
+  tables: [
+    AudioEntries,
+    AudioCollections,
+    EntryCollectionCrossRef,
+    Playlists,
+    PlaylistItems,
+    Subtitles,
+    SignalFiles,
+    ScriptFiles,
+  ],
+)
 class ResonanceDao extends DatabaseAccessor<AppDatabase>
     with _$ResonanceDaoMixin {
   ResonanceDao(super.db);
@@ -24,8 +27,7 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
   Stream<List<AudioEntry>> watchAllEntries() => select(audioEntries).watch();
 
   Future<AudioEntry?> getEntry(int id) =>
-      (select(audioEntries)..where((t) => t.id.equals(id)))
-          .getSingleOrNull();
+      (select(audioEntries)..where((t) => t.id.equals(id))).getSingleOrNull();
 
   Future<int> insertEntry(AudioEntriesCompanion entry) =>
       into(audioEntries).insert(entry);
@@ -54,8 +56,7 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
     final query = select(audioCollections).join([
       leftOuterJoin(
         entryCollectionCrossRef,
-        entryCollectionCrossRef.collectionId
-            .equalsExp(audioCollections.id),
+        entryCollectionCrossRef.collectionId.equalsExp(audioCollections.id),
       ),
     ]);
 
@@ -74,8 +75,8 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
       select(audioCollections).watch();
 
   Future<AudioCollection?> getCollection(int id) =>
-      (select(audioCollections)..where((t) => t.id.equals(id)))
-          .getSingleOrNull();
+      (select(audioCollections)
+        ..where((t) => t.id.equals(id))).getSingleOrNull();
 
   Future<int> insertCollection(AudioCollectionsCompanion collection) =>
       into(audioCollections).insert(collection);
@@ -119,39 +120,39 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<int> removeEntryFromCollection(int entryId, int collectionId) =>
-      (delete(entryCollectionCrossRef)
-            ..where((t) =>
-                t.entryId.equals(entryId) &
-                t.collectionId.equals(collectionId)))
-          .go();
+      (delete(entryCollectionCrossRef)..where(
+        (t) => t.entryId.equals(entryId) & t.collectionId.equals(collectionId),
+      )).go();
 
   Future<List<AudioEntry>> getEntriesForCollection(int collectionId) async {
-    final query = select(audioEntries).join([
-      innerJoin(
-        entryCollectionCrossRef,
-        entryCollectionCrossRef.entryId.equalsExp(audioEntries.id),
-      ),
-    ])
-      ..where(entryCollectionCrossRef.collectionId.equals(collectionId))
-      ..orderBy([OrderingTerm.asc(entryCollectionCrossRef.sortOrder)]);
+    final query =
+        select(audioEntries).join([
+            innerJoin(
+              entryCollectionCrossRef,
+              entryCollectionCrossRef.entryId.equalsExp(audioEntries.id),
+            ),
+          ])
+          ..where(entryCollectionCrossRef.collectionId.equals(collectionId))
+          ..orderBy([OrderingTerm.asc(entryCollectionCrossRef.sortOrder)]);
 
     final rows = await query.get();
     return rows.map((row) => row.readTable(audioEntries)).toList();
   }
 
   Stream<List<AudioEntry>> watchEntriesForCollection(int collectionId) {
-    final query = select(audioEntries).join([
-      innerJoin(
-        entryCollectionCrossRef,
-        entryCollectionCrossRef.entryId.equalsExp(audioEntries.id),
-      ),
-    ])
-      ..where(entryCollectionCrossRef.collectionId.equals(collectionId))
-      ..orderBy([OrderingTerm.asc(entryCollectionCrossRef.sortOrder)]);
+    final query =
+        select(audioEntries).join([
+            innerJoin(
+              entryCollectionCrossRef,
+              entryCollectionCrossRef.entryId.equalsExp(audioEntries.id),
+            ),
+          ])
+          ..where(entryCollectionCrossRef.collectionId.equals(collectionId))
+          ..orderBy([OrderingTerm.asc(entryCollectionCrossRef.sortOrder)]);
 
     return query.watch().map(
-          (rows) => rows.map((row) => row.readTable(audioEntries)).toList(),
-        );
+      (rows) => rows.map((row) => row.readTable(audioEntries)).toList(),
+    );
   }
 
   Future<void> reorderEntriesInCollection(
@@ -163,18 +164,20 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
         b.update(
           entryCollectionCrossRef,
           EntryCollectionCrossRefCompanion(sortOrder: Value(i)),
-          where: ($EntryCollectionCrossRefTable t) =>
-              t.entryId.equals(entryIds[i]) &
-              t.collectionId.equals(collectionId),
+          where:
+              ($EntryCollectionCrossRefTable t) =>
+                  t.entryId.equals(entryIds[i]) &
+                  t.collectionId.equals(collectionId),
         );
       }
     });
   }
 
   Future<int> _maxSortOrder(int collectionId) async {
-    final query = selectOnly(entryCollectionCrossRef)
-      ..addColumns([entryCollectionCrossRef.sortOrder.max()])
-      ..where(entryCollectionCrossRef.collectionId.equals(collectionId));
+    final query =
+        selectOnly(entryCollectionCrossRef)
+          ..addColumns([entryCollectionCrossRef.sortOrder.max()])
+          ..where(entryCollectionCrossRef.collectionId.equals(collectionId));
     final result = await query.getSingleOrNull();
     return result?.read(entryCollectionCrossRef.sortOrder.max()) ?? -1;
   }
@@ -193,12 +196,24 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
   // ── SignalFiles ───────────────────────────────────────────────────────
 
   Future<SignalFile?> getSignalFileForEntry(int entryId) =>
-      (select(signalFiles)..where((t) => t.entryId.equals(entryId)))
-          .getSingleOrNull();
+      (select(signalFiles)
+        ..where((t) => t.entryId.equals(entryId))).getSingleOrNull();
 
   Future<int> insertSignalFile(SignalFilesCompanion signalFile) =>
       into(signalFiles).insert(signalFile);
 
   Future<int> deleteSignalFilesForEntry(int entryId) =>
       (delete(signalFiles)..where((t) => t.entryId.equals(entryId))).go();
+
+  // ── ScriptFiles ───────────────────────────────────────────────────────
+
+  Future<ScriptFile?> getScriptFileForEntry(int entryId) =>
+      (select(scriptFiles)
+        ..where((t) => t.entryId.equals(entryId))).getSingleOrNull();
+
+  Future<int> insertScriptFile(ScriptFilesCompanion scriptFile) =>
+      into(scriptFiles).insert(scriptFile);
+
+  Future<int> deleteScriptFilesForEntry(int entryId) =>
+      (delete(scriptFiles)..where((t) => t.entryId.equals(entryId))).go();
 }

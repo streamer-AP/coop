@@ -33,6 +33,10 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
   PlayerState build() {
     final audioPlayer = ref.read(audioPlayerServiceProvider);
     final playlistSvc = ref.read(playlistServiceProvider);
+    audioPlayer.setSkipHandlers(
+      onSkipToNext: () => next(),
+      onSkipToPrevious: () => previous(),
+    );
 
     _subscriptions.add(
       audioPlayer.playingStream.listen((playing) {
@@ -133,6 +137,73 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
 
   RepeatMode cycleRepeatMode() {
     return ref.read(playlistServiceProvider).cycleRepeatMode();
+  }
+
+  void addToCurrentPlaylist(AudioEntry entry) {
+    ref.read(playlistServiceProvider).addEntry(entry);
+  }
+
+  Future<void> playPlaylistItem(String uid) async {
+    final playlistSvc = ref.read(playlistServiceProvider);
+    final audioPlayer = ref.read(audioPlayerServiceProvider);
+
+    final changed = playlistSvc.playItem(uid);
+    if (!changed) return;
+
+    final entry = playlistSvc.currentPlaylist.currentItem?.entry;
+    if (entry == null) return;
+
+    await audioPlayer.setSource(entry);
+    await audioPlayer.play();
+  }
+
+  Future<void> removeFromPlaylist(String uid) async {
+    final playlistSvc = ref.read(playlistServiceProvider);
+    final audioPlayer = ref.read(audioPlayerServiceProvider);
+    final previous = playlistSvc.currentPlaylist;
+    final removedIndex = previous.items.indexWhere((item) => item.uid == uid);
+    if (removedIndex < 0) return;
+
+    final wasCurrent = removedIndex == previous.currentIndex;
+    final wasPlaying = state.isPlaying;
+
+    playlistSvc.removeItem(uid);
+    final nextPlaylist = playlistSvc.currentPlaylist;
+
+    if (nextPlaylist.isEmpty) {
+      await audioPlayer.stop();
+      state = state.copyWith(
+        isPlaying: false,
+        position: Duration.zero,
+        duration: Duration.zero,
+        currentEntry: null,
+      );
+      return;
+    }
+
+    if (wasCurrent) {
+      final nextEntry = nextPlaylist.currentItem?.entry;
+      if (nextEntry != null) {
+        await audioPlayer.setSource(nextEntry);
+        if (wasPlaying) {
+          await audioPlayer.play();
+        } else {
+          await audioPlayer.pause();
+        }
+      }
+    }
+  }
+
+  Future<void> clearPlaylist() async {
+    final audioPlayer = ref.read(audioPlayerServiceProvider);
+    ref.read(playlistServiceProvider).clear();
+    await audioPlayer.stop();
+    state = state.copyWith(
+      isPlaying: false,
+      position: Duration.zero,
+      duration: Duration.zero,
+      currentEntry: null,
+    );
   }
 
   void setSignalMode(SignalMode mode) {

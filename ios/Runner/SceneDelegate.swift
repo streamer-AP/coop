@@ -11,6 +11,7 @@ class SceneDelegate: FlutterSceneDelegate {
 
     if let controller = window?.rootViewController as? FlutterViewController {
       UnityChannelBridge.shared.attach(to: controller.binaryMessenger)
+      MediaExtractionBridge.shared.attach(to: controller.binaryMessenger)
     }
   }
 }

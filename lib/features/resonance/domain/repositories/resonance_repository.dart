@@ -31,10 +31,7 @@ abstract class ResonanceRepository {
   Future<void> removeEntryFromCollection(int entryId, int collectionId);
   Future<List<AudioEntry>> getEntriesForCollection(int collectionId);
   Stream<List<AudioEntry>> watchEntriesForCollection(int collectionId);
-  Future<void> reorderEntriesInCollection(
-    int collectionId,
-    List<int> entryIds,
-  );
+  Future<void> reorderEntriesInCollection(int collectionId, List<int> entryIds);
 
   // ── Subtitles ─────────────────────────────────────────────────────────
 
@@ -47,4 +44,10 @@ abstract class ResonanceRepository {
   Future<String?> getSignalFilePathForEntry(int entryId);
   Future<void> insertSignalFile(int entryId, String filePath);
   Future<void> deleteSignalFilesForEntry(int entryId);
+
+  // ── ScriptFiles ───────────────────────────────────────────────────────
+
+  Future<String?> getScriptFilePathForEntry(int entryId);
+  Future<void> insertScriptFile(int entryId, String filePath);
+  Future<void> deleteScriptFilesForEntry(int entryId);
 }

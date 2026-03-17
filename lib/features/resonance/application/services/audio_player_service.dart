@@ -14,6 +14,8 @@ class AudioPlayerService {
   final AudioPlayer _player = AudioPlayer();
   late final OmaoAudioHandler _audioHandler;
   bool _initialized = false;
+  VoidCallback? _onSkipToNext;
+  VoidCallback? _onSkipToPrevious;
 
   AudioPlayer get player => _player;
 
@@ -24,8 +26,9 @@ class AudioPlayerService {
       _player.processingStateStream;
 
   /// Stream that emits when a track completes naturally.
-  Stream<void> get completionStream => _player.processingStateStream
-      .where((state) => state == ProcessingState.completed);
+  Stream<void> get completionStream => _player.processingStateStream.where(
+    (state) => state == ProcessingState.completed,
+  );
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -42,20 +45,36 @@ class AudioPlayerService {
         androidStopForegroundOnPause: true,
       ),
     );
+    _audioHandler.onSkipToNext = _onSkipToNext;
+    _audioHandler.onSkipToPrevious = _onSkipToPrevious;
 
     _initialized = true;
     AppLogger().info('AudioPlayerService initialized');
   }
 
+  void setSkipHandlers({
+    VoidCallback? onSkipToNext,
+    VoidCallback? onSkipToPrevious,
+  }) {
+    _onSkipToNext = onSkipToNext;
+    _onSkipToPrevious = onSkipToPrevious;
+    if (_initialized) {
+      _audioHandler.onSkipToNext = onSkipToNext;
+      _audioHandler.onSkipToPrevious = onSkipToPrevious;
+    }
+  }
+
   Future<void> setSource(AudioEntry entry) async {
     try {
       await _player.setFilePath(entry.filePath);
-      _audioHandler.mediaItem.add(MediaItem(
-        id: entry.id.toString(),
-        title: entry.title,
-        duration: Duration(milliseconds: entry.durationMs),
-        artUri: entry.coverPath != null ? Uri.file(entry.coverPath!) : null,
-      ));
+      _audioHandler.mediaItem.add(
+        MediaItem(
+          id: entry.id.toString(),
+          title: entry.title,
+          duration: Duration(milliseconds: entry.durationMs),
+          artUri: entry.coverPath != null ? Uri.file(entry.coverPath!) : null,
+        ),
+      );
     } catch (e, st) {
       AppLogger().error('Failed to set source', error: e, stackTrace: st);
       rethrow;
@@ -79,12 +98,14 @@ class AudioPlayerService {
   }
 
   void updateMediaItem(AudioEntry entry) {
-    _audioHandler.mediaItem.add(MediaItem(
-      id: entry.id.toString(),
-      title: entry.title,
-      duration: Duration(milliseconds: entry.durationMs),
-      artUri: entry.coverPath != null ? Uri.file(entry.coverPath!) : null,
-    ));
+    _audioHandler.mediaItem.add(
+      MediaItem(
+        id: entry.id.toString(),
+        title: entry.title,
+        duration: Duration(milliseconds: entry.durationMs),
+        artUri: entry.coverPath != null ? Uri.file(entry.coverPath!) : null,
+      ),
+    );
   }
 
   Future<void> dispose() async {
@@ -104,31 +125,33 @@ class OmaoAudioHandler extends BaseAudioHandler with SeekHandler {
   VoidCallback? onSkipToPrevious;
 
   void _broadcastState(PlaybackEvent event) {
-    playbackState.add(playbackState.value.copyWith(
-      controls: [
-        MediaControl.skipToPrevious,
-        if (_player.playing) MediaControl.pause else MediaControl.play,
-        MediaControl.skipToNext,
-      ],
-      systemActions: const {
-        MediaAction.seek,
-        MediaAction.seekForward,
-        MediaAction.seekBackward,
-      },
-      androidCompactActionIndices: const [0, 1, 2],
-      processingState: switch (_player.processingState) {
-        ProcessingState.idle => AudioProcessingState.idle,
-        ProcessingState.loading => AudioProcessingState.loading,
-        ProcessingState.buffering => AudioProcessingState.buffering,
-        ProcessingState.ready => AudioProcessingState.ready,
-        ProcessingState.completed => AudioProcessingState.completed,
-      },
-      playing: _player.playing,
-      updatePosition: _player.position,
-      bufferedPosition: _player.bufferedPosition,
-      speed: _player.speed,
-      queueIndex: event.currentIndex,
-    ));
+    playbackState.add(
+      playbackState.value.copyWith(
+        controls: [
+          MediaControl.skipToPrevious,
+          if (_player.playing) MediaControl.pause else MediaControl.play,
+          MediaControl.skipToNext,
+        ],
+        systemActions: const {
+          MediaAction.seek,
+          MediaAction.seekForward,
+          MediaAction.seekBackward,
+        },
+        androidCompactActionIndices: const [0, 1, 2],
+        processingState: switch (_player.processingState) {
+          ProcessingState.idle => AudioProcessingState.idle,
+          ProcessingState.loading => AudioProcessingState.loading,
+          ProcessingState.buffering => AudioProcessingState.buffering,
+          ProcessingState.ready => AudioProcessingState.ready,
+          ProcessingState.completed => AudioProcessingState.completed,
+        },
+        playing: _player.playing,
+        updatePosition: _player.position,
+        bufferedPosition: _player.bufferedPosition,
+        speed: _player.speed,
+        queueIndex: event.currentIndex,
+      ),
+    );
   }
 
   @override
