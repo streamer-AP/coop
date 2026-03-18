@@ -79,12 +79,16 @@ class ProfileRepositoryImpl implements ProfileRepository {
       return;
     }
 
-    final json = await _apiClient.post(
-      ApiEndpoints.updateAvatar,
-      data: {'avatarUrl': value},
-      queryParameters: {'avatarUrl': value},
-    );
-    _ensureSuccess(json, fallbackMessage: '头像更新失败');
+    try {
+      final json = await _apiClient.post(
+        ApiEndpoints.updateAvatar,
+        data: {'avatarUrl': value},
+        queryParameters: {'avatarUrl': value},
+      );
+      _ensureSuccess(json, fallbackMessage: '头像更新失败');
+    } on DioException catch (error) {
+      throw Exception(_extractDioMessage(error, fallback: '头像更新失败'));
+    }
   }
 
   @override
@@ -148,7 +152,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
     }
 
     final fileName = p.basename(path);
-    final fields = ['file', 'avatar', 'headImage'];
+    final fields = ['file', 'avatar', 'headImage', 'avatarFile', 'image'];
     Object? lastError;
 
     for (final field in fields) {
@@ -162,6 +166,8 @@ class ProfileRepositoryImpl implements ProfileRepository {
         );
         _ensureSuccess(json, fallbackMessage: '头像上传失败');
         return;
+      } on DioException catch (error) {
+        lastError = Exception(_extractDioMessage(error, fallback: '头像上传失败'));
       } catch (e) {
         lastError = e;
       }
@@ -197,5 +203,19 @@ class ProfileRepositoryImpl implements ProfileRepository {
     final isSuccess = code == null || code == 0 || code == 200;
     if (isSuccess) return;
     throw Exception(json['message'] ?? fallbackMessage);
+  }
+
+  String _extractDioMessage(DioException error, {required String fallback}) {
+    final data = error.response?.data;
+    if (data is Map<String, dynamic>) {
+      final message = data['message'] ?? data['msg'] ?? data['error'];
+      if (message is String && message.trim().isNotEmpty) {
+        return message.trim();
+      }
+    }
+
+    return error.message?.trim().isNotEmpty == true
+        ? error.message!.trim()
+        : fallback;
   }
 }
