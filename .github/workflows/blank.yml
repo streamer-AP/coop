@@ -1,0 +1,356 @@
+# AI Push Reviewer + Webhook 通知
+# 文件位置: .github/workflows/ai-push-reviewer.yml
+#
+# ===== 功能说明 =====
+# 1. 在 push 后立即对代码变更进行 AI 审查
+# 2. 审查完成后通过企业微信 webhook 推送结果
+#
+# ===== 配置说明 =====
+# 在仓库 Settings → Secrets and variables → Actions 中配置：
+#
+# 【Secrets（必须）】
+# - OPENAI_API_KEY: OpenAI API 密钥
+#
+# 【Variables（可选）】
+# - OPENAI_BASE_URL: API 地址（默认: https://api.deepseek.com/v1）
+# - OPENAI_MODEL: 模型名称（默认: deepseek-chat）
+
+name: AI Push Review
+
+on:
+  push:
+    # 审查所有分支，只触发代码文件变更
+    paths:
+      - '**/*.dart'
+      - '**/*.py'
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.svelte'
+      - '**/*.go'
+      - '**/*.java'
+      - '**/*.rs'
+      # 注意：测试文件的排除在 git diff 命令中处理
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # 获取最近两次提交用于 diff
+
+      - name: Get changed files
+        id: changed
+        run: |
+          # 处理首次提交的情况
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            DIFF_BASE="HEAD~1"
+          else
+            # 首次提交，使用空树作为基准
+            DIFF_BASE="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+          fi
+
+          # 获取变更的代码文件
+          CHANGED_FILES=$(git diff --name-only ${DIFF_BASE} HEAD -- \
+            '*.dart' '*.py' '*.js' '*.ts' '*.svelte' '*.go' '*.java' '*.rs' \
+            ':!*.test.*' ':!*.spec.*' ':!**/tests/**' \
+            2>/dev/null || echo "")
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "no_changes=true" >> $GITHUB_OUTPUT
+            echo "没有需要审查的代码文件变更"
+            exit 0
+          fi
+
+          # 保存 DIFF_BASE 供后续步骤使用
+          echo "diff_base=${DIFF_BASE}" >> $GITHUB_OUTPUT
+
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "变更的文件:"
+          echo "$CHANGED_FILES"
+
+      - name: Get diff content
+        if: steps.changed.outputs.no_changes != 'true'
+        id: diff
+        run: |
+          DIFF_BASE="${{ steps.changed.outputs.diff_base }}"
+
+          # 获取 diff 内容（限制大小 15KB）
+          DIFF_CONTENT=$(git diff ${DIFF_BASE} HEAD -- \
+            '*.dart' '*.py' '*.js' '*.ts' '*.svelte' '*.go' '*.java' '*.rs' \
+            ':!*.test.*' ':!*.spec.*' ':!**/tests/**' \
+            2>/dev/null | head -c 15000 || echo "")
+
+          # 保存到文件避免 shell 转义问题
+          echo "$DIFF_CONTENT" > /tmp/diff_content.txt
+
+          # 统计信息
+          LINES=$(echo "$DIFF_CONTENT" | wc -l)
+          echo "diff_lines=$LINES" >> $GITHUB_OUTPUT
+
+      - name: Get file contents
+        if: steps.changed.outputs.no_changes != 'true'
+        id: files
+        run: |
+          set -x  # 开启调试模式
+
+          # 简化版：提取变更行附近的上下文
+          MAX_CONTEXT=30  # 变更行前后各保留的行数
+          MAX_SIZE=20000  # 总大小限制 20KB
+          DIFF_BASE="${{ steps.changed.outputs.diff_base }}"
+
+          # 清空文件
+          > /tmp/file_contents.txt
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            [ ! -f "$file" ] && continue
+
+            echo "处理文件: $file"
+
+            # 获取变更的行号（只取新增/修改的行）
+            LINE_NUMS=$(git diff ${DIFF_BASE} HEAD -- "$file" 2>/dev/null | \
+              grep -E "^@@" | \
+              sed -E 's/^@@ -[0-9,]+ \+([0-9]+).*/\1/' || echo "")
+
+            if [ -z "$LINE_NUMS" ]; then
+              echo "  无变更行号，跳过"
+              continue
+            fi
+
+            echo "  变更起始行: $LINE_NUMS"
+
+            # 获取文件总行数
+            TOTAL_LINES=$(wc -l < "$file" | tr -d ' ')
+
+            echo "=== 文件: ${file} ===" >> /tmp/file_contents.txt
+
+            # 对每个变更位置提取上下文
+            for line_num in $LINE_NUMS; do
+              start=$((line_num - MAX_CONTEXT))
+              end=$((line_num + MAX_CONTEXT))
+              [ "$start" -lt 1 ] && start=1
+              [ "$end" -gt "$TOTAL_LINES" ] && end=$TOTAL_LINES
+
+              echo "--- 行 ${start}-${end} ---" >> /tmp/file_contents.txt
+              sed -n "${start},${end}p" "$file" >> /tmp/file_contents.txt 2>/dev/null || true
+              echo "" >> /tmp/file_contents.txt
+
+              # 检查大小限制
+              CURRENT_SIZE=$(wc -c < /tmp/file_contents.txt | tr -d ' ')
+              if [ "$CURRENT_SIZE" -ge "$MAX_SIZE" ]; then
+                echo "  达到大小限制，停止"
+                break 2
+              fi
+            done
+          done <<< "${{ steps.changed.outputs.changed_files }}"
+
+          FINAL_SIZE=$(wc -c < /tmp/file_contents.txt | tr -d ' ')
+          echo "total_size=$FINAL_SIZE" >> $GITHUB_OUTPUT
+          echo "提取的上下文大小: ${FINAL_SIZE} bytes"
+
+          set +x  # 关闭调试模式
+
+      - name: AI Code Review
+        if: steps.changed.outputs.no_changes != 'true'
+        id: review
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://api.deepseek.com/v1' }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'deepseek-chat' }}
+        run: |
+          # 读取 diff 内容
+          DIFF_CONTENT=$(cat /tmp/diff_content.txt)
+
+          # 读取文件完整内容
+          FILE_CONTENTS=$(cat /tmp/file_contents.txt)
+
+          # 清理环境变量中的换行符
+          OPENAI_BASE_URL=$(echo "$OPENAI_BASE_URL" | tr -d '\n\r')
+          OPENAI_MODEL=$(echo "$OPENAI_MODEL" | tr -d '\n\r')
+
+          # 构建审查请求
+          SYSTEM_PROMPT="你是一位资深代码审查专家。请用中文审查以下代码变更。
+
+          审查重点：
+          - 🔴 严重：安全漏洞、数据泄露、逻辑错误
+          - 🟡 一般：性能问题、错误处理、类型安全
+          - 💡 建议：代码优化、最佳实践
+
+          输出格式：
+          1. 变更摘要（1-2句话）
+          2. 问题列表（如有）
+          3. 总体评价（通过/需关注/需修复）
+
+          【重要】所有输出必须使用中文，保持简洁，直接指出问题。"
+
+          USER_PROMPT="请审查以下代码变更：
+
+          变更文件：
+          ${{ steps.changed.outputs.changed_files }}
+
+          Diff 内容：
+          \`\`\`diff
+          ${DIFF_CONTENT}
+          \`\`\`
+
+          文件完整内容（用于理解上下文）：
+          ${FILE_CONTENTS}"
+
+          # 保存 prompt 到文件，避免参数过长
+          echo "$SYSTEM_PROMPT" > /tmp/system_prompt.txt
+          echo "$USER_PROMPT" > /tmp/user_prompt.txt
+
+          # 调试：显示文件大小
+          echo "system_prompt 大小: $(wc -c < /tmp/system_prompt.txt) bytes"
+          echo "user_prompt 大小: $(wc -c < /tmp/user_prompt.txt) bytes"
+
+          # 使用 jq 构建请求 JSON（从文件读取内容）
+          REQUEST_BODY=$(jq -n \
+            --arg model "${OPENAI_MODEL}" \
+            --rawfile system /tmp/system_prompt.txt \
+            --rawfile user /tmp/user_prompt.txt \
+            '{
+              model: $model,
+              messages: [
+                {role: "system", content: $system},
+                {role: "user", content: $user}
+              ],
+              temperature: 0.3,
+              max_tokens: 2000
+            }' 2>&1) || {
+            echo "jq 构建 JSON 失败，使用简化版本"
+            # 回退方案：只发送 diff，不发送文件内容
+            REQUEST_BODY=$(jq -n \
+              --arg model "${OPENAI_MODEL}" \
+              --arg system "$SYSTEM_PROMPT" \
+              --arg user "请审查以下代码变更：$(cat /tmp/diff_content.txt | head -c 10000)" \
+              '{
+                model: $model,
+                messages: [
+                  {role: "system", content: $system},
+                  {role: "user", content: $user}
+                ],
+                temperature: 0.3,
+                max_tokens: 2000
+              }')
+          }
+
+          echo "REQUEST_BODY 大小: $(echo "$REQUEST_BODY" | wc -c) bytes"
+
+          # 构建完整 API URL
+          API_URL="${OPENAI_BASE_URL%/}/chat/completions"
+          echo "调用 API: $API_URL"
+
+          # 调用 API
+          RESPONSE=$(curl -s -X POST "$API_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+            -d "$REQUEST_BODY"
+          )
+
+          # 调试：显示响应（截断敏感信息）
+          echo "API 响应长度: $(echo "$RESPONSE" | wc -c) bytes"
+          echo "API 响应前 500 字符:"
+          echo "$RESPONSE" | head -c 500
+
+          # 提取审查结果
+          if echo "$RESPONSE" | jq -e '.choices[0].message.content' > /dev/null 2>&1; then
+            REVIEW_RESULT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
+          else
+            echo "API 响应解析失败，完整响应:"
+            echo "$RESPONSE"
+            REVIEW_RESULT="审查失败：API 返回异常 - $(echo "$RESPONSE" | jq -r '.error.message // .message // "未知错误"' 2>/dev/null || echo "$RESPONSE" | head -c 200)"
+          fi
+
+          # 保存结果
+          echo "$REVIEW_RESULT" > /tmp/review_result.txt
+
+          # 输出到日志
+          echo "=== AI 审查结果 ==="
+          echo "$REVIEW_RESULT"
+
+      - name: Send Webhook Notification
+        if: steps.changed.outputs.no_changes != 'true'
+        env:
+          WEBHOOK_URL: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=61b5f67c-7e48-46d6-8bd7-a464474e0687'
+        run: |
+          REVIEW_RESULT=$(cat /tmp/review_result.txt)
+          COMMIT_SHA="${{ github.sha }}"
+          COMMIT_SHORT="${COMMIT_SHA:0:7}"
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          COMMIT_AUTHOR="${{ github.event.head_commit.author.name }}"
+          REPO_NAME="${{ github.repository }}"
+          BRANCH="${{ github.ref_name }}"
+          COMMIT_URL="${{ github.event.head_commit.url }}"
+
+          # 企业微信格式（支持 markdown 链接）
+          REPO_URL="https://github.com/${REPO_NAME}"
+          BRANCH_URL="${REPO_URL}/tree/${BRANCH}"
+          ACTION_URL="${REPO_URL}/actions/runs/${{ github.run_id }}"
+
+          # 清理提交信息（移除换行）
+          COMMIT_MSG_CLEAN=$(echo "$COMMIT_MSG" | tr '\n' ' ')
+
+          # 构建消息内容文件
+          echo "**🤖 AI 代码审查报告**" > /tmp/wecom_content.txt
+          echo "" >> /tmp/wecom_content.txt
+          echo "> **仓库**: [${REPO_NAME}](${REPO_URL})" >> /tmp/wecom_content.txt
+          echo "> **分支**: [${BRANCH}](${BRANCH_URL})" >> /tmp/wecom_content.txt
+          echo "> **提交**: [${COMMIT_SHORT}](${COMMIT_URL})" >> /tmp/wecom_content.txt
+          echo "> **作者**: ${COMMIT_AUTHOR}" >> /tmp/wecom_content.txt
+          echo "" >> /tmp/wecom_content.txt
+          echo "**提交信息**: ${COMMIT_MSG_CLEAN}" >> /tmp/wecom_content.txt
+          echo "" >> /tmp/wecom_content.txt
+          echo "---" >> /tmp/wecom_content.txt
+          echo "**📋 审查结果**" >> /tmp/wecom_content.txt
+          echo "" >> /tmp/wecom_content.txt
+          echo "${REVIEW_RESULT}" >> /tmp/wecom_content.txt
+          echo "" >> /tmp/wecom_content.txt
+          echo "---" >> /tmp/wecom_content.txt
+          echo "[查看仓库](${REPO_URL}) | [查看提交](${COMMIT_URL}) | [查看Action](${ACTION_URL})" >> /tmp/wecom_content.txt
+
+          # 使用 jq 构建 JSON（从文件读取，自动处理换行和转义）
+          PAYLOAD=$(jq -n --rawfile content /tmp/wecom_content.txt '{msgtype: "markdown", markdown: {content: $content}}')
+
+          # 发送 webhook
+          echo "发送企业微信 webhook 通知..."
+          HTTP_CODE=$(curl -s -o /tmp/webhook_response.txt -w "%{http_code}" \
+            -X POST "${WEBHOOK_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Webhook 发送成功 (HTTP ${HTTP_CODE})"
+          else
+            echo "❌ Webhook 发送失败 (HTTP ${HTTP_CODE})"
+            cat /tmp/webhook_response.txt
+            exit 1
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## AI Push Review Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.changed.outputs.no_changes }}" == "true" ]; then
+            echo "ℹ️ 没有需要审查的代码文件变更" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### 变更文件" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.changed.outputs.changed_files }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 审查结果" >> $GITHUB_STEP_SUMMARY
+            if [ -f /tmp/review_result.txt ]; then
+              cat /tmp/review_result.txt >> $GITHUB_STEP_SUMMARY
+            fi
+          fi

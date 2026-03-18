@@ -1,0 +1,199 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../core/router/route_names.dart';
+import '../../../../shared/widgets/top_banner_toast.dart';
+import '../../application/providers/auth_providers.dart';
+import '../../domain/models/auth_exception.dart';
+import '../widgets/auth_chrome.dart';
+import '../widgets/auth_fields.dart';
+import 'verification_code_screen.dart';
+
+class RegisterScreen extends ConsumerStatefulWidget {
+  const RegisterScreen({super.key});
+
+  @override
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
+}
+
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+  final _phoneController = TextEditingController();
+  bool _agreedToTerms = false;
+  bool _isLoading = false;
+
+  String get _phoneDigits => _phoneController.text.replaceAll(RegExp(r'\D'), '');
+
+  bool get _canSubmit => _phoneDigits.length >= 11;
+
+  @override
+  void initState() {
+    super.initState();
+    _phoneController.addListener(_handleChanged);
+  }
+
+  @override
+  void dispose() {
+    _phoneController
+      ..removeListener(_handleChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleChanged() {
+    setState(() {});
+  }
+
+  Future<void> _sendCodeAndNavigate() async {
+    if (!_agreedToTerms) {
+      TopBannerToast.show(context, message: '注册前请先阅读并同意相关协议');
+      return;
+    }
+    if (!_canSubmit) return;
+
+    setState(() => _isLoading = true);
+    try {
+      await ref
+          .read(authNotifierProvider.notifier)
+          .sendVerificationCode(_phoneDigits, isRegister: true);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        TopBannerToast.show(
+          context,
+          message: error is AuthException ? error.displayMessage : '验证码发送失败',
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (_) => VerificationCodeScreen(
+              phone: _phoneDigits,
+              title: '验证码注册',
+              isRegister: true,
+              onVerified: _registerWithCode,
+            ),
+      ),
+    );
+  }
+
+  Future<void> _registerWithCode(String code) async {
+    await ref
+        .read(authNotifierProvider.notifier)
+        .register(phone: _phoneDigits, code: code);
+
+    if (!mounted) return;
+    final authState = ref.read(authNotifierProvider);
+    if (authState.hasError) {
+      TopBannerToast.show(
+        context,
+        message:
+            authState.error is AuthException
+                ? (authState.error as AuthException).displayMessage
+                : '注册失败',
+      );
+      return;
+    }
+
+    context.goNamed(RouteNames.setupPassword);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 22),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const AuthBackButton(
+                          iconColor: AuthPalette.title,
+                          backgroundColor: Color(0x40FFFFFF),
+                        ),
+                        const SizedBox(height: 76),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 10),
+                          child: AuthTitleBlock(
+                            title: '账号注册',
+                            subtitle: 'Sign Up',
+                          ),
+                        ),
+                        const SizedBox(height: 76),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Column(
+                            children: [
+                              AuthUnderlineField(
+                                label: '手机号码',
+                                controller: _phoneController,
+                                hintText: '请输入手机号码',
+                                leadingText: '+86 |',
+                                keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  ChinesePhoneNumberFormatter(),
+                                ],
+                                trailing:
+                                    _phoneController.text.isEmpty
+                                        ? null
+                                        : AuthClearButton(
+                                          onTap: () {
+                                            _phoneController.clear();
+                                            setState(() {});
+                                          },
+                                        ),
+                                onChanged: (_) => setState(() {}),
+                              ),
+                              const SizedBox(height: 42),
+                              AuthPrimaryButton(
+                                label: '发送验证码',
+                                enabled: _canSubmit,
+                                loading: _isLoading,
+                                onTap: _canSubmit ? _sendCodeAndNavigate : null,
+                              ),
+                              const SizedBox(height: 14),
+                              AuthAgreementRow(
+                                agreed: _agreedToTerms,
+                                onToggle:
+                                    () => setState(
+                                      () => _agreedToTerms = !_agreedToTerms,
+                                    ),
+                                onUserAgreementTap:
+                                    () => context.pushNamed(
+                                      RouteNames.userAgreement,
+                                    ),
+                                onPrivacyTap:
+                                    () => context.pushNamed(
+                                      RouteNames.privacyPolicy,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
