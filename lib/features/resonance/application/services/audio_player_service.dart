@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui';
 
 import 'package:audio_service/audio_service.dart';
@@ -9,33 +8,11 @@ import 'package:path/path.dart' as p;
 
 import '../../../../core/logging/app_logger.dart';
 import '../../domain/models/audio_entry.dart';
+import 'media_support.dart';
 
 /// Wraps just_audio AudioPlayer + audio_service AudioHandler for background
 /// playback and system media controls.
 class AudioPlayerService {
-  static const Set<String> _supportedMediaExtensions = {
-    'mp3',
-    'wav',
-    'flac',
-    'aac',
-    'm4a',
-    'ogg',
-    'wma',
-    'opus',
-    'amr',
-    'aiff',
-    'aif',
-    'mp4',
-    'mkv',
-    'avi',
-    'mov',
-    'wmv',
-    'flv',
-    'webm',
-    'm4v',
-    '3gp',
-  };
-
   final AudioPlayer _player = AudioPlayer();
   late final OmaoAudioHandler _audioHandler;
   bool _initialized = false;
@@ -97,16 +74,14 @@ class AudioPlayerService {
         throw Exception('音频路径为空');
       }
 
-      final file = File(path);
-      if (!await file.exists()) {
-        throw Exception('音频文件不存在');
-      }
+      AppLogger().info(
+        'Loading media entry id=${entry.id}, title=${entry.title}, ext=${p.extension(path)}, path=$path',
+      );
 
-      if (await file.length() <= 0) {
-        throw Exception('音频文件为空');
-      }
-
-      await _validatePlayableFile(path, file);
+      await ResonanceMediaSupport.ensureLikelyPlayableMediaFile(
+        path,
+        label: '音频文件',
+      );
 
       final duration = await _player.setFilePath(path);
       _audioHandler.mediaItem.add(
@@ -124,61 +99,13 @@ class AudioPlayerService {
       );
       return duration;
     } catch (e, st) {
-      AppLogger().error('Failed to set source', error: e, stackTrace: st);
+      AppLogger().error(
+        'Failed to set source, path=$path',
+        error: e,
+        stackTrace: st,
+      );
       throw Exception(_normalizePlaybackError(e, path));
     }
-  }
-
-  Future<void> _validatePlayableFile(String path, File file) async {
-    final ext = p.extension(path).toLowerCase().replaceFirst('.', '');
-    if (ext.isNotEmpty && !_supportedMediaExtensions.contains(ext)) {
-      throw Exception('不支持的媒体格式: .$ext');
-    }
-
-    // Detect obvious text/JSON/XML payloads that were imported by mistake.
-    final header = await _readHeader(file, length: 128);
-    if (header.isEmpty) return;
-    if (!_looksLikeText(header)) return;
-
-    final headerText = String.fromCharCodes(header).trimLeft();
-    final textMarkers = <String>[
-      '{',
-      '[',
-      '<',
-      'WEBVTT',
-      '[00:',
-      '[01:',
-      '[02:',
-      '1\n00:',
-      '#EXTM3U',
-    ];
-    if (textMarkers.any(headerText.startsWith)) {
-      throw Exception('文件内容不是可播放音频，请重新导入媒体文件');
-    }
-  }
-
-  Future<List<int>> _readHeader(File file, {required int length}) async {
-    final raf = await file.open();
-    try {
-      final fileLength = await raf.length();
-      final safeLength = fileLength < length ? fileLength : length;
-      if (safeLength <= 0) return const [];
-      return raf.read(safeLength);
-    } finally {
-      await raf.close();
-    }
-  }
-
-  bool _looksLikeText(List<int> bytes) {
-    if (bytes.isEmpty) return false;
-    var printable = 0;
-    for (final b in bytes) {
-      if (b == 0) return false;
-      if (b == 9 || b == 10 || b == 13 || (b >= 32 && b <= 126)) {
-        printable++;
-      }
-    }
-    return printable / bytes.length > 0.9;
   }
 
   String _normalizePlaybackError(Object error, String path) {
