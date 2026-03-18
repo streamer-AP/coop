@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../controller_assets.dart';
+
 class FirstConnectionScreen extends ConsumerStatefulWidget {
   const FirstConnectionScreen({super.key});
 
@@ -14,14 +16,14 @@ class FirstConnectionScreen extends ConsumerStatefulWidget {
 
 class _FirstConnectionScreen extends ConsumerState<FirstConnectionScreen>
     with SingleTickerProviderStateMixin {
-  static const _backgroundAsset = 'assets/images/icon_blue_con_bg.png';
-  static const _noDeviceAsset = 'assets/images/icon_no_device.png';
-  static const _connectButtonAsset = 'assets/images/icon_go_con_btn.png';
-  static const _shopAsset = 'assets/images/icon_go_shop.png';
-  static const _searchLoadingAsset = 'assets/images/icon_search_loading.png';
-  static const _bluetoothLogoAsset = 'assets/images/icon_blue_logo.png';
-  static const _bodyTextColor = Color(0xFF797979);
-  static const _accentColor = Color(0xFF6A53A7);
+  static const _backgroundAsset = ControllerAssets.blueConnectionBackground;
+  static const _noDeviceAsset = ControllerAssets.noDevice;
+  static const _connectButtonAsset = ControllerAssets.connectButton;
+  static const _shopAsset = ControllerAssets.shopEntry;
+  static const _searchLoadingAsset = ControllerAssets.searchLoading;
+  static const _bluetoothLogoAsset = ControllerAssets.bluetoothLogo;
+  static const _bodyTextColor = ControllerAssets.bodyText;
+  static const _accentColor = ControllerAssets.accent;
 
   late final AnimationController _rotationController;
   bool _isSearching = false;
@@ -61,7 +63,7 @@ class _FirstConnectionScreen extends ConsumerState<FirstConnectionScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: ControllerAssets.background,
       body: Stack(
         children: [
           Positioned(

@@ -76,3 +76,4 @@ flutter:
   assets:
     - assets/avatars/
     - assets/images/
+    - assets/images/controller/
