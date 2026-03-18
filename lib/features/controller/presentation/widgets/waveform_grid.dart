@@ -6,6 +6,7 @@ import '../../domain/models/waveform.dart';
 
 class WaveformGrid extends StatelessWidget {
   final int page;
+  final String channel;
   final List<FavoriteSlot> slots;
   final List<Waveform> allWaveforms;
   final int? selectedWaveformId;
@@ -14,6 +15,7 @@ class WaveformGrid extends StatelessWidget {
   const WaveformGrid({
     super.key,
     required this.page,
+    required this.channel,
     required this.slots,
     required this.allWaveforms,
     required this.selectedWaveformId,
@@ -23,8 +25,10 @@ class WaveformGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           mainAxisSpacing: 12,
@@ -103,8 +107,9 @@ class _WaveformCard extends StatelessWidget {
                   Icon(
                     waveform.isBuiltIn ? Icons.waves : Icons.edit_note,
                     size: 16,
-                    color:
-                        isSelected ? AppColors.primary : AppColors.textSecondary,
+                    color: isSelected
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
                   ),
                   const SizedBox(width: 6),
                   Expanded(

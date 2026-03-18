@@ -80,16 +80,4 @@ flutter:
   assets:
     - assets/avatars/
     - assets/figma/auth/
-    - assets/figma/components/
     - assets/figma/home/
-  fonts:
-    - family: SourceHanSansCN
-      fonts:
-        - asset: assets/fonts/source_han_sans/SourceHanSansCN-Light.otf
-          weight: 300
-        - asset: assets/fonts/source_han_sans/SourceHanSansCN-Regular.otf
-          weight: 400
-        - asset: assets/fonts/source_han_sans/SourceHanSansCN-Medium.otf
-          weight: 500
-        - asset: assets/fonts/source_han_sans/SourceHanSansCN-Bold.otf
-          weight: 700

@@ -103,17 +103,63 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen>
     return TabBarView(
       controller: _tabController,
       children: List.generate(3, (page) {
-        final pageSlots = allSlots.where((s) => s.page == page).toList();
-        return WaveformGrid(
-          page: page,
-          slots: pageSlots,
-          allWaveforms: allWaveforms,
-          selectedWaveformId: uiState.selectedWaveform?.id,
-          onSelect: (waveform) {
-            ref
-                .read(controllerStateNotifierProvider.notifier)
-                .selectWaveform(waveform);
-          },
+        final swingSlots = allSlots
+            .where((s) => s.channel == 'swing' && s.page == page)
+            .toList();
+        final vibrationSlots = allSlots
+            .where((s) => s.channel == 'vibration' && s.page == page)
+            .toList();
+
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(
+                  '摇摆',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              WaveformGrid(
+                page: page,
+                channel: 'swing',
+                slots: swingSlots,
+                allWaveforms: allWaveforms,
+                selectedWaveformId: uiState.selectedSwingWaveform?.id,
+                onSelect: (waveform) {
+                  ref
+                      .read(controllerStateNotifierProvider.notifier)
+                      .selectSwingWaveform(waveform);
+                },
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Text(
+                  '震动',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              WaveformGrid(
+                page: page,
+                channel: 'vibration',
+                slots: vibrationSlots,
+                allWaveforms: allWaveforms,
+                selectedWaveformId: uiState.selectedVibrationWaveform?.id,
+                onSelect: (waveform) {
+                  ref
+                      .read(controllerStateNotifierProvider.notifier)
+                      .selectVibrationWaveform(waveform);
+                },
+              ),
+            ],
+          ),
         );
       }),
     );
@@ -321,6 +367,3 @@ class _ScanSheetState extends ConsumerState<_ScanSheet> {
     );
   }
 }
-
-
-

@@ -1,18 +1,8 @@
 import 'package:flutter/material.dart';
-
 import 'app_colors.dart';
 
 class AppTheme {
   AppTheme._();
-
-  static const _appChineseFontFamily = 'SourceHanSansCN';
-  static const _chineseFontFallback = [
-    'Source Han Sans SC',
-    'Source Han Sans CN',
-    'Noto Sans CJK SC',
-    'Noto Sans SC',
-    'sans-serif',
-  ];
 
   static ThemeData get light {
     final colorScheme = ColorScheme.fromSeed(
@@ -23,17 +13,10 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
-      fontFamily: _appChineseFontFamily,
-      colorScheme: colorScheme.copyWith(primary: AppColors.primary),
+      colorScheme: colorScheme.copyWith(
+        primary: AppColors.primary,
+      ),
       scaffoldBackgroundColor: AppColors.background,
-      textTheme: ThemeData.light().textTheme.apply(
-        fontFamily: _appChineseFontFamily,
-        fontFamilyFallback: _chineseFontFallback,
-      ),
-      primaryTextTheme: ThemeData.light().primaryTextTheme.apply(
-        fontFamily: _appChineseFontFamily,
-        fontFamilyFallback: _chineseFontFallback,
-      ),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -43,8 +26,6 @@ class AppTheme {
           color: Color(0xFF1C1B1F),
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          fontFamily: _appChineseFontFamily,
-          fontFamilyFallback: _chineseFontFallback,
         ),
         iconTheme: IconThemeData(color: Color(0xFF1C1B1F)),
       ),
@@ -57,14 +38,10 @@ class AppTheme {
         labelStyle: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
-          fontFamily: _appChineseFontFamily,
-          fontFamilyFallback: _chineseFontFallback,
         ),
         unselectedLabelStyle: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w400,
-          fontFamily: _appChineseFontFamily,
-          fontFamilyFallback: _chineseFontFallback,
         ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
@@ -79,18 +56,9 @@ class AppTheme {
   static ThemeData get dark {
     return ThemeData(
       useMaterial3: true,
-      fontFamily: _appChineseFontFamily,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         brightness: Brightness.dark,
-      ),
-      textTheme: ThemeData.dark().textTheme.apply(
-        fontFamily: _appChineseFontFamily,
-        fontFamilyFallback: _chineseFontFallback,
-      ),
-      primaryTextTheme: ThemeData.dark().primaryTextTheme.apply(
-        fontFamily: _appChineseFontFamily,
-        fontFamilyFallback: _chineseFontFallback,
       ),
     );
   }

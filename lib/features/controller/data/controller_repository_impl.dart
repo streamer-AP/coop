@@ -25,6 +25,12 @@ class ControllerRepositoryImpl implements ControllerRepository {
   }
 
   @override
+  Future<List<Waveform>> getWaveformsByChannel(String channel) async {
+    final rows = await _dao.getWaveformsByChannel(channel);
+    return rows.map(_toWaveformDomain).toList();
+  }
+
+  @override
   Future<Waveform?> getWaveformById(int id) async {
     final row = await _dao.getWaveformById(id);
     return row != null ? _toWaveformDomain(row) : null;
@@ -36,7 +42,10 @@ class ControllerRepositoryImpl implements ControllerRepository {
       final waveformId = await _dao.insertWaveform(
         WaveformsCompanion.insert(
           name: waveform.name,
+          channel: waveform.channel,
           durationMs: Value(waveform.durationMs),
+          signalIntervalMs: Value(waveform.signalIntervalMs),
+          signalDelayMs: Value(waveform.signalDelayMs),
           isBuiltIn: Value(waveform.isBuiltIn),
         ),
       );
@@ -47,8 +56,7 @@ class ControllerRepositoryImpl implements ControllerRepository {
                 (kf) => WaveformKeyframesCompanion.insert(
                   waveformId: waveformId,
                   timeMs: kf.timeMs,
-                  swingValue: kf.swingValue,
-                  vibrationValue: kf.vibrationValue,
+                  value: kf.value,
                 ),
               )
               .toList(),
@@ -61,7 +69,10 @@ class ControllerRepositoryImpl implements ControllerRepository {
       WaveformsCompanion(
         id: Value(waveform.id),
         name: Value(waveform.name),
+        channel: Value(waveform.channel),
         durationMs: Value(waveform.durationMs),
+        signalIntervalMs: Value(waveform.signalIntervalMs),
+        signalDelayMs: Value(waveform.signalDelayMs),
         isBuiltIn: Value(waveform.isBuiltIn),
       ),
     );
@@ -74,8 +85,7 @@ class ControllerRepositoryImpl implements ControllerRepository {
               (kf) => WaveformKeyframesCompanion.insert(
                 waveformId: waveform.id,
                 timeMs: kf.timeMs,
-                swingValue: kf.swingValue,
-                vibrationValue: kf.vibrationValue,
+                value: kf.value,
               ),
             )
             .toList(),
@@ -95,6 +105,22 @@ class ControllerRepositoryImpl implements ControllerRepository {
     return rows
         .map(
           (r) => FavoriteSlot(
+            channel: r.channel,
+            page: r.page,
+            index: r.slotIndex,
+            waveformId: r.waveformId,
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<List<FavoriteSlot>> getFavoriteSlotsByChannel(String channel) async {
+    final rows = await _dao.getFavoriteSlotsByChannel(channel);
+    return rows
+        .map(
+          (r) => FavoriteSlot(
+            channel: r.channel,
             page: r.page,
             index: r.slotIndex,
             waveformId: r.waveformId,
@@ -106,6 +132,7 @@ class ControllerRepositoryImpl implements ControllerRepository {
   @override
   Future<void> setFavoriteSlot(FavoriteSlot slot) => _dao.upsertFavoriteSlot(
         FavoriteSlotsCompanion.insert(
+          channel: slot.channel,
           page: slot.page,
           slotIndex: slot.index,
           waveformId: slot.waveformId,
@@ -114,12 +141,13 @@ class ControllerRepositoryImpl implements ControllerRepository {
 
   @override
   Future<void> removeFavoriteSlot({
+    required String channel,
     required int page,
     required int index,
   }) async {
-    await _dao.deleteFavoriteSlot(page, index);
+    await _dao.deleteFavoriteSlot(channel, page, index);
 
-    final remaining = await _dao.getAllFavoriteSlots();
+    final remaining = await _dao.getFavoriteSlotsByChannel(channel);
     final pageSlots =
         remaining.where((s) => s.page == page).toList()
           ..sort((a, b) => a.slotIndex.compareTo(b.slotIndex));
@@ -128,25 +156,29 @@ class ControllerRepositoryImpl implements ControllerRepository {
     for (var i = 0; i < pageSlots.length; i++) {
       reindexed.add(
         FavoriteSlotsCompanion.insert(
+          channel: channel,
           page: page,
           slotIndex: i,
           waveformId: pageSlots[i].waveformId,
         ),
       );
     }
-    await _dao.updateSlotsOnPage(page, reindexed);
+    await _dao.updateSlotsOnPage(channel, page, reindexed);
   }
 
   @override
   Future<void> reorderFavoriteSlotsOnPage(
+    String channel,
     int page,
     List<FavoriteSlot> slots,
   ) =>
       _dao.updateSlotsOnPage(
+        channel,
         page,
         slots
             .map(
               (s) => FavoriteSlotsCompanion.insert(
+                channel: channel,
                 page: page,
                 slotIndex: s.index,
                 waveformId: s.waveformId,
@@ -238,24 +270,23 @@ class ControllerRepositoryImpl implements ControllerRepository {
     return Waveform(
       id: row.waveform.id,
       name: row.waveform.name,
+      channel: row.waveform.channel,
       durationMs: row.waveform.durationMs,
+      signalIntervalMs: row.waveform.signalIntervalMs,
+      signalDelayMs: row.waveform.signalDelayMs,
       isBuiltIn: row.waveform.isBuiltIn,
       keyframes: row.keyframes
           .map(
             (kf) => WaveformKeyframe(
               timeMs: kf.timeMs,
-              swingValue: kf.swingValue,
-              vibrationValue: kf.vibrationValue,
+              value: kf.value,
             ),
           )
           .toList(),
     );
   }
 
-  DeviceBinding _toDeviceBindingDomain(
-    // ignore the specific generated type name; use dynamic
-    dynamic row,
-  ) {
+  DeviceBinding _toDeviceBindingDomain(dynamic row) {
     return DeviceBinding(
       deviceId: row.deviceId as String,
       deviceName: row.deviceName as String,

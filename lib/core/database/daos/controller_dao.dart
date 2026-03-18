@@ -37,6 +37,37 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
         .toList();
   }
 
+  Future<List<WaveformWithKeyframes>> getWaveformsByChannel(
+    String channel,
+  ) async {
+    final channelWaveforms =
+        await (select(waveforms)..where((t) => t.channel.equals(channel)))
+            .get();
+
+    if (channelWaveforms.isEmpty) return [];
+
+    final ids = channelWaveforms.map((w) => w.id).toList();
+    final kfs =
+        await (select(waveformKeyframes)
+              ..where((t) => t.waveformId.isIn(ids))
+              ..orderBy([(t) => OrderingTerm.asc(t.timeMs)]))
+            .get();
+
+    final keyframesByWaveform = <int, List<WaveformKeyframe>>{};
+    for (final kf in kfs) {
+      keyframesByWaveform.putIfAbsent(kf.waveformId, () => []).add(kf);
+    }
+
+    return channelWaveforms
+        .map(
+          (w) => WaveformWithKeyframes(
+            waveform: w,
+            keyframes: keyframesByWaveform[w.id] ?? [],
+          ),
+        )
+        .toList();
+  }
+
   Future<WaveformWithKeyframes?> getWaveformById(int id) async {
     final waveform =
         await (select(waveforms)..where((t) => t.id.equals(id)))
@@ -87,6 +118,16 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
   Future<List<FavoriteSlot>> getAllFavoriteSlots() =>
       (select(favoriteSlots)
             ..orderBy([
+              (t) => OrderingTerm.asc(t.channel),
+              (t) => OrderingTerm.asc(t.page),
+              (t) => OrderingTerm.asc(t.slotIndex),
+            ]))
+          .get();
+
+  Future<List<FavoriteSlot>> getFavoriteSlotsByChannel(String channel) =>
+      (select(favoriteSlots)
+            ..where((t) => t.channel.equals(channel))
+            ..orderBy([
               (t) => OrderingTerm.asc(t.page),
               (t) => OrderingTerm.asc(t.slotIndex),
             ]))
@@ -95,19 +136,31 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
   Future<void> upsertFavoriteSlot(FavoriteSlotsCompanion slot) =>
       into(favoriteSlots).insertOnConflictUpdate(slot);
 
-  Future<void> deleteFavoriteSlot(int page, int slotIndex) =>
+  Future<void> deleteFavoriteSlot(
+    String channel,
+    int page,
+    int slotIndex,
+  ) =>
       (delete(favoriteSlots)
             ..where(
-              (t) => t.page.equals(page) & t.slotIndex.equals(slotIndex),
+              (t) =>
+                  t.channel.equals(channel) &
+                  t.page.equals(page) &
+                  t.slotIndex.equals(slotIndex),
             ))
           .go();
 
   Future<void> updateSlotsOnPage(
+    String channel,
     int page,
     List<FavoriteSlotsCompanion> slots,
   ) async {
     await transaction(() async {
-      await (delete(favoriteSlots)..where((t) => t.page.equals(page))).go();
+      await (delete(favoriteSlots)
+            ..where(
+              (t) => t.channel.equals(channel) & t.page.equals(page),
+            ))
+          .go();
       await batch((b) => b.insertAll(favoriteSlots, slots));
     });
   }

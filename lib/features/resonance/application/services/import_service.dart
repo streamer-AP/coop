@@ -8,7 +8,6 @@ import '../../../../core/logging/app_logger.dart';
 import '../../../../core/platform/media_extraction_bridge.dart';
 import '../models/import_preview.dart';
 import '../../domain/models/import_result.dart';
-import 'media_support.dart';
 
 /// Callback for reporting import progress: (current, total).
 typedef ImportProgressCallback = void Function(int current, int total);
@@ -16,6 +15,24 @@ typedef ImportProgressCallback = void Function(int current, int total);
 /// File import service: handles previewing and importing files, zip extraction,
 /// audio extraction from videos, and automatic resource matching.
 class ImportService {
+  static const _audioExtensions = {
+    'mp3',
+    'wav',
+    'flac',
+    'aac',
+    'm4a',
+    'ogg',
+    'wma',
+  };
+  static const _videoExtensions = {
+    'mp4',
+    'mkv',
+    'avi',
+    'mov',
+    'wmv',
+    'flv',
+    'webm',
+  };
   static const _subtitleExtensions = {'srt', 'vtt', 'lrc', 'sub', 'stl', 'txt'};
   static const _coverExtensions = {
     'jpg',
@@ -163,8 +180,7 @@ class ImportService {
 
     for (final filePath in paths) {
       final ext = p.extension(filePath).toLowerCase().replaceFirst('.', '');
-      if (ResonanceMediaSupport.audioExtensions.contains(ext) ||
-          ResonanceMediaSupport.videoExtensions.contains(ext)) {
+      if (_audioExtensions.contains(ext) || _videoExtensions.contains(ext)) {
         mediaFiles.add(filePath);
       } else if (_subtitleExtensions.contains(ext)) {
         subtitleFiles.add(filePath);
@@ -333,50 +349,26 @@ class ImportService {
 
   Future<String> _importMediaFile(String mediaPath, String rawTitle) async {
     final ext = p.extension(mediaPath).toLowerCase().replaceFirst('.', '');
-    if (ResonanceMediaSupport.videoExtensions.contains(ext)) {
+    if (_videoExtensions.contains(ext)) {
       final outputPath = await _reserveImportPath('$rawTitle.m4a');
       final extractedPath = await _mediaExtractionBridge.extractAudio(
         inputPath: mediaPath,
         outputPath: outputPath,
       );
-      await ResonanceMediaSupport.ensureLikelyPlayableMediaFile(
-        extractedPath,
-        label: '提取后的音频文件',
-      );
+      await _ensureReadableFile(extractedPath, label: '提取后的音频文件');
       return extractedPath;
     }
 
     final copiedPath = await _copyToImportDir(mediaPath);
-    await ResonanceMediaSupport.ensureLikelyPlayableMediaFile(
-      copiedPath,
-      label: '导入后的音频文件',
-    );
+    await _ensureReadableFile(copiedPath, label: '导入后的音频文件');
     return copiedPath;
   }
 
   Future<String> _copyToImportDir(String sourcePath) async {
     final fileName = p.basename(sourcePath);
     final destPath = await _reserveImportPath(fileName);
-    await _copyFileWithRetry(sourcePath, destPath);
+    await File(sourcePath).copy(destPath);
     return destPath;
-  }
-
-  Future<void> _copyFileWithRetry(String sourcePath, String destPath) async {
-    final sourceFile = File(sourcePath);
-    final destFile = File(destPath);
-
-    await ResonanceMediaSupport.runWithPendingFsRetry(() async {
-      if (await destFile.exists()) {
-        await destFile.delete();
-      }
-
-      final sink = destFile.openWrite();
-      try {
-        await sink.addStream(sourceFile.openRead());
-      } finally {
-        await sink.close();
-      }
-    });
   }
 
   Future<String> _reserveImportPath(String fileName) async {
@@ -469,10 +461,10 @@ class ImportService {
 
   ImportPreviewItemType _classifyFile(String path) {
     final ext = p.extension(path).toLowerCase().replaceFirst('.', '');
-    if (ResonanceMediaSupport.audioExtensions.contains(ext)) {
+    if (_audioExtensions.contains(ext)) {
       return ImportPreviewItemType.audio;
     }
-    if (ResonanceMediaSupport.videoExtensions.contains(ext)) {
+    if (_videoExtensions.contains(ext)) {
       return ImportPreviewItemType.video;
     }
     if (_subtitleExtensions.contains(ext)) {
@@ -515,15 +507,7 @@ class ImportService {
   }
 
   String _normalizeError(Object error) {
-    if (error is FileSystemException &&
-        ResonanceMediaSupport.isPendingFsOperation(error)) {
-      return '文件正在被系统读取，请稍后重试';
-    }
-
     final message = '$error'.trim();
-    if (message.startsWith('FileSystemException: ')) {
-      return message.substring('FileSystemException: '.length);
-    }
     if (message.startsWith('Exception: ')) {
       return message.substring('Exception: '.length);
     }
@@ -531,6 +515,17 @@ class ImportService {
       return message.substring('Unsupported operation: '.length);
     }
     return message;
+  }
+
+  Future<void> _ensureReadableFile(String path, {required String label}) async {
+    final file = File(path);
+    if (!await file.exists()) {
+      throw Exception('$label 不存在');
+    }
+
+    if (await file.length() <= 0) {
+      throw Exception('$label 为空');
+    }
   }
 
   Set<String> get subtitleExtensions => _subtitleExtensions;

@@ -9,8 +9,13 @@ import '../../domain/models/waveform.dart';
 
 class WaveformEditorScreen extends ConsumerStatefulWidget {
   final Waveform? existingWaveform;
+  final String channel; // 'swing' / 'vibration'
 
-  const WaveformEditorScreen({super.key, this.existingWaveform});
+  const WaveformEditorScreen({
+    super.key,
+    this.existingWaveform,
+    required this.channel,
+  });
 
   @override
   ConsumerState<WaveformEditorScreen> createState() =>
@@ -26,11 +31,9 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
   static const _pageMs = 8000;
   static const _stepMs = 1000;
   static const _minValue = 15;
-  static const _maxValue = 100;
 
   int _enabledPages = 1;
-  late List<List<_KeyframePoint>> _swingPages;
-  late List<List<_KeyframePoint>> _vibrationPages;
+  late List<List<_KeyframePoint>> _pages;
 
   @override
   void initState() {
@@ -42,11 +45,9 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
 
     if (waveform != null) {
       _enabledPages = max(1, (waveform.durationMs / _pageMs).ceil());
-      _swingPages = _buildPages(waveform.keyframes, true);
-      _vibrationPages = _buildPages(waveform.keyframes, false);
+      _pages = _buildPages(waveform.keyframes);
     } else {
-      _swingPages = List.generate(_maxPages, (_) => _defaultPage());
-      _vibrationPages = List.generate(_maxPages, (_) => _defaultPage());
+      _pages = List.generate(_maxPages, (_) => _defaultPage());
     }
   }
 
@@ -57,10 +58,7 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
     super.dispose();
   }
 
-  List<List<_KeyframePoint>> _buildPages(
-    List<WaveformKeyframe> keyframes,
-    bool isSwing,
-  ) {
+  List<List<_KeyframePoint>> _buildPages(List<WaveformKeyframe> keyframes) {
     final pages = List.generate(_maxPages, (_) => <_KeyframePoint>[]);
 
     for (final kf in keyframes) {
@@ -68,10 +66,7 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
       final localMs = kf.timeMs % _pageMs;
       if (pageIndex < _maxPages) {
         pages[pageIndex].add(
-          _KeyframePoint(
-            timeMs: localMs,
-            value: isSwing ? kf.swingValue : kf.vibrationValue,
-          ),
+          _KeyframePoint(timeMs: localMs, value: kf.value),
         );
       }
     }
@@ -93,12 +88,16 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
     );
   }
 
+  String get _channelLabel => widget.channel == 'swing' ? '摇摆' : '震动';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.existingWaveform != null ? '编辑波形' : '新建波形',
+          widget.existingWaveform != null
+              ? '编辑$_channelLabel波形'
+              : '新建$_channelLabel波形',
         ),
         actions: [
           TextButton(
@@ -186,36 +185,14 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
         }
         return Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              const Text(
-                '摇摆',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              Expanded(
-                child: _WaveformChart(
-                  points: _swingPages[pageIndex],
-                  color: AppColors.primary,
-                  onUpdate: (points) => setState(() {
-                    _swingPages[pageIndex] = points;
-                  }),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                '震动',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              Expanded(
-                child: _WaveformChart(
-                  points: _vibrationPages[pageIndex],
-                  color: AppColors.secondary,
-                  onUpdate: (points) => setState(() {
-                    _vibrationPages[pageIndex] = points;
-                  }),
-                ),
-              ),
-            ],
+          child: _WaveformChart(
+            points: _pages[pageIndex],
+            color: widget.channel == 'swing'
+                ? AppColors.primary
+                : AppColors.secondary,
+            onUpdate: (points) => setState(() {
+              _pages[pageIndex] = points;
+            }),
           ),
         );
       }),
@@ -249,9 +226,7 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
 
   void _resetCurrentPage() {
     setState(() {
-      final page = _tabController.index;
-      _swingPages[page] = _defaultPage();
-      _vibrationPages[page] = _defaultPage();
+      _pages[_tabController.index] = _defaultPage();
     });
   }
 
@@ -267,27 +242,11 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
     final keyframes = <WaveformKeyframe>[];
     for (var page = 0; page < _enabledPages; page++) {
       final baseMs = page * _pageMs;
-      final swingPoints = _swingPages[page];
-      final vibPoints = _vibrationPages[page];
+      final points = _pages[page];
 
-      final allTimes = <int>{};
-      for (final p in swingPoints) {
-        allTimes.add(p.timeMs);
-      }
-      for (final p in vibPoints) {
-        allTimes.add(p.timeMs);
-      }
-      final sortedTimes = allTimes.toList()..sort();
-
-      for (final t in sortedTimes) {
-        final swing = _valueAtTime(swingPoints, t);
-        final vibration = _valueAtTime(vibPoints, t);
+      for (final p in points) {
         keyframes.add(
-          WaveformKeyframe(
-            timeMs: baseMs + t,
-            swingValue: swing,
-            vibrationValue: vibration,
-          ),
+          WaveformKeyframe(timeMs: baseMs + p.timeMs, value: p.value),
         );
       }
     }
@@ -295,6 +254,7 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
     final waveform = Waveform(
       id: widget.existingWaveform?.id ?? 0,
       name: name,
+      channel: widget.channel,
       durationMs: _enabledPages * _pageMs,
       isBuiltIn: false,
       keyframes: keyframes,
@@ -332,25 +292,6 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
       ref.invalidate(waveformsProvider);
       if (mounted) Navigator.of(context).pop();
     }
-  }
-
-  int _valueAtTime(List<_KeyframePoint> points, int timeMs) {
-    if (points.isEmpty) return _minValue;
-    if (points.length == 1) return points.first.value;
-
-    for (var i = 0; i < points.length - 1; i++) {
-      if (timeMs >= points[i].timeMs && timeMs <= points[i + 1].timeMs) {
-        final range = points[i + 1].timeMs - points[i].timeMs;
-        if (range == 0) return points[i].value;
-        final t = (timeMs - points[i].timeMs) / range;
-        return (points[i].value +
-                (points[i + 1].value - points[i].value) * t)
-            .round()
-            .clamp(_minValue, _maxValue);
-      }
-    }
-
-    return points.last.value;
   }
 }
 
@@ -413,8 +354,9 @@ class _WaveformChartState extends State<_WaveformChart> {
 
     for (var i = 0; i < widget.points.length; i++) {
       final px = widget.points[i].timeMs / _pageMs * constraints.maxWidth;
-      final py = (1 - (widget.points[i].value - _minValue) /
-              (_maxValue - _minValue)) *
+      final py = (1 -
+              (widget.points[i].value - _minValue) /
+                  (_maxValue - _minValue)) *
           constraints.maxHeight;
       final dist = sqrt(pow(x - px, 2) + pow(y - py, 2));
       if (dist < minDist && dist < 30) {
@@ -491,8 +433,8 @@ class _WaveformPainter extends CustomPainter {
 
     for (var i = 0; i < points.length; i++) {
       final x = points[i].timeMs / _pageMs * size.width;
-      final y = (1 - (points[i].value - _minValue) /
-              (_maxValue - _minValue)) *
+      final y = (1 -
+              (points[i].value - _minValue) / (_maxValue - _minValue)) *
           size.height;
 
       if (i == 0) {
@@ -516,8 +458,8 @@ class _WaveformPainter extends CustomPainter {
 
     for (var i = 0; i < points.length; i++) {
       final x = points[i].timeMs / _pageMs * size.width;
-      final y = (1 - (points[i].value - _minValue) /
-              (_maxValue - _minValue)) *
+      final y = (1 -
+              (points[i].value - _minValue) / (_maxValue - _minValue)) *
           size.height;
 
       canvas.drawCircle(
@@ -540,4 +482,3 @@ class _WaveformPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _WaveformPainter oldDelegate) => true;
 }
-

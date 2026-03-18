@@ -34,6 +34,16 @@ Future<List<domain.FavoriteSlot>> favoriteSlots(Ref ref) {
 }
 
 @riverpod
+Future<List<domain.FavoriteSlot>> favoriteSlotsByChannel(
+  Ref ref,
+  String channel,
+) {
+  return ref
+      .watch(controllerRepositoryProvider)
+      .getFavoriteSlotsByChannel(channel);
+}
+
+@riverpod
 Future<domain.DeviceBinding?> activeDeviceBinding(Ref ref) {
   return ref.watch(controllerRepositoryProvider).getActiveDeviceBinding();
 }
@@ -52,7 +62,6 @@ WaveformPlayerService waveformPlayerService(Ref ref) {
   return service;
 }
 
-/// Session-scoped controller state (not persisted).
 @riverpod
 class ControllerStateNotifier extends _$ControllerStateNotifier {
   @override
@@ -72,23 +81,39 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
 
   void _autoSelectDefault() {
     Future.microtask(() {
-      if (state.selectedWaveform != null) return;
+      if (state.selectedSwingWaveform != null) return;
       final slotsAsync = ref.read(favoriteSlotsProvider);
       final waveformsAsync = ref.read(waveformsProvider);
       slotsAsync.whenData((slots) {
         waveformsAsync.whenData((allWaveforms) {
           if (allWaveforms.isEmpty) return;
-          final page0Slots = slots.where((s) => s.page == 0).toList()
-            ..sort((a, b) => a.index.compareTo(b.index));
-          if (page0Slots.isNotEmpty) {
+
+          final swingSlots =
+              slots.where((s) => s.channel == 'swing' && s.page == 0).toList()
+                ..sort((a, b) => a.index.compareTo(b.index));
+          if (swingSlots.isNotEmpty) {
             final firstWaveform = allWaveforms
-                .where((w) => w.id == page0Slots.first.waveformId)
+                .where((w) => w.id == swingSlots.first.waveformId)
                 .firstOrNull;
-            if (firstWaveform != null && state.selectedWaveform == null) {
-              state = state.copyWith(selectedWaveform: firstWaveform);
+            if (firstWaveform != null &&
+                state.selectedSwingWaveform == null) {
+              state = state.copyWith(selectedSwingWaveform: firstWaveform);
             }
-          } else if (allWaveforms.isNotEmpty) {
-            state = state.copyWith(selectedWaveform: allWaveforms.first);
+          }
+
+          final vibSlots = slots
+              .where((s) => s.channel == 'vibration' && s.page == 0)
+              .toList()
+            ..sort((a, b) => a.index.compareTo(b.index));
+          if (vibSlots.isNotEmpty) {
+            final firstWaveform = allWaveforms
+                .where((w) => w.id == vibSlots.first.waveformId)
+                .firstOrNull;
+            if (firstWaveform != null &&
+                state.selectedVibrationWaveform == null) {
+              state =
+                  state.copyWith(selectedVibrationWaveform: firstWaveform);
+            }
           }
         });
       });
@@ -99,37 +124,40 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
     state = state.copyWith(selectedPage: page);
   }
 
-  void selectWaveform(Waveform waveform) {
+  void selectSwingWaveform(Waveform waveform) {
     state = state.copyWith(
-      selectedWaveform: waveform,
+      selectedSwingWaveform: waveform,
       lastSelectedPage: state.selectedPage,
     );
+    _updatePlayer();
+  }
 
-    final player = ref.read(waveformPlayerServiceProvider);
-    player.play(waveform);
-
-    if (state.swingIntensity > 0 || state.vibrationIntensity > 0) {
-      player.setSwingIntensity(state.swingIntensity);
-      player.setVibrationIntensity(state.vibrationIntensity);
-    }
+  void selectVibrationWaveform(Waveform waveform) {
+    state = state.copyWith(
+      selectedVibrationWaveform: waveform,
+      lastSelectedPage: state.selectedPage,
+    );
+    _updatePlayer();
   }
 
   void setSwingIntensity(int value) {
     state = state.copyWith(swingIntensity: value);
-    final player = ref.read(waveformPlayerServiceProvider);
-    if (state.selectedWaveform != null && player.currentWaveform == null) {
-      player.play(state.selectedWaveform!);
-    }
-    player.setSwingIntensity(value);
+    _updatePlayer();
   }
 
   void setVibrationIntensity(int value) {
     state = state.copyWith(vibrationIntensity: value);
+    _updatePlayer();
+  }
+
+  void _updatePlayer() {
     final player = ref.read(waveformPlayerServiceProvider);
-    if (state.selectedWaveform != null && player.currentWaveform == null) {
-      player.play(state.selectedWaveform!);
-    }
-    player.setVibrationIntensity(value);
+    player.update(
+      swingWaveform: state.selectedSwingWaveform,
+      vibrationWaveform: state.selectedVibrationWaveform,
+      swingIntensity: state.swingIntensity,
+      vibrationIntensity: state.vibrationIntensity,
+    );
   }
 
   void _onDisconnected() {
@@ -141,14 +169,16 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
 class ControllerUiState {
   final int selectedPage;
   final int? lastSelectedPage;
-  final Waveform? selectedWaveform;
+  final Waveform? selectedSwingWaveform;
+  final Waveform? selectedVibrationWaveform;
   final int swingIntensity;
   final int vibrationIntensity;
 
   const ControllerUiState({
     this.selectedPage = 0,
     this.lastSelectedPage,
-    this.selectedWaveform,
+    this.selectedSwingWaveform,
+    this.selectedVibrationWaveform,
     this.swingIntensity = 0,
     this.vibrationIntensity = 0,
   });
@@ -156,14 +186,18 @@ class ControllerUiState {
   ControllerUiState copyWith({
     int? selectedPage,
     int? lastSelectedPage,
-    Waveform? selectedWaveform,
+    Waveform? selectedSwingWaveform,
+    Waveform? selectedVibrationWaveform,
     int? swingIntensity,
     int? vibrationIntensity,
   }) {
     return ControllerUiState(
       selectedPage: selectedPage ?? this.selectedPage,
       lastSelectedPage: lastSelectedPage ?? this.lastSelectedPage,
-      selectedWaveform: selectedWaveform ?? this.selectedWaveform,
+      selectedSwingWaveform:
+          selectedSwingWaveform ?? this.selectedSwingWaveform,
+      selectedVibrationWaveform:
+          selectedVibrationWaveform ?? this.selectedVibrationWaveform,
       swingIntensity: swingIntensity ?? this.swingIntensity,
       vibrationIntensity: vibrationIntensity ?? this.vibrationIntensity,
     );

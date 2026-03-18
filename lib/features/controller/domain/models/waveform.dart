@@ -8,7 +8,10 @@ class Waveform with _$Waveform {
   const factory Waveform({
     required int id,
     required String name,
+    required String channel, // 'swing' / 'vibration'
     @Default(8000) int durationMs,
+    @Default(200) int signalIntervalMs,
+    @Default(0) int signalDelayMs,
     @Default(true) bool isBuiltIn,
     @Default([]) List<WaveformKeyframe> keyframes,
   }) = _Waveform;
@@ -21,8 +24,7 @@ class Waveform with _$Waveform {
 class WaveformKeyframe with _$WaveformKeyframe {
   const factory WaveformKeyframe({
     required int timeMs,
-    required int swingValue,
-    required int vibrationValue,
+    required int value,
   }) = _WaveformKeyframe;
 
   factory WaveformKeyframe.fromJson(Map<String, dynamic> json) =>

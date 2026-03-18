@@ -124,8 +124,13 @@ GoRouter appRouter(Ref ref) {
         path: '/waveform-editor',
         name: RouteNames.waveformEditor,
         builder: (context, state) {
-          final waveform = state.extra as Waveform?;
-          return WaveformEditorScreen(existingWaveform: waveform);
+          final extra = state.extra as Map<String, dynamic>?;
+          final waveform = extra?['waveform'] as Waveform?;
+          final channel = extra?['channel'] as String? ?? 'swing';
+          return WaveformEditorScreen(
+            existingWaveform: waveform,
+            channel: channel,
+          );
         },
       ),
 

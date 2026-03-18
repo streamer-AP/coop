@@ -6,15 +6,25 @@ import '../models/usage_log.dart';
 abstract class ControllerRepository {
   // --- 波形 CRUD ---
   Future<List<Waveform>> getAllWaveforms();
+  Future<List<Waveform>> getWaveformsByChannel(String channel);
   Future<Waveform?> getWaveformById(int id);
   Future<int> saveWaveform(Waveform waveform);
   Future<void> deleteWaveform(int id);
 
-  // --- 常用波形配置（12 槽位）---
+  // --- 常用波形配置（每通道 12 槽位）---
   Future<List<FavoriteSlot>> getAllFavoriteSlots();
+  Future<List<FavoriteSlot>> getFavoriteSlotsByChannel(String channel);
   Future<void> setFavoriteSlot(FavoriteSlot slot);
-  Future<void> removeFavoriteSlot({required int page, required int index});
-  Future<void> reorderFavoriteSlotsOnPage(int page, List<FavoriteSlot> slots);
+  Future<void> removeFavoriteSlot({
+    required String channel,
+    required int page,
+    required int index,
+  });
+  Future<void> reorderFavoriteSlotsOnPage(
+    String channel,
+    int page,
+    List<FavoriteSlot> slots,
+  );
 
   // --- 设备绑定 ---
   Future<DeviceBinding?> getActiveDeviceBinding();

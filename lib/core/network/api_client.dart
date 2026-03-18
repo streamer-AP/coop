@@ -28,26 +28,13 @@ class ApiClient {
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
-    Options? options,
   }) async {
-    final requestOptions = _resolveOptions(data, options);
     final response = await _dio.post<Map<String, dynamic>>(
       path,
       data: data,
       queryParameters: queryParameters,
-      options: requestOptions,
     );
     return response.data!;
-  }
-
-  Options? _resolveOptions(dynamic data, Options? options) {
-    if (data is! FormData) {
-      return options;
-    }
-
-    final merged = options?.copyWith() ?? Options();
-    merged.contentType = Headers.multipartFormDataContentType;
-    return merged;
   }
 }
 
@@ -58,7 +45,9 @@ Dio dio(Ref ref) {
       baseUrl: ApiEndpoints.baseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+      },
     ),
   );
   dio.interceptors.add(AuthInterceptor(TokenStorage()));
