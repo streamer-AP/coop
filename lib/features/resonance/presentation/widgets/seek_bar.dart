@@ -75,7 +75,7 @@ class _SeekBarState extends ConsumerState<SeekBar> {
                   alignment: Alignment.centerLeft,
                   children: [
                     Container(
-                      height: 8,
+                      height: 4,
                       decoration: BoxDecoration(
                         color: const Color(0xFFD9D9D9),
                         borderRadius: BorderRadius.circular(6),
@@ -84,7 +84,7 @@ class _SeekBarState extends ConsumerState<SeekBar> {
                     FractionallySizedBox(
                       widthFactor: effectiveProgress,
                       child: Container(
-                        height: 8,
+                        height: 4,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             colors: [Color(0xFF605591), Color(0xFFC5B8FF)],
@@ -94,10 +94,10 @@ class _SeekBarState extends ConsumerState<SeekBar> {
                       ),
                     ),
                     Positioned(
-                      left: (knobOffset - 6).clamp(0.0, width - 12),
+                      left: (knobOffset - 5).clamp(0.0, width - 10),
                       child: Container(
-                        width: 12,
-                        height: 12,
+                        width: 10,
+                        height: 10,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white,

@@ -77,12 +77,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   hasSubtitle: hasSubtitle,
                   hasEntry: hasEntry,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 4),
                 Expanded(
                   child: Column(
                     children: [
                       SizedBox(
-                        height: 340,
+                        height: 310,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child:
@@ -102,7 +102,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                                 ? currentEntry!.artist!
                                 : 'Unknown Artist',
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 37),
                         child: SeekBar(),
@@ -139,6 +139,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       child: Stack(
         fit: StackFit.expand,
         children: [
+          const ColoredBox(color: Color(0xFFEAEAEA)),
           if (coverPath != null)
             ImageFiltered(
               imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
@@ -148,29 +149,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                 errorBuilder: (_, __, ___) => const SizedBox.expand(),
               ),
             ),
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xCC634E83),
-                  Color(0x99B4AAC8),
-                  Color(0xFFEAEAEA),
-                ],
-                stops: [0.0, 0.45, 1.0],
-              ),
-            ),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: const Alignment(0, -0.95),
-                radius: 1.3,
-                colors: [
-                  Colors.white.withValues(alpha: 0.18),
-                  Colors.transparent,
-                ],
+          Align(
+            alignment: Alignment.topCenter,
+            child: Container(
+              height: 596,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xB3634E83),
+                    Color(0xB3EAEAEA),
+                  ],
+                  stops: [0.0, 0.79328],
+                ),
               ),
             ),
           ),
@@ -199,10 +191,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
+              style: const TextStyle(
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Colors.white.withValues(alpha: 0.72),
+                color: Colors.white,
               ),
             ),
           ),
@@ -530,7 +522,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               borderRadius: BorderRadius.circular(6),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           GestureDetector(
             onTap: hasEntry ? _openControlPanel : null,
             child: Container(

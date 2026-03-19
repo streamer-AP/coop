@@ -194,7 +194,7 @@ class AuthRepositoryImpl implements AuthRepository {
       final json = await _apiClient.post(path, queryParameters: params);
       final code = json['code'] as int?;
 
-      if (code == 200) return json;
+      if (code == 200 || code == 0) return json;
 
       // Map server error codes to AuthException
       throw AuthException.fromServerError({
