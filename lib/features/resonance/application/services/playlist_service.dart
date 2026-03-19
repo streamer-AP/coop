@@ -243,6 +243,18 @@ class PlaylistService {
     );
   }
 
+  /// Update an entry's metadata in the playlist (e.g. after cover import).
+  void updateEntry(AudioEntry entry) {
+    final items = _playlist.items;
+    final index = items.indexWhere((item) => item.entry.id == entry.id);
+    if (index < 0) return;
+
+    final updated = List<PlaylistItem>.of(items);
+    updated[index] = updated[index].copyWith(entry: entry);
+    _playlist = _playlist.copyWith(items: updated);
+    _emit();
+  }
+
   /// Remove an item from the playlist.
   void removeItem(String uid) {
     final index = _playlist.items.indexWhere((i) => i.uid == uid);
