@@ -8,6 +8,7 @@ import '../../domain/models/player_state.dart';
 import '../../domain/models/playlist.dart';
 import '../services/audio_player_service.dart';
 import '../services/playlist_service.dart';
+import 'resonance_providers.dart';
 
 part 'player_providers.g.dart';
 
@@ -214,6 +215,23 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
       currentEntry: null,
       playlistTitle: '全部音频',
     );
+  }
+
+  /// Refresh the current entry's metadata from the database.
+  /// Call this after importing a cover or other metadata change.
+  Future<void> refreshCurrentEntry() async {
+    final current = state.currentEntry;
+    if (current == null) return;
+
+    final repo = ref.read(resonanceRepositoryProvider);
+    final updated = await repo.getEntry(current.id);
+    if (updated == null) return;
+
+    state = state.copyWith(currentEntry: updated);
+
+    // Also update the in-memory playlist so next/previous keeps the change.
+    final playlistSvc = ref.read(playlistServiceProvider);
+    playlistSvc.updateEntry(updated);
   }
 
   void setSignalMode(SignalMode mode) {

@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../../../../core/storage/file_manager.dart';
 import '../../application/providers/import_providers.dart';
+import '../../application/providers/player_providers.dart';
 import '../../application/providers/resonance_providers.dart';
 import '../../domain/models/audio_entry.dart';
 import '../../domain/models/subtitle.dart';
@@ -124,6 +125,10 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
           await _replaceScript(repo, destPath);
         case _ManualImportType.cover:
           await _replaceCover(repo, destPath);
+          // Sync the in-memory player state so the UI updates immediately.
+          await ref
+              .read(playerStateNotifierProvider.notifier)
+              .refreshCurrentEntry();
       }
 
       if (context.mounted) {
