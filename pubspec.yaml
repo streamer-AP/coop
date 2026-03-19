@@ -44,10 +44,14 @@ dependencies:
   encrypt: ^5.0.3
   pointycastle: ^3.9.1
 
+  # URL
+  url_launcher: ^6.3.1
+
   # Utils
   path_provider: ^2.1.5
   path: ^1.9.1
   share_plus: ^10.1.4
+  flutter_svg: ^2.0.17
   freezed_annotation: ^2.4.4
   json_annotation: ^4.9.0
   uuid: ^4.5.1
@@ -77,3 +81,17 @@ flutter:
     - assets/avatars/
     - assets/images/
     - assets/images/controller/
+    - assets/figma/auth/
+    - assets/figma/components/
+    - assets/figma/home/
+  fonts:
+    - family: SourceHanSansCN
+      fonts:
+        - asset: assets/fonts/source_han_sans/SourceHanSansCN-Light.otf
+          weight: 300
+        - asset: assets/fonts/source_han_sans/SourceHanSansCN-Regular.otf
+          weight: 400
+        - asset: assets/fonts/source_han_sans/SourceHanSansCN-Medium.otf
+          weight: 500
+        - asset: assets/fonts/source_han_sans/SourceHanSansCN-Bold.otf
+          weight: 700

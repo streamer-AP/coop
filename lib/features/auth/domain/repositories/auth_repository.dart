@@ -11,14 +11,14 @@ abstract class AuthRepository {
     required String password,
   });
 
-  /// 注册（手机号+验证码）
-  Future<User> register({required String phone, required String code});
+  /// 注册（手机号+验证码+密码）
+  Future<User> register({required String phone, required String code, String? password});
 
   /// 首次设置密码（验证码登录后）
   Future<void> setupPassword({required String password});
 
   /// 发送验证码
-  Future<void> sendVerificationCode(String phone);
+  Future<void> sendVerificationCode(String phone, {bool isRegister = false});
 
   /// 实名认证
   Future<VerificationResult> verifyIdentity({

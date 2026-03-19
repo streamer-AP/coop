@@ -41,7 +41,7 @@ class _ChangePasswordCodeScreenState
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
-          title: const Text('验证码修改密码'),
+          title: const Text('验证码修改'),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios, size: 20),
             onPressed: () => Navigator.of(context).pop(),

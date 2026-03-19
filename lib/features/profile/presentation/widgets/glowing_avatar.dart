@@ -1,14 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
 class GlowingAvatar extends StatelessWidget {
-  const GlowingAvatar({
-    super.key,
-    this.imageUrl,
-    this.size = 72,
-    this.onTap,
-  });
+  const GlowingAvatar({super.key, this.imageUrl, this.size = 72, this.onTap});
 
   final String? imageUrl;
   final double size;
@@ -44,15 +41,10 @@ class GlowingAvatar extends StatelessWidget {
                 width: 1.5,
               ),
             ),
-            child: imageUrl != null
-                ? ClipOval(
-                    child: Image.network(
-                      imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _defaultIcon(),
-                    ),
-                  )
-                : _defaultIcon(),
+            child:
+                imageUrl != null
+                    ? ClipOval(child: _buildAvatarImage(imageUrl!))
+                    : _defaultIcon(),
           ),
         ),
       ),
@@ -65,5 +57,40 @@ class GlowingAvatar extends StatelessWidget {
       size: size * 0.4,
       color: Colors.white.withValues(alpha: 0.8),
     );
+  }
+
+  Widget _buildAvatarImage(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return _defaultIcon();
+
+    final localPath = _resolveLocalPath(value);
+    if (localPath != null) {
+      return Image.file(
+        File(localPath),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _defaultIcon(),
+      );
+    }
+
+    return Image.network(
+      value,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => _defaultIcon(),
+    );
+  }
+
+  String? _resolveLocalPath(String value) {
+    if (value.startsWith('file://')) {
+      final uri = Uri.tryParse(value);
+      if (uri == null) return null;
+      return uri.toFilePath();
+    }
+
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return null;
+    }
+
+    final file = File(value);
+    return file.existsSync() ? file.path : null;
   }
 }

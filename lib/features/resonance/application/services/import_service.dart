@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -6,38 +5,73 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../../core/logging/app_logger.dart';
+import '../../../../core/platform/media_extraction_bridge.dart';
+import '../models/import_preview.dart';
 import '../../domain/models/import_result.dart';
+import 'media_support.dart';
 
 /// Callback for reporting import progress: (current, total).
 typedef ImportProgressCallback = void Function(int current, int total);
 
-/// File import service: handles file selection, zip extraction,
-/// and automatic matching of audio with subtitle/cover/signal files.
+/// File import service: handles previewing and importing files, zip extraction,
+/// audio extraction from videos, and automatic resource matching.
 class ImportService {
-  static const _audioExtensions = {
-    'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'wma',
-  };
-  static const _videoExtensions = {
-    'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm',
-  };
-  static const _subtitleExtensions = {
-    'srt', 'vtt', 'lrc', 'sub', 'stl', 'txt',
-  };
+  static const _subtitleExtensions = {'srt', 'vtt', 'lrc', 'sub', 'stl', 'txt'};
   static const _coverExtensions = {
-    'jpg', 'jpeg', 'png', 'tiff', 'tif', 'bmp', 'webp',
-    'gif', 'heif', 'heic', 'hdr',
+    'jpg',
+    'jpeg',
+    'png',
+    'tiff',
+    'tif',
+    'bmp',
+    'webp',
+    'gif',
+    'heif',
+    'heic',
+    'hdr',
+  };
+  static const _scriptExtensions = {
+    'md',
+    'markdown',
+    'pdf',
+    'rtf',
+    'doc',
+    'docx',
   };
   static const _signalExtensions = {'json'};
 
   static const _subtitlePriority = ['srt', 'vtt', 'sub', 'stl', 'lrc', 'txt'];
   static const _coverPriority = [
-    'jpeg', 'jpg', 'png', 'tiff', 'tif', 'gif', 'webp',
-    'bmp', 'heif', 'heic', 'hdr',
+    'jpeg',
+    'jpg',
+    'png',
+    'tiff',
+    'tif',
+    'gif',
+    'webp',
+    'bmp',
+    'heif',
+    'heic',
+    'hdr',
+  ];
+  static const _scriptPriority = [
+    'md',
+    'markdown',
+    'pdf',
+    'rtf',
+    'docx',
+    'doc',
   ];
 
   final String _importDir;
+  final MediaExtractionBridge _mediaExtractionBridge;
 
-  ImportService({required String importDirectory}) : _importDir = importDirectory;
+  ImportService({
+    required String importDirectory,
+    MediaExtractionBridge? mediaExtractionBridge,
+  }) : _importDir = importDirectory,
+       _mediaExtractionBridge =
+           mediaExtractionBridge ?? MediaExtractionBridge();
 
   /// Pick regular files (non-zip) using the system file picker.
   Future<List<String>?> pickFiles() async {
@@ -62,56 +96,82 @@ class ImportService {
     return result.files.first.path;
   }
 
-  /// Import files from a list of paths.
-  /// For zip files, extracts and processes contents.
-  Future<ImportResult> importFiles(
-    List<String> paths, {
-    String? zipPassword,
+  Future<ImportPreview> prepareFilesPreview(List<String> paths) async {
+    final normalizedPaths = paths
+        .map(p.normalize)
+        .toSet()
+        .toList(growable: false);
+
+    if (normalizedPaths.isEmpty) {
+      throw Exception('未选择任何文件');
+    }
+
+    if (!_isSingleDirectorySelection(normalizedPaths)) {
+      throw Exception('仅支持选择同一级目录中的文件');
+    }
+
+    return _buildPreview(normalizedPaths, sourceType: ImportSourceType.files);
+  }
+
+  Future<ImportPreview> prepareZipPreview(
+    String zipPath, {
+    String? password,
+  }) async {
+    final extracted = await _extractZip(zipPath, password: password);
+
+    return _buildPreview(
+      extracted.paths,
+      sourceType: ImportSourceType.zip,
+      archivePath: zipPath,
+      extractedDir: extracted.directory,
+    );
+  }
+
+  Future<void> cleanupPreview(ImportPreview? preview) async {
+    final extractedDir = preview?.extractedDir;
+    if (extractedDir == null) return;
+
+    final directory = Directory(extractedDir);
+    if (await directory.exists()) {
+      await directory.delete(recursive: true);
+    }
+  }
+
+  Future<ImportResult> importPreview(
+    ImportPreview preview, {
     ImportProgressCallback? onProgress,
     List<String>? existingTitles,
   }) async {
+    final paths = preview.selectedPaths;
+    if (paths.isEmpty) {
+      throw Exception('请先选择需要导入的文件');
+    }
+
+    if (!preview.hasSelectedMedia) {
+      throw Exception('请至少选择一个音频或视频文件');
+    }
+
     final succeeded = <ImportedItem>[];
     final failed = <ImportFailure>[];
 
-    // Separate zips from regular files
-    final zips = <String>[];
-    final regularFiles = <String>[];
-
-    for (final path in paths) {
-      if (p.extension(path).toLowerCase() == '.zip') {
-        zips.add(path);
-      } else {
-        regularFiles.add(path);
-      }
-    }
-
-    // Extract zip files first
-    for (final zipPath in zips) {
-      try {
-        final extracted = await _extractZip(zipPath, password: zipPassword);
-        regularFiles.addAll(extracted);
-      } catch (e) {
-        failed.add(ImportFailure(
-          fileName: p.basename(zipPath),
-          reason: '解压失败: $e',
-        ));
-      }
-    }
-
     // Categorize all files
-    final audioFiles = <String>[];
+    final mediaFiles = <String>[];
     final subtitleFiles = <String>[];
     final coverFiles = <String>[];
+    final scriptFiles = <String>[];
     final signalFiles = <String>[];
 
-    for (final filePath in regularFiles) {
+    for (final filePath in paths) {
       final ext = p.extension(filePath).toLowerCase().replaceFirst('.', '');
-      if (_audioExtensions.contains(ext) || _videoExtensions.contains(ext)) {
-        audioFiles.add(filePath);
+      if (ResonanceMediaSupport.audioExtensions.contains(ext) ||
+          ResonanceMediaSupport.videoExtensions.contains(ext)) {
+        mediaFiles.add(filePath);
       } else if (_subtitleExtensions.contains(ext)) {
         subtitleFiles.add(filePath);
       } else if (_coverExtensions.contains(ext)) {
         coverFiles.add(filePath);
+      } else if (_scriptExtensions.contains(ext)) {
+        scriptFiles.add(filePath);
       } else if (_signalExtensions.contains(ext)) {
         signalFiles.add(filePath);
       }
@@ -120,39 +180,43 @@ class ImportService {
     // Track used titles for deduplication
     final usedTitles = <String>{...?existingTitles};
 
-    // Auto-match for each audio file
-    for (var i = 0; i < audioFiles.length; i++) {
-      final audioPath = audioFiles[i];
-      onProgress?.call(i + 1, audioFiles.length);
+    final remainingSubtitles = List<String>.of(subtitleFiles);
+    final remainingCovers = List<String>.of(coverFiles);
+    final remainingScripts = List<String>.of(scriptFiles);
+    final remainingSignals = List<String>.of(signalFiles);
+
+    for (var i = 0; i < mediaFiles.length; i++) {
+      final mediaPath = mediaFiles[i];
+      onProgress?.call(i + 1, mediaFiles.length);
 
       try {
-        final destPath = await _copyToImportDir(audioPath);
-        final rawTitle = _baseName(audioPath);
+        final rawTitle = _baseName(mediaPath);
         final title = _deduplicateTitle(rawTitle, usedTitles);
         usedTitles.add(title);
 
-        // Determine media type
-        final ext = p.extension(audioPath).toLowerCase().replaceFirst('.', '');
-        final mediaType = _videoExtensions.contains(ext) ? 'video' : 'audio';
+        final destPath = await _importMediaFile(mediaPath, rawTitle);
+        const mediaType = 'audio';
 
-        final matchedSubtitle = _findBestMatch(
+        final matchedSubtitle = _takeBestMatch(
           rawTitle,
-          subtitleFiles,
+          remainingSubtitles,
           _subtitlePriority,
         );
-        final matchedCover = _findBestMatch(
+        final matchedCover = _takeBestMatch(
           rawTitle,
-          coverFiles,
+          remainingCovers,
           _coverPriority,
         );
-        final matchedSignal = _findBestMatch(
+        final matchedScript = _takeBestMatch(
           rawTitle,
-          signalFiles,
-          null,
+          remainingScripts,
+          _scriptPriority,
         );
+        final matchedSignal = _takeBestMatch(rawTitle, remainingSignals, null);
 
         String? subtitleDest;
         String? coverDest;
+        String? scriptDest;
         String? signalDest;
 
         if (matchedSubtitle != null) {
@@ -161,23 +225,31 @@ class ImportService {
         if (matchedCover != null) {
           coverDest = await _copyToImportDir(matchedCover);
         }
+        if (matchedScript != null) {
+          scriptDest = await _copyToImportDir(matchedScript);
+        }
         if (matchedSignal != null) {
           signalDest = await _copyToImportDir(matchedSignal);
         }
 
-        succeeded.add(ImportedItem(
-          title: title,
-          filePath: destPath,
-          coverPath: coverDest,
-          subtitlePath: subtitleDest,
-          signalPath: signalDest,
-          mediaType: mediaType,
-        ));
+        succeeded.add(
+          ImportedItem(
+            title: title,
+            filePath: destPath,
+            coverPath: coverDest,
+            subtitlePath: subtitleDest,
+            scriptPath: scriptDest,
+            signalPath: signalDest,
+            mediaType: mediaType,
+          ),
+        );
       } catch (e) {
-        failed.add(ImportFailure(
-          fileName: p.basename(audioPath),
-          reason: '$e',
-        ));
+        failed.add(
+          ImportFailure(
+            fileName: p.basename(mediaPath),
+            reason: _normalizeError(e),
+          ),
+        );
       }
     }
 
@@ -200,67 +272,114 @@ class ImportService {
     return '$title$counter';
   }
 
-  /// Auto-matching algorithm:
-  /// Priority 1: exact basename match (ignoring extension)
-  /// Priority 2: resource filename starts with audio basename
-  /// Priority 3: first dot-segment matches
-  String? _findBestMatch(
-    String audioBaseName,
+  String? _takeBestMatch(
+    String mediaBaseName,
     List<String> candidates,
     List<String>? extensionPriority,
   ) {
-    if (candidates.isEmpty) return null;
+    final matches =
+        <
+          ({
+            String path,
+            int rulePriority,
+            int extensionRank,
+            int originalIndex,
+          })
+        >[];
 
-    // Priority 1: exact basename match
-    final exact = _filterAndSort(
-      candidates.where((c) => _baseName(c) == audioBaseName).toList(),
-      extensionPriority,
-    );
-    if (exact.isNotEmpty) return exact.first;
+    for (var index = 0; index < candidates.length; index++) {
+      final candidate = candidates[index];
+      final candidateBaseName = _baseName(candidate);
+      final rulePriority = _matchRulePriority(mediaBaseName, candidateBaseName);
+      if (rulePriority == null) continue;
 
-    // Priority 2: starts with audio basename
-    final startsWith = _filterAndSort(
-      candidates.where((c) => _baseName(c).startsWith(audioBaseName)).toList(),
-      extensionPriority,
-    );
-    if (startsWith.isNotEmpty) return startsWith.first;
+      final extension = p
+          .extension(candidate)
+          .toLowerCase()
+          .replaceFirst('.', '');
+      final extensionRank =
+          extensionPriority == null ? 0 : extensionPriority.indexOf(extension);
 
-    // Priority 3: first dot-segment matches
-    final audioFirstPart = audioBaseName.split('.').first;
-    final firstPart = _filterAndSort(
-      candidates
-          .where((c) => _baseName(c).split('.').first == audioFirstPart)
-          .toList(),
-      extensionPriority,
-    );
-    if (firstPart.isNotEmpty) return firstPart.first;
+      matches.add((
+        path: candidate,
+        rulePriority: rulePriority,
+        extensionRank: extensionRank == -1 ? 999 : extensionRank,
+        originalIndex: index,
+      ));
+    }
 
-    return null;
-  }
+    if (matches.isEmpty) {
+      return null;
+    }
 
-  List<String> _filterAndSort(
-    List<String> files,
-    List<String>? extensionPriority,
-  ) {
-    if (extensionPriority == null || files.length <= 1) return files;
-    files.sort((a, b) {
-      final extA = p.extension(a).toLowerCase().replaceFirst('.', '');
-      final extB = p.extension(b).toLowerCase().replaceFirst('.', '');
-      final indexA = extensionPriority.indexOf(extA);
-      final indexB = extensionPriority.indexOf(extB);
-      return (indexA == -1 ? 999 : indexA).compareTo(
-        indexB == -1 ? 999 : indexB,
-      );
+    matches.sort((a, b) {
+      final byRule = a.rulePriority.compareTo(b.rulePriority);
+      if (byRule != 0) return byRule;
+
+      final byExtension = a.extensionRank.compareTo(b.extensionRank);
+      if (byExtension != 0) return byExtension;
+
+      return a.originalIndex.compareTo(b.originalIndex);
     });
-    return files;
+
+    final bestMatch = matches.first.path;
+    candidates.remove(bestMatch);
+    return bestMatch;
   }
 
   String _baseName(String path) {
     return p.basenameWithoutExtension(path);
   }
 
+  Future<String> _importMediaFile(String mediaPath, String rawTitle) async {
+    final ext = p.extension(mediaPath).toLowerCase().replaceFirst('.', '');
+    if (ResonanceMediaSupport.videoExtensions.contains(ext)) {
+      final outputPath = await _reserveImportPath('$rawTitle.m4a');
+      final extractedPath = await _mediaExtractionBridge.extractAudio(
+        inputPath: mediaPath,
+        outputPath: outputPath,
+      );
+      await ResonanceMediaSupport.ensureLikelyPlayableMediaFile(
+        extractedPath,
+        label: '提取后的音频文件',
+      );
+      return extractedPath;
+    }
+
+    final copiedPath = await _copyToImportDir(mediaPath);
+    await ResonanceMediaSupport.ensureLikelyPlayableMediaFile(
+      copiedPath,
+      label: '导入后的音频文件',
+    );
+    return copiedPath;
+  }
+
   Future<String> _copyToImportDir(String sourcePath) async {
     final fileName = p.basename(sourcePath);
+    final destPath = await _reserveImportPath(fileName);
+    await _copyFileWithRetry(sourcePath, destPath);
+    return destPath;
+  }
+
+  Future<void> _copyFileWithRetry(String sourcePath, String destPath) async {
+    final sourceFile = File(sourcePath);
+    final destFile = File(destPath);
+
+    await ResonanceMediaSupport.runWithPendingFsRetry(() async {
+      if (await destFile.exists()) {
+        await destFile.delete();
+      }
+
+      final sink = destFile.openWrite();
+      try {
+        await sink.addStream(sourceFile.openRead());
+      } finally {
+        await sink.close();
+      }
+    });
+  }
+
+  Future<String> _reserveImportPath(String fileName) async {
     var destPath = p.join(_importDir, fileName);
     final destFile = File(destPath);
 
@@ -268,46 +387,43 @@ class ImportService {
       await destFile.parent.create(recursive: true);
     }
 
-    // Handle file name conflicts
-    if (await File(destPath).exists()) {
-      final baseName = p.basenameWithoutExtension(fileName);
-      final ext = p.extension(fileName);
-      var counter = 1;
-      const maxAttempts = 100;
-      do {
-        destPath = p.join(_importDir, '$baseName($counter)$ext');
-        counter++;
-      } while (await File(destPath).exists() && counter <= maxAttempts);
-      if (counter > maxAttempts && await File(destPath).exists()) {
-        throw Exception('文件名冲突次数超过上限: $fileName');
-      }
+    if (!await destFile.exists()) {
+      return destPath;
     }
 
-    await File(sourcePath).copy(destPath);
+    final baseName = p.basenameWithoutExtension(fileName);
+    final ext = p.extension(fileName);
+    var counter = 1;
+    const maxAttempts = 100;
+
+    do {
+      destPath = p.join(_importDir, '$baseName($counter)$ext');
+      counter++;
+    } while (await File(destPath).exists() && counter <= maxAttempts);
+
+    if (counter > maxAttempts && await File(destPath).exists()) {
+      throw Exception('文件名冲突次数超过上限: $fileName');
+    }
+
     return destPath;
   }
 
-  Future<List<String>> _extractZip(
+  Future<({String directory, List<String> paths})> _extractZip(
     String zipPath, {
     String? password,
   }) async {
     final bytes = await File(zipPath).readAsBytes();
-    final archive = ZipDecoder().decodeBytes(
-      bytes,
-      password: password,
-    );
+    final archive = ZipDecoder().decodeBytes(bytes, password: password);
 
-    final extractDir = p.join(
-      _importDir,
-      '_extracted_${p.basenameWithoutExtension(zipPath)}',
+    final extractDir = await Directory.systemTemp.createTemp(
+      'omao_zip_${p.basenameWithoutExtension(zipPath)}_',
     );
-    await Directory(extractDir).create(recursive: true);
 
     final extractedPaths = <String>[];
 
     for (final file in archive) {
       if (file.isFile) {
-        final outPath = p.join(extractDir, file.name);
+        final outPath = p.join(extractDir.path, file.name);
         final outFile = File(outPath);
         await outFile.parent.create(recursive: true);
         await outFile.writeAsBytes(file.content as List<int>);
@@ -315,18 +431,113 @@ class ImportService {
       }
     }
 
-    return extractedPaths;
+    return (directory: extractDir.path, paths: extractedPaths);
   }
 
-  /// Clean up extracted zip temp directories.
-  Future<void> cleanupExtractedDirs() async {
-    final dir = Directory(_importDir);
-    if (!await dir.exists()) return;
+  ImportPreview _buildPreview(
+    List<String> paths, {
+    required ImportSourceType sourceType,
+    String? archivePath,
+    String? extractedDir,
+  }) {
+    final items = paths
+        .map((path) {
+          final type = _classifyFile(path);
+          final selectable = type != ImportPreviewItemType.unsupported;
+          final name =
+              extractedDir == null
+                  ? p.basename(path)
+                  : p.relative(path, from: extractedDir);
 
-    await for (final entity in dir.list()) {
-      if (entity is Directory && p.basename(entity.path).startsWith('_extracted_')) {
-        await entity.delete(recursive: true);
-      }
+          return ImportPreviewItem(
+            path: path,
+            name: name,
+            type: type,
+            selected: selectable,
+            selectable: selectable,
+          );
+        })
+        .toList(growable: false);
+
+    return ImportPreview(
+      sourceType: sourceType,
+      items: items,
+      archivePath: archivePath,
+      extractedDir: extractedDir,
+    );
+  }
+
+  ImportPreviewItemType _classifyFile(String path) {
+    final ext = p.extension(path).toLowerCase().replaceFirst('.', '');
+    if (ResonanceMediaSupport.audioExtensions.contains(ext)) {
+      return ImportPreviewItemType.audio;
     }
+    if (ResonanceMediaSupport.videoExtensions.contains(ext)) {
+      return ImportPreviewItemType.video;
+    }
+    if (_subtitleExtensions.contains(ext)) {
+      return ImportPreviewItemType.subtitle;
+    }
+    if (_coverExtensions.contains(ext)) {
+      return ImportPreviewItemType.cover;
+    }
+    if (_scriptExtensions.contains(ext)) {
+      return ImportPreviewItemType.script;
+    }
+    if (_signalExtensions.contains(ext)) {
+      return ImportPreviewItemType.signal;
+    }
+    return ImportPreviewItemType.unsupported;
   }
+
+  bool _isSingleDirectorySelection(List<String> paths) {
+    final parentDirectories =
+        paths.map((path) => p.normalize(p.dirname(path))).toSet();
+    return parentDirectories.length <= 1;
+  }
+
+  int? _matchRulePriority(String mediaBaseName, String candidateBaseName) {
+    if (candidateBaseName == mediaBaseName) {
+      return 0;
+    }
+
+    if (candidateBaseName.startsWith(mediaBaseName)) {
+      return 1;
+    }
+
+    final mediaFirstSegment = mediaBaseName.split('.').first;
+    final candidateFirstSegment = candidateBaseName.split('.').first;
+    if (candidateFirstSegment == mediaFirstSegment) {
+      return 2;
+    }
+
+    return null;
+  }
+
+  String _normalizeError(Object error) {
+    if (error is FileSystemException &&
+        ResonanceMediaSupport.isPendingFsOperation(error)) {
+      return '文件正在被系统读取，请稍后重试';
+    }
+
+    final message = '$error'.trim();
+    if (message.startsWith('FileSystemException: ')) {
+      return message.substring('FileSystemException: '.length);
+    }
+    if (message.startsWith('Exception: ')) {
+      return message.substring('Exception: '.length);
+    }
+    if (message.startsWith('Unsupported operation: ')) {
+      return message.substring('Unsupported operation: '.length);
+    }
+    return message;
+  }
+
+  Set<String> get subtitleExtensions => _subtitleExtensions;
+
+  Set<String> get coverExtensions => _coverExtensions;
+
+  Set<String> get scriptExtensions => _scriptExtensions;
+
+  Set<String> get signalExtensions => _signalExtensions;
 }

@@ -39,7 +39,9 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
       mediaType: Value(entry.mediaType),
       artist: Value(entry.artist),
       createdAt:
-          entry.createdAt != null ? Value(entry.createdAt!) : const Value.absent(),
+          entry.createdAt != null
+              ? Value(entry.createdAt!)
+              : const Value.absent(),
     );
   }
 
@@ -84,9 +86,7 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
 
   @override
   Stream<List<AudioEntry>> watchAllEntries() {
-    return _dao.watchAllEntries().map(
-          (rows) => rows.map(_mapEntry).toList(),
-        );
+    return _dao.watchAllEntries().map((rows) => rows.map(_mapEntry).toList());
   }
 
   @override
@@ -136,8 +136,8 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
   @override
   Stream<List<AudioCollection>> watchCollections() {
     return _dao.watchAllCollections().map(
-          (rows) => rows.map((row) => _mapCollection(row)).toList(),
-        );
+      (rows) => rows.map((row) => _mapCollection(row)).toList(),
+    );
   }
 
   @override
@@ -154,21 +154,25 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
 
   @override
   Future<int> createCollection(AudioCollection collection) {
-    return _dao.insertCollection(db.AudioCollectionsCompanion(
-      title: Value(collection.title),
-      coverPath: Value(collection.coverPath),
-      description: Value(collection.description),
-    ));
+    return _dao.insertCollection(
+      db.AudioCollectionsCompanion(
+        title: Value(collection.title),
+        coverPath: Value(collection.coverPath),
+        description: Value(collection.description),
+      ),
+    );
   }
 
   @override
   Future<void> updateCollection(AudioCollection collection) async {
-    await _dao.updateCollection(db.AudioCollectionsCompanion(
-      id: Value(collection.id),
-      title: Value(collection.title),
-      coverPath: Value(collection.coverPath),
-      description: Value(collection.description),
-    ));
+    await _dao.updateCollection(
+      db.AudioCollectionsCompanion(
+        id: Value(collection.id),
+        title: Value(collection.title),
+        coverPath: Value(collection.coverPath),
+        description: Value(collection.description),
+      ),
+    );
   }
 
   @override
@@ -201,9 +205,9 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
 
   @override
   Stream<List<AudioEntry>> watchEntriesForCollection(int collectionId) {
-    return _dao.watchEntriesForCollection(collectionId).map(
-          (rows) => rows.map(_mapEntry).toList(),
-        );
+    return _dao
+        .watchEntriesForCollection(collectionId)
+        .map((rows) => rows.map(_mapEntry).toList());
   }
 
   @override
@@ -224,12 +228,14 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
 
   @override
   Future<int> insertSubtitle(SubtitleRef subtitle) {
-    return _dao.insertSubtitle(db.SubtitlesCompanion(
-      entryId: Value(subtitle.entryId),
-      language: Value(subtitle.language),
-      filePath: Value(subtitle.filePath),
-      format: Value(subtitle.format.name),
-    ));
+    return _dao.insertSubtitle(
+      db.SubtitlesCompanion(
+        entryId: Value(subtitle.entryId),
+        language: Value(subtitle.language),
+        filePath: Value(subtitle.filePath),
+        format: Value(subtitle.format.name),
+      ),
+    );
   }
 
   @override
@@ -247,14 +253,39 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
 
   @override
   Future<void> insertSignalFile(int entryId, String filePath) async {
-    await _dao.insertSignalFile(db.SignalFilesCompanion(
-      entryId: Value(entryId),
-      filePath: Value(filePath),
-    ));
+    await _dao.insertSignalFile(
+      db.SignalFilesCompanion(
+        entryId: Value(entryId),
+        filePath: Value(filePath),
+      ),
+    );
   }
 
   @override
   Future<void> deleteSignalFilesForEntry(int entryId) async {
     await _dao.deleteSignalFilesForEntry(entryId);
+  }
+
+  // ── ScriptFiles ───────────────────────────────────────────────────────
+
+  @override
+  Future<String?> getScriptFilePathForEntry(int entryId) async {
+    final row = await _dao.getScriptFileForEntry(entryId);
+    return row?.filePath;
+  }
+
+  @override
+  Future<void> insertScriptFile(int entryId, String filePath) async {
+    await _dao.insertScriptFile(
+      db.ScriptFilesCompanion(
+        entryId: Value(entryId),
+        filePath: Value(filePath),
+      ),
+    );
+  }
+
+  @override
+  Future<void> deleteScriptFilesForEntry(int entryId) async {
+    await _dao.deleteScriptFilesForEntry(entryId);
   }
 }

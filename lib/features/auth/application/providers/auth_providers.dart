@@ -77,6 +77,12 @@ class AuthNotifier extends _$AuthNotifier {
     }
   }
 
+  void updateNicknameLocally(String nickname) {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    state = AsyncData(current.copyWith(nickname: nickname));
+  }
+
   Future<void> logout() async {
     await ref.read(authRepositoryProvider).logout();
     state = const AsyncData(null);
@@ -105,8 +111,13 @@ class AuthNotifier extends _$AuthNotifier {
     return result;
   }
 
-  Future<void> sendVerificationCode(String phone) async {
-    await ref.read(authRepositoryProvider).sendVerificationCode(phone);
+  Future<void> sendVerificationCode(
+    String phone, {
+    bool isRegister = false,
+  }) async {
+    await ref
+        .read(authRepositoryProvider)
+        .sendVerificationCode(phone, isRegister: isRegister);
   }
 
   /// 提取 AuthException 的展示信息

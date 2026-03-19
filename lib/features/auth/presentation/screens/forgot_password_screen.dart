@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../application/providers/auth_providers.dart';
 import '../../domain/models/auth_exception.dart';
+import '../widgets/auth_chrome.dart';
+import '../widgets/auth_fields.dart';
 import 'verification_code_screen.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
@@ -24,10 +25,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _confirmController = TextEditingController();
   bool _isLoading = false;
 
-  bool get _canProceed =>
-      _phoneController.text.length >= 11 &&
-      _passwordController.text.length >= 6 &&
-      _confirmController.text.isNotEmpty;
+  String get _phoneDigits =>
+      _phoneController.text.replaceAll(RegExp(r'\D'), '');
 
   @override
   void dispose() {
@@ -38,6 +37,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   }
 
   Future<void> _sendCodeAndNavigate() async {
+    if (_phoneDigits.length < 11) {
+      TopBannerToast.show(context, message: '请输入正确的手机号码');
+      return;
+    }
+    if (_passwordController.text.length < 6) {
+      TopBannerToast.show(context, message: '请输入至少6位密码');
+      return;
+    }
     if (_passwordController.text != _confirmController.text) {
       TopBannerToast.show(context, message: '密码输入不一致，请重新输入');
       return;
@@ -47,43 +54,48 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     try {
       await ref
           .read(authNotifierProvider.notifier)
-          .sendVerificationCode(_phoneController.text);
+          .sendVerificationCode(_phoneDigits);
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
         TopBannerToast.show(
           context,
           message: e is AuthException ? e.displayMessage : '验证码发送失败',
         );
       }
-      return;
+      rethrow;
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
 
     if (!mounted) return;
-    setState(() => _isLoading = false);
-
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => VerificationCodeScreen(
-          phone: _phoneController.text,
-          title: '重置密码',
-          onVerified: (code) => _resetPassword(code),
-        ),
+        builder:
+            (_) => VerificationCodeScreen(
+              phone: _phoneDigits,
+              title: '重置密码',
+              onVerified: _resetPassword,
+            ),
       ),
     );
   }
 
   Future<void> _resetPassword(String code) async {
     try {
-      await ref.read(apiClientProvider).post(
-        ApiEndpoints.resetPassword,
-        data: {
-          'mobile': _phoneController.text,
-          'code': code,
-          'newPassword': _passwordController.text,
-        },
-      );
-    } catch (e) {
+      await ref
+          .read(apiClientProvider)
+          .post(
+            ApiEndpoints.resetPassword,
+            queryParameters: {
+              'mobile': _phoneDigits,
+              'code': code,
+              'password': _passwordController.text,
+              'veryPassword': _passwordController.text,
+            },
+          );
+    } catch (_) {
       if (mounted) {
         TopBannerToast.show(context, message: '重置失败，请重试');
       }
@@ -91,258 +103,173 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     }
 
     if (!mounted) return;
-
-    // Show success dialog
-    await showDialog(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.primary.withValues(alpha: 0.08),
-                Colors.white,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            width: 304,
+            padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white.withValues(alpha: 0.95),
+                  const Color(0xFFF1ECFF).withValues(alpha: 0.94),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF5F5382).withValues(alpha: 0.18),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF12BE6C),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  '密码重置成功',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: AuthPalette.title,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: 116,
+                  child: AuthPrimaryButton(
+                    label: '确定',
+                    onTap: () {
+                      Navigator.of(dialogContext).pop();
+                      Navigator.of(context)
+                        ..pop()
+                        ..pop();
+                    },
+                  ),
+                ),
               ],
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.check_circle,
-                size: 48,
-                color: AppColors.success,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                '密码重置成功',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 24),
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  // Pop back to login
-                  Navigator.of(context)
-                    ..pop() // pop verification code screen
-                    ..pop(); // pop forgot password screen
-                },
-                child: Container(
-                  width: 160,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.purpleButtonGradient,
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    '确定',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.profileBackgroundGradient,
-      ),
+    return AuthBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, size: 20),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              const Text(
-                '重置密码',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AuthBackButton(onTap: () => Navigator.of(context).pop()),
+                const SizedBox(height: 76),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: AuthPageTitle(title: '重置密码', subtitle: 'Password'),
                 ),
-              ),
-              Text(
-                'Password',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontStyle: FontStyle.italic,
-                  color: AppColors.textHint.withValues(alpha: 0.5),
-                ),
-              ),
-              const SizedBox(height: 40),
-              // Phone
-              const Text(
-                '输入手机号码',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(11),
-                ],
-                style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  prefixText: '+86 | ',
-                  prefixStyle: const TextStyle(
-                    fontSize: 16,
-                    color: AppColors.textPrimary,
-                  ),
-                  hintText: '请输入手机号码',
-                  hintStyle: const TextStyle(color: AppColors.textHint),
-                  suffixIcon: _phoneController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.cancel,
-                              size: 18, color: AppColors.textHint),
-                          onPressed: () {
-                            _phoneController.clear();
-                            setState(() {});
-                          },
-                        )
-                      : null,
-                  border: const UnderlineInputBorder(),
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFE0E0E0)),
-                  ),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 24),
-              // New password
-              const Text(
-                '输入新密码',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: '请输入新密码',
-                  hintStyle: const TextStyle(color: AppColors.textHint),
-                  suffixIcon: _passwordController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.cancel,
-                              size: 18, color: AppColors.textHint),
-                          onPressed: () {
-                            _passwordController.clear();
-                            setState(() {});
-                          },
-                        )
-                      : null,
-                  border: const UnderlineInputBorder(),
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+                const SizedBox(height: 76),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AuthUnderlineField(
+                        label: '输入手机号码',
+                        controller: _phoneController,
+                        hintText: '请输入手机号',
+                        leadingText: '+86 |',
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          ChinesePhoneNumberFormatter(),
+                        ],
+                        trailing:
+                            _phoneController.text.isEmpty
+                                ? null
+                                : AuthClearButton(
+                                  onTap: () {
+                                    _phoneController.clear();
+                                    setState(() {});
+                                  },
+                                ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 28),
+                      AuthUnderlineField(
+                        label: '输入新密码',
+                        controller: _passwordController,
+                        hintText: '请输入新密码',
+                        obscureText: true,
+                        trailing:
+                            _passwordController.text.isEmpty
+                                ? null
+                                : AuthClearButton(
+                                  onTap: () {
+                                    _passwordController.clear();
+                                    setState(() {});
+                                  },
+                                ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 28),
+                      AuthUnderlineField(
+                        label: '再次输入新密码',
+                        controller: _confirmController,
+                        hintText: '再次输入新密码',
+                        obscureText: true,
+                        trailing:
+                            _confirmController.text.isEmpty
+                                ? null
+                                : AuthClearButton(
+                                  onTap: () {
+                                    _confirmController.clear();
+                                    setState(() {});
+                                  },
+                                ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 42),
+                      AuthPrimaryButton(
+                        label: '发送验证码',
+                        loading: _isLoading,
+                        onTap: () async {
+                          try {
+                            await _sendCodeAndNavigate();
+                          } catch (_) {}
+                        },
+                      ),
+                    ],
                   ),
                 ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 24),
-              // Confirm password
-              const Text(
-                '再次输入新密码',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _confirmController,
-                obscureText: true,
-                style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: '再次输入新密码',
-                  hintStyle: const TextStyle(color: AppColors.textHint),
-                  suffixIcon: _confirmController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.cancel,
-                              size: 18, color: AppColors.textHint),
-                          onPressed: () {
-                            _confirmController.clear();
-                            setState(() {});
-                          },
-                        )
-                      : null,
-                  border: const UnderlineInputBorder(),
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFE0E0E0)),
-                  ),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 40),
-              // Send code button
-              SizedBox(
-                width: double.infinity,
-                child: GestureDetector(
-                  onTap: (_canProceed && !_isLoading)
-                      ? _sendCodeAndNavigate
-                      : null,
-                  child: Container(
-                    height: 52,
-                    decoration: BoxDecoration(
-                      gradient: _canProceed
-                          ? AppColors.purpleButtonGradient
-                          : const LinearGradient(
-                              colors: [Color(0xFFCCCCCC), Color(0xFFDDDDDD)],
-                            ),
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                    alignment: Alignment.center,
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            '发送验证码',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

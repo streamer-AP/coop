@@ -74,6 +74,12 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<!-- 允许 HTTP 明文请求 -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<!-- 蓝牙权限 -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>需要蓝牙权限以连接 OMAO 设备</string>

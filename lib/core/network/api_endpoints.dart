@@ -2,18 +2,19 @@
 class ApiEndpoints {
   ApiEndpoints._();
 
-  static const String baseUrl = 'https://api.omao.com'; // TODO: configure
+  static const String baseUrl = 'https://app.erotouch.cn/api';
 
-  // Auth
+  // Auth (all auth endpoints use query parameters, not JSON body)
   static const String loginByCode = '/auth/loginByCode';
-  static const String loginByPassword = '/auth/loginByPassword';
-  static const String register = '/auth/register';
-  static const String setupPassword = '/auth/setupPassword';
+  static const String loginByPassword = '/auth/login';
+  static const String register = '/auth/registerApp';
+  static const String setupPassword = '/auth/setPassword';
   static const String resetPassword = '/auth/resetPassword';
   static const String changePassword = '/auth/changePassword';
-  static const String sendCode = '/auth/sendCode';
+  static const String sendLoginCode = '/auth/sendLoginCode';
+  static const String sendRegisterCode = '/auth/sendRegisterCode';
   static const String logout = '/auth/logout';
-  static const String deactivateAccount = '/auth/deactivate';
+  static const String deactivateAccount = '/auth/cancel';
   static const String getCurrentUserInfo = '/auth/getCurrentUserInfo';
 
   // Identity verification
@@ -21,7 +22,9 @@ class ApiEndpoints {
 
   // Permission
   static const String permissions = '/permissions';
-  static const String deviceBinding = '/devices/bind';
+
+  // Device
+  static const String userDevices = '/userDevices';
 
   // Resonance
   static const String audioEntries = '/resonance/entries';
@@ -42,7 +45,7 @@ class ApiEndpoints {
   static const String checkUpdate = '/app/check-update';
 
   // Message
-  static const String messages = '/messages';
+  static const String messages = '/messageBatch/app/planSendTime';
   static const String markMessageRead = '/messages/read';
   static const String markAllMessagesRead = '/messages/read-all';
 

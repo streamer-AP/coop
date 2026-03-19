@@ -11,6 +11,23 @@ import 'resonance_providers.dart';
 
 part 'subtitle_providers.g.dart';
 
+enum SubtitleTranslationLanguage {
+  zh('中文'),
+  en('English'),
+  ja('日本語'),
+  ko('한국어');
+
+  const SubtitleTranslationLanguage(this.label);
+  final String label;
+}
+
+final subtitleFollowEnabledProvider = StateProvider<bool>((ref) => true);
+final subtitleTranslationEnabledProvider = StateProvider<bool>((ref) => false);
+final subtitleTranslationLanguageProvider =
+    StateProvider<SubtitleTranslationLanguage>(
+      (ref) => SubtitleTranslationLanguage.zh,
+    );
+
 @riverpod
 SubtitleService subtitleService(Ref ref) {
   return SubtitleService();

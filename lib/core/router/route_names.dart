@@ -2,6 +2,7 @@
 class RouteNames {
   RouteNames._();
 
+  static const startup = 'startup';
   static const home = 'home';
   static const login = 'login';
   static const passwordLogin = 'password-login';

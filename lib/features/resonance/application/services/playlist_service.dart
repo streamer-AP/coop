@@ -19,12 +19,11 @@ class PlaylistService {
 
   /// Play an entry from the "all entries" context.
   /// If list is empty, creates a new playlist with just this entry.
-  /// If entry already exists, moves playhead to it.
+  /// If entry already exists, moves it to current+1 and plays it.
   /// Otherwise, inserts after current and plays.
   void playEntryFromAll(AudioEntry entry) {
-    final existingIndex = _playlist.items.indexWhere(
-      (item) => item.entry.id == entry.id,
-    );
+    final items = List<PlaylistItem>.of(_playlist.items);
+    final existingIndex = items.indexWhere((item) => item.entry.id == entry.id);
 
     if (_playlist.isEmpty) {
       _playlist = Playlist(
@@ -32,15 +31,30 @@ class PlaylistService {
         currentIndex: 0,
         repeatMode: _playlist.repeatMode,
       );
-    } else if (existingIndex >= 0) {
-      _playlist = _playlist.copyWith(currentIndex: existingIndex);
     } else {
-      final insertAt = _playlist.currentIndex + 1;
-      final newItems = List<PlaylistItem>.of(_playlist.items)
-        ..insert(insertAt, PlaylistItem(uid: _uuid.v4(), entry: entry));
+      final currentIndex = _clampInt(
+        _playlist.currentIndex,
+        0,
+        items.length - 1,
+      );
+      final targetIndex = currentIndex + 1;
+      PlaylistItem target;
+      if (existingIndex >= 0) {
+        target = items.removeAt(existingIndex);
+      } else {
+        target = PlaylistItem(uid: _uuid.v4(), entry: entry);
+      }
+
+      var insertAt = targetIndex;
+      if (existingIndex >= 0 && existingIndex < insertAt) {
+        insertAt -= 1;
+      }
+      insertAt = _clampInt(insertAt, 0, items.length);
+      items.insert(insertAt, target);
+
       _playlist = _playlist.copyWith(
-        items: newItems,
-        currentIndex: insertAt,
+        items: items,
+        currentIndex: _clampInt(insertAt, 0, items.length - 1),
       );
     }
 
@@ -53,15 +67,28 @@ class PlaylistService {
     AudioEntry entry,
     List<AudioEntry> collectionEntries,
   ) {
+    final startIndex = collectionEntries.indexWhere((e) => e.id == entry.id);
+    if (startIndex < 0 || collectionEntries.isEmpty) return;
+
     switch (_playlist.repeatMode) {
       case RepeatMode.sequential:
-        _buildSequentialFromCollection(entry, collectionEntries);
+        _playlist = Playlist(
+          items:
+              collectionEntries
+                  .map((e) => PlaylistItem(uid: _uuid.v4(), entry: e))
+                  .toList(),
+          currentIndex: startIndex,
+          repeatMode: RepeatMode.sequential,
+        );
       case RepeatMode.shuffle:
         _buildShuffleFromCollection(entry, collectionEntries);
       case RepeatMode.single:
         _playlist = Playlist(
-          items: [PlaylistItem(uid: _uuid.v4(), entry: entry)],
-          currentIndex: 0,
+          items:
+              collectionEntries
+                  .map((e) => PlaylistItem(uid: _uuid.v4(), entry: e))
+                  .toList(),
+          currentIndex: startIndex,
           repeatMode: RepeatMode.single,
         );
     }
@@ -69,33 +96,9 @@ class PlaylistService {
     _emit();
   }
 
-  void _buildSequentialFromCollection(
-    AudioEntry entry,
-    List<AudioEntry> entries,
-  ) {
-    final startIndex = entries.indexWhere((e) => e.id == entry.id);
-    if (startIndex < 0) return;
-
-    // Rotate so clicked entry is first
-    final rotated = [
-      ...entries.sublist(startIndex),
-      ...entries.sublist(0, startIndex),
-    ];
-
-    _playlist = Playlist(
-      items: rotated
-          .map((e) => PlaylistItem(uid: _uuid.v4(), entry: e))
-          .toList(),
-      currentIndex: 0,
-      repeatMode: RepeatMode.sequential,
-    );
-  }
-
-  void _buildShuffleFromCollection(
-    AudioEntry entry,
-    List<AudioEntry> entries,
-  ) {
-    final others = entries.where((e) => e.id != entry.id).toList()..shuffle(_random);
+  void _buildShuffleFromCollection(AudioEntry entry, List<AudioEntry> entries) {
+    final others =
+        entries.where((e) => e.id != entry.id).toList()..shuffle(_random);
     final items = [
       PlaylistItem(uid: _uuid.v4(), entry: entry),
       ...others.map((e) => PlaylistItem(uid: _uuid.v4(), entry: e)),
@@ -109,11 +112,69 @@ class PlaylistService {
   }
 
   /// Add an entry to the end of the playlist without changing playhead.
+  /// If entry already exists, move it to current+1 without changing playhead.
   void addEntry(AudioEntry entry) {
-    final newItems = List<PlaylistItem>.of(_playlist.items)
-      ..add(PlaylistItem(uid: _uuid.v4(), entry: entry));
-    _playlist = _playlist.copyWith(items: newItems);
+    if (_playlist.isEmpty) {
+      _playlist = Playlist(
+        items: [PlaylistItem(uid: _uuid.v4(), entry: entry)],
+        currentIndex: 0,
+        repeatMode: _playlist.repeatMode,
+      );
+      _emit();
+      return;
+    }
+
+    final items = List<PlaylistItem>.of(_playlist.items);
+    final currentUid = _playlist.currentItem?.uid;
+    final existingIndex = items.indexWhere((item) => item.entry.id == entry.id);
+    PlaylistItem target;
+    if (existingIndex >= 0) {
+      target = items.removeAt(existingIndex);
+    } else {
+      target = PlaylistItem(uid: _uuid.v4(), entry: entry);
+    }
+
+    var insertAt = _clampInt(_playlist.currentIndex + 1, 0, items.length);
+    if (existingIndex >= 0 && existingIndex < insertAt) {
+      insertAt -= 1;
+    }
+    insertAt = _clampInt(insertAt, 0, items.length);
+    items.insert(insertAt, target);
+
+    var nextCurrentIndex = _playlist.currentIndex;
+    if (currentUid != null) {
+      nextCurrentIndex = items.indexWhere((item) => item.uid == currentUid);
+    }
+
+    _playlist = _playlist.copyWith(
+      items: items,
+      currentIndex: _clampInt(nextCurrentIndex, 0, items.length - 1),
+    );
     _emit();
+  }
+
+  /// Select an existing item as current play item.
+  /// In shuffle mode: selecting the last item reshuffles with selected as first.
+  bool playItem(String uid) {
+    final index = _playlist.items.indexWhere((item) => item.uid == uid);
+    if (index < 0) return false;
+
+    if (_playlist.repeatMode == RepeatMode.shuffle &&
+        index == _playlist.length - 1 &&
+        _playlist.length > 1) {
+      final selected = _playlist.items[index];
+      final others =
+          _playlist.items.where((i) => i.uid != uid).toList()..shuffle(_random);
+      _playlist = _playlist.copyWith(
+        items: [selected, ...others],
+        currentIndex: 0,
+      );
+    } else {
+      _playlist = _playlist.copyWith(currentIndex: index);
+    }
+
+    _emit();
+    return true;
   }
 
   /// Move to next track. Returns true if there is a next track.
@@ -147,16 +208,14 @@ class PlaylistService {
 
     switch (_playlist.repeatMode) {
       case RepeatMode.sequential:
-        final prevIndex = (_playlist.currentIndex - 1 + _playlist.length) %
-            _playlist.length;
+        final prevIndex =
+            (_playlist.currentIndex - 1 + _playlist.length) % _playlist.length;
         _playlist = _playlist.copyWith(currentIndex: prevIndex);
       case RepeatMode.single:
         break;
       case RepeatMode.shuffle:
         if (_playlist.currentIndex <= 0) {
-          _playlist = _playlist.copyWith(
-            currentIndex: _playlist.length - 1,
-          );
+          _playlist = _playlist.copyWith(currentIndex: _playlist.length - 1);
         } else {
           _playlist = _playlist.copyWith(
             currentIndex: _playlist.currentIndex - 1,
@@ -174,8 +233,9 @@ class PlaylistService {
     final current = _playlist.currentItem;
     if (current == null) return;
 
-    final others = _playlist.items.where((i) => i.uid != current.uid).toList()
-      ..shuffle(_random);
+    final others =
+        _playlist.items.where((i) => i.uid != current.uid).toList()
+          ..shuffle(_random);
 
     _playlist = _playlist.copyWith(
       items: [current, ...others],
@@ -197,7 +257,7 @@ class PlaylistService {
       if (index < newCurrentIndex) {
         newCurrentIndex--;
       } else if (index == newCurrentIndex) {
-        newCurrentIndex = newCurrentIndex.clamp(0, newItems.length - 1);
+        newCurrentIndex = _clampInt(newCurrentIndex, 0, newItems.length - 1);
       }
       _playlist = _playlist.copyWith(
         items: newItems,
@@ -209,7 +269,25 @@ class PlaylistService {
   }
 
   void setRepeatMode(RepeatMode mode) {
-    _playlist = _playlist.copyWith(repeatMode: mode);
+    if (_playlist.repeatMode == mode) return;
+
+    if (_playlist.isNotEmpty && mode == RepeatMode.shuffle) {
+      final current = _playlist.currentItem;
+      if (current != null) {
+        final others =
+            _playlist.items.where((i) => i.uid != current.uid).toList()
+              ..shuffle(_random);
+        _playlist = _playlist.copyWith(
+          repeatMode: mode,
+          items: [current, ...others],
+          currentIndex: 0,
+        );
+      } else {
+        _playlist = _playlist.copyWith(repeatMode: mode);
+      }
+    } else {
+      _playlist = _playlist.copyWith(repeatMode: mode);
+    }
     _emit();
   }
 
@@ -228,6 +306,13 @@ class PlaylistService {
 
   void _emit() {
     _controller.add(_playlist);
+  }
+
+  int _clampInt(int value, int min, int max) {
+    if (max < min) return min;
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
   }
 
   void dispose() {
