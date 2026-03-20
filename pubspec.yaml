@@ -79,11 +79,10 @@ flutter:
   uses-material-design: true
   assets:
     - assets/avatars/
-    - assets/images/
-    - assets/images/controller/
     - assets/figma/auth/
     - assets/figma/components/
     - assets/figma/home/
+    - assets/figma/controller/
   fonts:
     - family: SourceHanSansCN
       fonts:

@@ -6,13 +6,19 @@ class LoggingInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    _logger.d('${options.method} ${options.uri}');
+    _logger.d('''
+    ${options.method} ${options.uri}
+    ${options.queryParameters}
+        ''');
     handler.next(options);
   }
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    _logger.d('${response.statusCode} ${response.requestOptions.uri}');
+    _logger.d('''
+    ${response.statusCode} ${response.requestOptions.uri}
+    ${response.data}
+    ''');
     handler.next(response);
   }
 
