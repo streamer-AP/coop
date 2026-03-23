@@ -24,7 +24,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     _nicknameController = TextEditingController();
     final profile = ref.read(profileNotifierProvider).valueOrNull;
     if (profile != null) {
-      _nicknameController.text = profile.nickname ?? '';
+      _nicknameController.text = _normalizeNickname(profile.nickname);
     }
   }
 
@@ -37,6 +37,20 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(profileNotifierProvider);
+    final loadedNickname = _normalizeNickname(
+      profileAsync.valueOrNull?.nickname,
+    );
+    if (_nicknameController.text.isEmpty && loadedNickname.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _nicknameController.text.isNotEmpty) {
+          return;
+        }
+        _nicknameController.value = TextEditingValue(
+          text: loadedNickname,
+          selection: TextSelection.collapsed(offset: loadedNickname.length),
+        );
+      });
+    }
 
     return Container(
       decoration: const BoxDecoration(
@@ -120,12 +134,30 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     );
   }
 
-  void _save() {
+  Future<void> _save() async {
     final nickname = _nicknameController.text.trim();
-    if (nickname.isNotEmpty) {
-      ref.read(profileNotifierProvider.notifier).updateNickname(nickname);
+    final currentNickname = _normalizeNickname(
+      ref.read(profileNotifierProvider).valueOrNull?.nickname,
+    );
+    if (nickname.isEmpty) {
+      Navigator.of(context).pop();
+      return;
     }
-    Navigator.of(context).pop();
+    if (nickname == currentNickname) {
+      Navigator.of(context).pop();
+      return;
+    }
+    try {
+      await ref.read(profileNotifierProvider.notifier).updateNickname(nickname);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      final message = '$e'.replaceFirst('Exception: ', '').trim();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message.isEmpty ? '用户名更新失败' : message)),
+      );
+    }
   }
 
   void _showAvatarPicker(BuildContext context) {
@@ -164,5 +196,9 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
         );
       }
     }
+  }
+
+  String _normalizeNickname(String? nickname) {
+    return nickname?.trim() ?? '';
   }
 }

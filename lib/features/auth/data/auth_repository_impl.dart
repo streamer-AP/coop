@@ -29,6 +29,7 @@ class AuthRepositoryImpl implements AuthRepository {
     if (user.token != null) {
       await _tokenStorage.saveToken(user.token!);
     }
+    await _persistCurrentUserId(user.id);
     return user;
   }
 
@@ -45,6 +46,7 @@ class AuthRepositoryImpl implements AuthRepository {
     if (user.token != null) {
       await _tokenStorage.saveToken(user.token!);
     }
+    await _persistCurrentUserId(user.id);
     return user;
   }
 
@@ -60,10 +62,13 @@ class AuthRepositoryImpl implements AuthRepository {
       if (password != null) 'password': password,
       if (password != null) 'veryPassword': password,
     });
-    final user = _parseUserResponse(json).copyWith(needsPasswordSetup: password == null);
+    final user = _parseUserResponse(
+      json,
+    ).copyWith(needsPasswordSetup: password == null);
     if (user.token != null) {
       await _tokenStorage.saveToken(user.token!);
     }
+    await _persistCurrentUserId(user.id);
     return user;
   }
 
@@ -80,12 +85,9 @@ class AuthRepositoryImpl implements AuthRepository {
     String phone, {
     bool isRegister = false,
   }) async {
-    final endpoint = isRegister
-        ? ApiEndpoints.sendRegisterCode
-        : ApiEndpoints.sendLoginCode;
-    await _postWithQuery(endpoint, {
-      'mobile': phone,
-    });
+    final endpoint =
+        isRegister ? ApiEndpoints.sendRegisterCode : ApiEndpoints.sendLoginCode;
+    await _postWithQuery(endpoint, {'mobile': phone});
   }
 
   @override
@@ -104,9 +106,8 @@ class AuthRepositoryImpl implements AuthRepository {
     if (code == 200 && data != null) {
       final isAdult = data['isAdult'] as bool? ?? false;
       return VerificationResult(
-        status: isAdult
-            ? VerificationStatus.verified
-            : VerificationStatus.underage,
+        status:
+            isAdult ? VerificationStatus.verified : VerificationStatus.underage,
         message: data['message'] as String?,
       );
     }
@@ -114,17 +115,17 @@ class AuthRepositoryImpl implements AuthRepository {
     // Error codes from docs
     return switch (code) {
       1007 => const VerificationResult(
-          status: VerificationStatus.underage,
-          message: '您仍然未成年',
-        ),
+        status: VerificationStatus.underage,
+        message: '您仍然未成年',
+      ),
       1000 => const VerificationResult(
-          status: VerificationStatus.verified,
-          message: '您实名验证已成功',
-        ),
+        status: VerificationStatus.verified,
+        message: '您实名验证已成功',
+      ),
       _ => VerificationResult(
-          status: VerificationStatus.failed,
-          message: json['message'] as String? ?? '认证失败',
-        ),
+        status: VerificationStatus.failed,
+        message: json['message'] as String? ?? '认证失败',
+      ),
     };
   }
 
@@ -136,6 +137,7 @@ class AuthRepositoryImpl implements AuthRepository {
       // Logout locally even if server call fails
     }
     await _tokenStorage.clearToken();
+    await _tokenStorage.clearCurrentUserId();
   }
 
   @override
@@ -149,10 +151,10 @@ class AuthRepositoryImpl implements AuthRepository {
       if (code == 200 && json['data'] != null) {
         final data = json['data'] as Map<String, dynamic>;
         final residentStatus = data['residentStatus'] as String? ?? '0';
-        return User(
-          id: '${data['id'] ?? ''}',
+        final user = User(
+          id: _extractUserId(data),
           phone: data['mobile'] as String? ?? '',
-          nickname: data['userName'] as String?,
+          nickname: _normalizeOptionalString(data['userName']),
           token: token,
           verificationStatus: switch (residentStatus) {
             '1' => VerificationStatus.verified,
@@ -161,18 +163,25 @@ class AuthRepositoryImpl implements AuthRepository {
           },
           isVerified: residentStatus == '1',
         );
+        await _persistCurrentUserId(user.id);
+        return user;
       }
     } catch (e) {
       AppLogger().warning('getCurrentUser failed: $e');
       // Token might be expired
       if (e is DioException && e.response?.statusCode == 401) {
         await _tokenStorage.clearToken();
+        await _tokenStorage.clearCurrentUserId();
         return null;
       }
     }
 
     // Fallback: return minimal user from token
-    return User(id: '', phone: '', token: token);
+    return User(
+      id: (await _tokenStorage.getCurrentUserId()) ?? '',
+      phone: '',
+      token: token,
+    );
   }
 
   @override
@@ -246,16 +255,17 @@ class AuthRepositoryImpl implements AuthRepository {
 
   User _parseUserResponse(Map<String, dynamic> json) {
     final data = json['data'] as Map<String, dynamic>? ?? {};
-    final token = data['token'] as String? ??
+    final token =
+        data['token'] as String? ??
         data['accessToken'] as String? ??
         data['tokenValue'] as String? ??
         data['satoken'] as String?;
     final residentStatus = data['residentStatus'] as String? ?? '0';
 
     return User(
-      id: '${data['id'] ?? data['userId'] ?? data['loginId'] ?? ''}',
+      id: _extractUserId(data),
       phone: data['mobile'] as String? ?? '',
-      nickname: data['userName'] as String?,
+      nickname: _normalizeOptionalString(data['userName']),
       token: token,
       needsPasswordSetup: data['needsPasswordSetup'] as bool? ?? false,
       verificationStatus: switch (residentStatus) {
@@ -265,5 +275,31 @@ class AuthRepositoryImpl implements AuthRepository {
       },
       isVerified: residentStatus == '1',
     );
+  }
+
+  Future<void> _persistCurrentUserId(String userId) async {
+    if (userId.trim().isEmpty) return;
+    await _tokenStorage.saveCurrentUserId(userId);
+  }
+
+  String _extractUserId(Map<String, dynamic> data) {
+    final id = data['id'];
+    final userId = data['userId'];
+    final loginId = data['loginId'];
+    AppLogger().info(
+      '[Auth] _extractUserId: id=$id, userId=$userId, loginId=$loginId',
+    );
+    // userId 是真正的用户标识，id 可能是会话/记录 id
+    final raw = userId ?? loginId ?? id;
+    if (raw == null) return '';
+    return '$raw'.trim();
+  }
+
+  String? _normalizeOptionalString(Object? value) {
+    final normalized = '$value'.trim();
+    if (value == null || normalized.isEmpty || normalized == 'null') {
+      return null;
+    }
+    return normalized;
   }
 }
