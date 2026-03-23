@@ -52,7 +52,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -83,6 +83,17 @@ class AppDatabase extends _$AppDatabase {
         // v4 → v5: 消息表新增服务端消息 ID，用于远端同步去重
         if (from >= 3 && from < 5) {
           await m.addColumn(messages, messages.serverId);
+        }
+        // v5 → v6: 波形表新增 channel/signalIntervalMs/signalDelayMs；
+        //          关键帧表 swingValue+vibrationValue → value；
+        //          常用槽位表新增 channel
+        if (from < 6) {
+          await m.deleteTable('waveform_keyframes');
+          await m.deleteTable('favorite_slots');
+          await m.deleteTable('waveforms');
+          await m.createTable(waveforms);
+          await m.createTable(waveformKeyframes);
+          await m.createTable(favoriteSlots);
         }
       },
     );

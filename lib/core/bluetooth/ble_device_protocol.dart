@@ -3,10 +3,54 @@ import 'models/ble_signal.dart';
 
 /// Encodes/decodes BLE device protocol messages.
 class BleDeviceProtocol {
-  // --- 待硬件侧确认后填入 ---
-  static const serviceUuid = 'TODO';
-  static const writeCharacteristicUuid = 'TODO';
-  static const notifyCharacteristicUuid = 'TODO';
+  /// OMAO 设备主控制服务
+  static const serviceUuid = '0000F004-0000-1000-8000-00805F9B34FB';
+
+  /// 振动控制写入特征
+  static const writeCharacteristicUuid =
+      '0000F320-0000-1000-8000-00805F9B34FB';
+
+  /// 当前档位通知特征
+  static const notifyCharacteristicUuid =
+      '0000F220-0000-1000-8000-00805F9B34FB';
+
+  /// 电池电量特征
+  static const batteryCharacteristicUuid =
+      '00002A19-0000-1000-8000-00805F9B34FB';
+
+  /// 设备名特征
+  static const deviceNameCharacteristicUuid =
+      '00002A00-0000-1000-8000-00805F9B34FB';
+
+  /// 震动类型特征
+  static const vibrationTypeCharacteristicUuid =
+      '0000F221-0000-1000-8000-00805F9B34FB';
+
+  /// 剩余时间特征
+  static const remainingTimeCharacteristicUuid =
+      '0000F241-0000-1000-8000-00805F9B34FB';
+
+  /// 控制源特征
+  static const controlSourceCharacteristicUuid =
+      '0000F260-0000-1000-8000-00805F9B34FB';
+
+  /// 设备所需的全部服务 UUID
+  static const requiredServiceUuids = [
+    '0000180A-0000-1000-8000-00805F9B34FB',
+    '0000180F-0000-1000-8000-00805F9B34FB',
+    '00001800-0000-1000-8000-00805F9B34FB',
+    '0000F000-0000-1000-8000-00805F9B34FB',
+    '0000F001-0000-1000-8000-00805F9B34FB',
+    '0000F004-0000-1000-8000-00805F9B34FB',
+    '0000F005-0000-1000-8000-00805F9B34FB',
+    '0000F006-0000-1000-8000-00805F9B34FB',
+  ];
+
+  /// 设备名前缀白名单
+  static const targetNamePrefixes = ['OMAO', 'ETOUCH', '744'];
+
+  /// 目标厂商 ID
+  static const targetManufacturerId = 511;
 
   /// 编码为定时长模式帧（5 字节）
   /// [swing(1B), vibration(1B), durationMs(2B, little-endian), delayMs(1B)]

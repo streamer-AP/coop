@@ -8,5 +8,38 @@ part 'user_dao.g.dart';
 class UserDao extends DatabaseAccessor<AppDatabase> with _$UserDaoMixin {
   UserDao(super.db);
 
-  // TODO: implement CRUD operations
+  // --- 设备绑定 ---
+
+  Future<DeviceBinding?> getActiveDeviceBinding() =>
+      (select(deviceBindings)..where((t) => t.isActive.equals(true)))
+          .getSingleOrNull();
+
+  Future<List<DeviceBinding>> getAllDeviceBindings() =>
+      (select(deviceBindings)
+            ..orderBy([(t) => OrderingTerm.desc(t.boundAt)]))
+          .get();
+
+  Future<void> saveDeviceBinding(DeviceBindingsCompanion binding) async {
+    await into(deviceBindings).insertOnConflictUpdate(binding);
+  }
+
+  Future<void> deactivateAllBindings() async {
+    await update(deviceBindings).write(
+      const DeviceBindingsCompanion(isActive: Value(false)),
+    );
+  }
+
+  // --- 用户偏好 ---
+
+  Future<String?> getPreference(String key) async {
+    final row =
+        await (select(userPreferences)..where((t) => t.key.equals(key)))
+            .getSingleOrNull();
+    return row?.value;
+  }
+
+  Future<void> setPreference(String key, String value) =>
+      into(userPreferences).insertOnConflictUpdate(
+        UserPreferencesCompanion.insert(key: key, value: value),
+      );
 }

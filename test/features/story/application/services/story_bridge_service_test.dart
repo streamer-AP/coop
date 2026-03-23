@@ -218,7 +218,10 @@ class _FakeStoryRepository implements StoryRepository {
 
 class _RecordingSignalArbitrator extends BleSignalArbitrator {
   _RecordingSignalArbitrator()
-    : super(BleSignalSender(_FakeBleConnectionManager(), BleDeviceProtocol()));
+    : super(
+        BleSignalSender(_FakeBleConnectionManager(), BleDeviceProtocol()),
+        _FakeBleConnectionManager(),
+      );
 
   final List<BleSignal> submittedSignals = [];
   final List<SignalSource> releasedSources = [];

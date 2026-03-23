@@ -10,7 +10,9 @@ import '../../features/auth/presentation/screens/password_login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/setup_password_screen.dart';
 import '../../features/auth/presentation/screens/startup_screen.dart';
+import '../../features/controller/domain/models/waveform.dart';
 import '../../features/controller/presentation/screens/controller_screen.dart';
+import '../../features/controller/presentation/screens/waveform_editor_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/message/presentation/screens/message_detail_screen.dart';
 import '../../features/profile/presentation/screens/account_security_screen.dart';
@@ -117,6 +119,19 @@ GoRouter appRouter(Ref ref) {
         path: '/controller',
         name: RouteNames.controller,
         builder: (context, state) => const ControllerScreen(),
+      ),
+      GoRoute(
+        path: '/waveform-editor',
+        name: RouteNames.waveformEditor,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final waveform = extra?['waveform'] as Waveform?;
+          final channel = extra?['channel'] as String? ?? 'swing';
+          return WaveformEditorScreen(
+            existingWaveform: waveform,
+            channel: channel,
+          );
+        },
       ),
 
       // Story
