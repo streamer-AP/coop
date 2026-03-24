@@ -1,21 +1,26 @@
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
+import '../../../core/storage/token_storage.dart';
 import '../domain/models/app_version.dart';
 import '../domain/models/profile.dart';
 import '../domain/repositories/profile_repository.dart';
 
 class ProfileRepositoryImpl implements ProfileRepository {
   final ApiClient _apiClient;
+  final TokenStorage _tokenStorage;
+  final String _avatarDirectory;
 
-  ProfileRepositoryImpl(this._apiClient);
+  ProfileRepositoryImpl(this._apiClient, {required String avatarDirectory})
+    : _tokenStorage = TokenStorage(),
+      _avatarDirectory = avatarDirectory;
 
   @override
   Future<Profile> getProfile() async {
+    Profile profile = _emptyProfile();
     try {
       final json = await _apiClient.get(ApiEndpoints.getCurrentUserInfo);
       final code = json['code'] as int?;
@@ -24,9 +29,11 @@ class ProfileRepositoryImpl implements ProfileRepository {
       if (code == 200 && data != null) {
         final residentStatus = '${data['residentStatus'] ?? '0'}';
         final phone = data['mobile'] as String? ?? '';
-        return Profile(
-          userId: '${data['id'] ?? data['userId'] ?? ''}',
-          nickname: data['userName'] as String?,
+        final userId = _extractUserId(data);
+        final nickname = _normalizeOptionalString(data['userName']);
+        profile = Profile(
+          userId: userId,
+          nickname: nickname,
           avatarUrl:
               data['avatarUrl'] as String? ??
               data['avatar'] as String? ??
@@ -35,17 +42,24 @@ class ProfileRepositoryImpl implements ProfileRepository {
           isVerified: residentStatus == '1',
           avatarPreset: 'flower',
         );
+        await _persistCurrentUserId(userId);
       }
-    } catch (_) {
-      // Fall through to an empty profile so the profile page remains usable.
+    } catch (_) {}
+
+    final cachedUserId = await _resolveCurrentUserId();
+    final effectiveUserId =
+        profile.userId.trim().isNotEmpty ? profile.userId.trim() : cachedUserId;
+    if (effectiveUserId.isNotEmpty && profile.userId != effectiveUserId) {
+      profile = profile.copyWith(userId: effectiveUserId);
     }
 
-    return const Profile(
-      userId: '',
-      nickname: null,
-      phone: '',
-      avatarPreset: 'flower',
-    );
+    // 读取用户目录下的本地头像
+    final localAvatar = await _findLocalAvatar();
+    if (localAvatar != null && await File(localAvatar).exists()) {
+      profile = profile.copyWith(avatarUrl: localAvatar);
+    }
+
+    return profile;
   }
 
   @override
@@ -55,14 +69,20 @@ class ProfileRepositoryImpl implements ProfileRepository {
 
   @override
   Future<void> updateNickname(String nickname) async {
-    final json = await _apiClient.post(
+    final value = nickname.trim();
+    if (value.isEmpty) {
+      throw Exception('用户名不能为空');
+    }
+
+    final json = await _apiClient.put(
       ApiEndpoints.updateNickname,
-      data: {'userName': nickname},
-      queryParameters: {'userName': nickname},
+      queryParameters: {'userName': value},
     );
     final code = json['code'] as int?;
     if (code != 200) {
-      throw Exception(json['message'] ?? '用户名更新失败');
+      throw Exception(
+        json['message'] as String? ?? json['msg'] as String? ?? '修改用户名失败',
+      );
     }
   }
 
@@ -74,21 +94,31 @@ class ProfileRepositoryImpl implements ProfileRepository {
     }
 
     final localFile = _resolveLocalFile(value);
-    if (localFile != null) {
-      await _uploadAvatarFile(localFile);
-      return;
+    if (localFile == null || !await localFile.exists()) {
+      throw Exception('头像文件不存在');
     }
 
-    try {
-      final json = await _apiClient.post(
-        ApiEndpoints.updateAvatar,
-        data: {'avatarUrl': value},
-        queryParameters: {'avatarUrl': value},
-      );
-      _ensureSuccess(json, fallbackMessage: '头像更新失败');
-    } on DioException catch (error) {
-      throw Exception(_extractDioMessage(error, fallback: '头像更新失败'));
+    // 确保头像目录存在
+    final avatarDir = Directory(_avatarDirectory);
+    if (!await avatarDir.exists()) {
+      await avatarDir.create(recursive: true);
     }
+
+    final ext = p.extension(localFile.path);
+    final destPath = p.join(_avatarDirectory, 'avatar$ext');
+
+    // 删除旧头像
+    final previousAvatar = await _findLocalAvatar();
+    if (previousAvatar != null && previousAvatar != destPath) {
+      await _deleteFileIfExists(previousAvatar);
+    }
+
+    final destFile = File(destPath);
+    if (await destFile.exists()) {
+      await destFile.delete();
+    }
+
+    await localFile.copy(destPath);
   }
 
   @override
@@ -96,7 +126,24 @@ class ProfileRepositoryImpl implements ProfileRepository {
     required String oldPassword,
     required String newPassword,
   }) async {
-    // TODO: implement
+    final previousValue = oldPassword.trim();
+    final nextValue = newPassword.trim();
+    if (previousValue.isEmpty) {
+      throw Exception('原密码不能为空');
+    }
+    if (nextValue.isEmpty) {
+      throw Exception('新密码不能为空');
+    }
+
+    final json = await _apiClient.post(
+      ApiEndpoints.updatePwd,
+      data: {
+        'oldPwd': previousValue,
+        'newPwd': nextValue,
+        'confirmPassword': nextValue,
+      },
+    );
+    _ensureSuccess(json, fallbackMessage: '修改密码失败');
   }
 
   @override
@@ -105,7 +152,42 @@ class ProfileRepositoryImpl implements ProfileRepository {
     required String code,
     required String newPassword,
   }) async {
-    // TODO: implement
+    final phoneValue = phone.trim();
+    final codeValue = code.trim();
+    final passwordValue = newPassword.trim();
+    if (phoneValue.isEmpty) {
+      throw Exception('手机号不能为空');
+    }
+    if (codeValue.isEmpty) {
+      throw Exception('验证码不能为空');
+    }
+    if (passwordValue.isEmpty) {
+      throw Exception('新密码不能为空');
+    }
+
+    final json = await _apiClient.post(
+      ApiEndpoints.forgotPwd,
+      queryParameters: {
+        'mobile': phoneValue,
+        'code': codeValue,
+        'newPwd': passwordValue,
+      },
+    );
+    _ensureSuccess(json, fallbackMessage: '修改密码失败');
+  }
+
+  @override
+  Future<void> sendPasswordResetCode(String phone) async {
+    final phoneValue = phone.trim();
+    if (phoneValue.isEmpty) {
+      throw Exception('手机号不能为空');
+    }
+
+    final json = await _apiClient.post(
+      ApiEndpoints.forgotPwdSendCode,
+      queryParameters: {'mobile': phoneValue},
+    );
+    _ensureSuccess(json, fallbackMessage: '验证码发送失败');
   }
 
   @override
@@ -142,44 +224,20 @@ class ProfileRepositoryImpl implements ProfileRepository {
     return '${phone.substring(0, 3)}****${phone.substring(7)}';
   }
 
-  Future<void> _uploadAvatarFile(File file) async {
-    final path = file.path;
-    if (!await file.exists()) {
-      throw Exception('头像文件不存在');
-    }
-    if (await file.length() <= 0) {
-      throw Exception('头像文件为空');
-    }
+  /// 在用户头像目录中查找 avatar.* 文件。
+  Future<String?> _findLocalAvatar() async {
+    final avatarDir = Directory(_avatarDirectory);
+    if (!await avatarDir.exists()) return null;
 
-    final fileName = p.basename(path);
-    final fields = ['file', 'avatar', 'headImage', 'avatarFile', 'image'];
-    Object? lastError;
-
-    for (final field in fields) {
-      try {
-        final formData = FormData.fromMap({
-          field: await MultipartFile.fromFile(path, filename: fileName),
-        });
-        final json = await _apiClient.post(
-          ApiEndpoints.updateAvatar,
-          data: formData,
-        );
-        _ensureSuccess(json, fallbackMessage: '头像上传失败');
-        return;
-      } on DioException catch (error) {
-        lastError = Exception(_extractDioMessage(error, fallback: '头像上传失败'));
-      } catch (e) {
-        lastError = e;
+    await for (final entity in avatarDir.list()) {
+      if (entity is File) {
+        final basename = p.basenameWithoutExtension(entity.path);
+        if (basename == 'avatar') {
+          return entity.path;
+        }
       }
     }
-
-    if (lastError == null) {
-      throw Exception('头像上传失败');
-    }
-    if (lastError is Exception) {
-      throw lastError;
-    }
-    throw Exception('$lastError');
+    return null;
   }
 
   File? _resolveLocalFile(String value) {
@@ -195,27 +253,73 @@ class ProfileRepositoryImpl implements ProfileRepository {
     return File(value);
   }
 
+  Profile _emptyProfile() {
+    return const Profile(
+      userId: '',
+      nickname: null,
+      phone: '',
+      avatarPreset: 'flower',
+    );
+  }
+
+  String _extractUserId(Map<String, dynamic> data) {
+    final raw = data['id'] ?? data['userId'] ?? data['loginId'];
+    if (raw == null) return '';
+    return '$raw'.trim();
+  }
+
+  String? _normalizeOptionalString(Object? value) {
+    final normalized = '$value'.trim();
+    if (value == null || normalized.isEmpty || normalized == 'null') {
+      return null;
+    }
+    return normalized;
+  }
+
+  Future<void> _persistCurrentUserId(String userId) async {
+    if (userId.trim().isEmpty) return;
+    await _tokenStorage.saveCurrentUserId(userId);
+  }
+
+  Future<String> _resolveCurrentUserId() async {
+    final cachedUserId = (await _tokenStorage.getCurrentUserId())?.trim() ?? '';
+    if (cachedUserId.isNotEmpty) {
+      return cachedUserId;
+    }
+
+    try {
+      final json = await _apiClient.get(ApiEndpoints.getCurrentUserInfo);
+      final code = json['code'] as int?;
+      final data = json['data'] as Map<String, dynamic>?;
+      if (code == 200 && data != null) {
+        final userId = _extractUserId(data);
+        if (userId.isNotEmpty) {
+          await _persistCurrentUserId(userId);
+          return userId;
+        }
+      }
+    } catch (_) {}
+
+    return '';
+  }
+
+  Future<void> _deleteFileIfExists(String path) async {
+    final file = File(path);
+    if (await file.exists()) {
+      await file.delete();
+    }
+  }
+
   void _ensureSuccess(
     Map<String, dynamic> json, {
     required String fallbackMessage,
   }) {
-    final code = json['code'];
-    final isSuccess = code == null || code == 0 || code == 200;
-    if (isSuccess) return;
-    throw Exception(json['message'] ?? fallbackMessage);
-  }
-
-  String _extractDioMessage(DioException error, {required String fallback}) {
-    final data = error.response?.data;
-    if (data is Map<String, dynamic>) {
-      final message = data['message'] ?? data['msg'] ?? data['error'];
-      if (message is String && message.trim().isNotEmpty) {
-        return message.trim();
-      }
+    final code = json['code'] as int?;
+    if (code == 200 || code == 0) {
+      return;
     }
-
-    return error.message?.trim().isNotEmpty == true
-        ? error.message!.trim()
-        : fallback;
+    throw Exception(
+      json['message'] as String? ?? json['msg'] as String? ?? fallbackMessage,
+    );
   }
 }

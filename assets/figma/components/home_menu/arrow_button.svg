@@ -1,9 +1,9 @@
 <svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
 <g id="Group 865">
 <g id="Rectangle Copy 30">
-<rect x="1" y="1" width="32" height="32" rx="16" fill="var(--fill-0, #5E619F)" fill-opacity="0.27"/>
-<rect x="0.5" y="0.5" width="33" height="33" rx="16.5" stroke="var(--stroke-0, white)" stroke-opacity="0.5"/>
+<rect x="1" y="1" width="32" height="32" rx="16" fill="#5E619F" fill-opacity="0.27"/>
+<rect x="0.5" y="0.5" width="33" height="33" rx="16.5" stroke="white" stroke-opacity="0.5"/>
 </g>
-<path id="Path 16" d="M19 13L14 17.5L19 22" stroke="var(--stroke-0, white)" stroke-width="2"/>
+<path id="Path 16" d="M15 13L20 17.5L15 22" stroke="white" stroke-width="2"/>
 </g>
 </svg>

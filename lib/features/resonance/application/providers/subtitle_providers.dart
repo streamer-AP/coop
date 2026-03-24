@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -27,6 +25,9 @@ final subtitleTranslationLanguageProvider =
     StateProvider<SubtitleTranslationLanguage>(
       (ref) => SubtitleTranslationLanguage.zh,
     );
+final entryResourceRefreshTickProvider = StateProvider.family<int, int>(
+  (ref, entryId) => 0,
+);
 
 @riverpod
 SubtitleService subtitleService(Ref ref) {
@@ -37,13 +38,18 @@ SubtitleService subtitleService(Ref ref) {
 class CurrentSubtitleNotifier extends _$CurrentSubtitleNotifier {
   @override
   ParsedSubtitle? build() {
-    final playerState = ref.watch(playerStateNotifierProvider);
-    final currentEntry = playerState.currentEntry;
+    // Only watch currentEntry, NOT the full player state (which includes position).
+    // Watching position would cause this to rebuild on every tick → flicker.
+    final currentEntry = ref.watch(
+      playerStateNotifierProvider.select((s) => s.currentEntry),
+    );
 
     if (currentEntry == null) return null;
 
+    ref.watch(entryResourceRefreshTickProvider(currentEntry.id));
+
     _loadSubtitle(currentEntry.id);
-    return null;
+    return state; // Preserve previous state while loading, avoid null flash
   }
 
   Future<void> _loadSubtitle(int entryId) async {
@@ -58,7 +64,7 @@ class CurrentSubtitleNotifier extends _$CurrentSubtitleNotifier {
 
     final subtitleRef = subtitleRefs.first;
     try {
-      final content = await File(subtitleRef.filePath).readAsString();
+      final content = await subtitleSvc.readTextFile(subtitleRef.filePath);
       state = subtitleSvc.parse(subtitleRef, content);
     } catch (_) {
       state = null;
@@ -66,17 +72,19 @@ class CurrentSubtitleNotifier extends _$CurrentSubtitleNotifier {
   }
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 class ActiveCueNotifier extends _$ActiveCueNotifier {
   @override
   int build() {
-    final playerState = ref.watch(playerStateNotifierProvider);
+    final position = ref.watch(
+      playerStateNotifierProvider.select((s) => s.position),
+    );
     final subtitle = ref.watch(currentSubtitleNotifierProvider);
 
     if (subtitle == null) return -1;
 
     final subtitleSvc = ref.read(subtitleServiceProvider);
-    return subtitleSvc.cueIndexAtPosition(subtitle, playerState.position);
+    return subtitleSvc.cueIndexAtPosition(subtitle, position);
   }
 }
 

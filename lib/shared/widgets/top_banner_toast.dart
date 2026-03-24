@@ -8,14 +8,33 @@ class TopBannerToast {
     Duration duration = const Duration(seconds: 3),
   }) {
     final overlay = Overlay.of(context);
+    final topPadding = MediaQuery.of(context).padding.top;
+    showOnOverlay(
+      overlay,
+      message: message,
+      isError: isError,
+      duration: duration,
+      topPadding: topPadding,
+    );
+  }
+
+  static void showOnOverlay(
+    OverlayState overlay, {
+    required String message,
+    bool isError = true,
+    Duration duration = const Duration(seconds: 3),
+    double topPadding = 0,
+  }) {
     late OverlayEntry entry;
     entry = OverlayEntry(
-      builder: (context) => _TopBanner(
-        message: message,
-        isError: isError,
-        onDismiss: () => entry.remove(),
-        duration: duration,
-      ),
+      builder:
+          (context) => _TopBanner(
+            message: message,
+            isError: isError,
+            onDismiss: () => entry.remove(),
+            duration: duration,
+            topPadding: topPadding,
+          ),
     );
     overlay.insert(entry);
   }
@@ -27,12 +46,14 @@ class _TopBanner extends StatefulWidget {
     required this.isError,
     required this.onDismiss,
     required this.duration,
+    required this.topPadding,
   });
 
   final String message;
   final bool isError;
   final VoidCallback onDismiss;
   final Duration duration;
+  final double topPadding;
 
   @override
   State<_TopBanner> createState() => _TopBannerState();
@@ -71,9 +92,8 @@ class _TopBannerState extends State<_TopBanner>
 
   @override
   Widget build(BuildContext context) {
-    final topPadding = MediaQuery.of(context).padding.top;
     return Positioned(
-      top: topPadding + 8,
+      top: widget.topPadding + 8,
       left: 0,
       right: 0,
       child: SlideTransition(

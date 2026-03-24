@@ -74,7 +74,7 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
 
     _subscriptions.add(
       audioPlayer.completionStream.listen((_) {
-        _onTrackComplete();
+        unawaited(_onTrackComplete());
       }),
     );
 
@@ -103,6 +103,20 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
   }) async {
     final audioPlayer = ref.read(audioPlayerServiceProvider);
     final playlistSvc = ref.read(playlistServiceProvider);
+
+    // If this entry is already the currently loaded one, just continue playing
+    // without reloading (avoids restarting from the beginning).
+    if (state.currentEntry?.id == entry.id) {
+      // Still update the playlist so position/context is correct,
+      // but don't reload the audio source.
+      if (context != null) {
+        playlistSvc.playEntryFromCollection(entry, context);
+      } else {
+        playlistSvc.playEntryFromAll(entry);
+      }
+      state = state.copyWith(playlistTitle: playlistTitle);
+      return;
+    }
 
     await audioPlayer.initialize();
 
@@ -217,36 +231,45 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
     );
   }
 
-  /// Refresh the current entry's metadata from the database.
-  /// Call this after importing a cover or other metadata change.
-  Future<void> refreshCurrentEntry() async {
-    final current = state.currentEntry;
-    if (current == null) return;
-
-    final repo = ref.read(resonanceRepositoryProvider);
-    final updated = await repo.getEntry(current.id);
-    if (updated == null) return;
-
-    state = state.copyWith(currentEntry: updated);
-
-    // Also update the in-memory playlist so next/previous keeps the change.
-    final playlistSvc = ref.read(playlistServiceProvider);
-    playlistSvc.updateEntry(updated);
-  }
-
   void setSignalMode(SignalMode mode) {
     state = state.copyWith(signalMode: mode);
   }
 
-  void _onTrackComplete() {
+  /// Refresh the current entry's metadata.
+  /// When [updatedEntry] is provided, update in-memory state directly.
+  /// Otherwise reload the current entry from the repository.
+  Future<void> refreshCurrentEntry([AudioEntry? updatedEntry]) async {
+    final resolvedEntry = updatedEntry ?? state.currentEntry;
+    if (resolvedEntry == null) return;
+
+    AudioEntry? nextEntry = updatedEntry;
+    if (nextEntry == null) {
+      final repo = ref.read(resonanceRepositoryProvider);
+      nextEntry = await repo.getEntry(resolvedEntry.id);
+    }
+    if (nextEntry == null) return;
+
+    if (state.currentEntry?.id == nextEntry.id) {
+      state = state.copyWith(currentEntry: nextEntry);
+      ref.read(audioPlayerServiceProvider).updateMediaItem(nextEntry);
+    }
+    ref.read(playlistServiceProvider).updateEntry(nextEntry);
+  }
+
+  Future<void> _onTrackComplete() async {
     final playlistSvc = ref.read(playlistServiceProvider);
     final playlist = playlistSvc.currentPlaylist;
+    final audioPlayer = ref.read(audioPlayerServiceProvider);
 
     if (playlist.repeatMode == RepeatMode.single) {
-      ref.read(audioPlayerServiceProvider).seekTo(Duration.zero);
-      ref.read(audioPlayerServiceProvider).play();
+      await audioPlayer.seekTo(Duration.zero);
+      await audioPlayer.play();
+      state = state.copyWith(isPlaying: true, position: Duration.zero);
+    } else if (playlist.length <= 1) {
+      await audioPlayer.pause();
+      state = state.copyWith(isPlaying: false, position: Duration.zero);
     } else {
-      next();
+      await next();
     }
   }
 

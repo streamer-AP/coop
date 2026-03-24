@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/purple_gradient_button.dart';
 import '../../../../shared/widgets/verification_code_input.dart';
-import '../../../auth/application/providers/auth_providers.dart';
 import '../../application/providers/profile_providers.dart';
 
 class ChangePasswordCodeScreen extends ConsumerStatefulWidget {
@@ -55,11 +54,10 @@ class _ChangePasswordCodeScreenState
               VerificationCodeInput(
                 phoneController: _phoneController,
                 codeController: _codeController,
-                onSendCode: () {
-                  ref
-                      .read(authNotifierProvider.notifier)
-                      .sendVerificationCode(_phoneController.text);
-                },
+                onSendCode:
+                    () => ref
+                        .read(profileRepositoryProvider)
+                        .sendPasswordResetCode(_phoneController.text),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -96,10 +94,7 @@ class _ChangePasswordCodeScreenState
               const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
-                child: PurpleGradientButton(
-                  text: '确认',
-                  onPressed: _submit,
-                ),
+                child: PurpleGradientButton(text: '确认', onPressed: _submit),
               ),
             ],
           ),
@@ -109,22 +104,40 @@ class _ChangePasswordCodeScreenState
   }
 
   void _submit() async {
+    if (_newPasswordController.text != _confirmPasswordController.text) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('两次输入的密码不一致')));
+      }
+      return;
+    }
+    if (_newPasswordController.text.trim().length < 6) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('密码长度至少6位')));
+      }
+      return;
+    }
     try {
-      await ref.read(profileRepositoryProvider).changePasswordByCode(
+      await ref
+          .read(profileRepositoryProvider)
+          .changePasswordByCode(
             phone: _phoneController.text,
             code: _codeController.text,
             newPassword: _newPasswordController.text,
           );
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('密码修改成功')),
-        );
-        Navigator.of(context).pop();
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('密码修改成功')));
+      Navigator.of(context).pop();
     } catch (e) {
+      final message = '$e'.replaceFirst('Exception: ', '').trim();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('修改失败，请重试')),
+          SnackBar(content: Text(message.isEmpty ? '修改失败，请重试' : message)),
         );
       }
     }

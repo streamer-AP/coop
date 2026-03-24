@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/player_providers.dart';
 import '../../domain/models/audio_entry.dart';
 import 'audio_wave_animation.dart';
@@ -34,12 +35,13 @@ class AudioEntryTile extends ConsumerWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: isCurrent
-            ? BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-              )
-            : null,
+        decoration:
+            isCurrent
+                ? BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                )
+                : null,
         child: Row(
           children: [
             _buildCover(theme, isCurrent),
@@ -56,9 +58,10 @@ class AudioEntryTile extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: isCurrent
-                          ? AppColors.primary
-                          : const Color(0xFF1C1B1F),
+                      color:
+                          isCurrent
+                              ? AppColors.primary
+                              : const Color(0xFF1C1B1F),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -68,9 +71,10 @@ class AudioEntryTile extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 13,
-                      color: isCurrent
-                          ? AppColors.primary.withValues(alpha: 0.7)
-                          : const Color(0xFF79747E),
+                      color:
+                          isCurrent
+                              ? AppColors.primary.withValues(alpha: 0.7)
+                              : const Color(0xFF79747E),
                     ),
                   ),
                 ],
@@ -79,10 +83,10 @@ class AudioEntryTile extends ConsumerWidget {
             if (trailing != null) trailing!,
             if (trailing == null && showMoreButton)
               IconButton(
-                icon: const Icon(
-                  Icons.more_vert,
-                  color: Color(0xFF79747E),
+                icon: AppIcons.icon(
+                  AppIcons.more1,
                   size: 20,
+                  color: const Color(0xFF79747E),
                 ),
                 onPressed: onMoreTap,
                 padding: EdgeInsets.zero,
@@ -112,50 +116,60 @@ class AudioEntryTile extends ConsumerWidget {
     }
 
     if (isCurrent) {
-      return Stack(
-        children: [
-          cover,
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Center(
-                child: AudioWaveAnimation(
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
+      return _CurrentOverlay(cover: cover, entry: entry);
     }
 
     return cover;
   }
 
   Widget _placeholderCover(ThemeData theme) {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFD4C4E8),
-            Color(0xFFE8E0F0),
-          ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.asset(
+        'assets/figma/player/default_cover.png',
+        width: 56,
+        height: 56,
+        fit: BoxFit.cover,
+      ),
+    );
+  }
+}
+
+/// 当前播放条目的封面叠加层，根据播放状态控制动画。
+class _CurrentOverlay extends ConsumerWidget {
+  const _CurrentOverlay({required this.cover, required this.entry});
+
+  final Widget cover;
+  final AudioEntry entry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isPlaying = ref.watch(
+      playerStateNotifierProvider.select((s) => s.isPlaying),
+    );
+
+    return Stack(
+      children: [
+        cover,
+        Positioned.fill(
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child:
+                  isPlaying
+                      ? const AudioWaveAnimation(color: Colors.white, size: 24)
+                      : AppIcons.icon(
+                        AppIcons.pause,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+            ),
+          ),
         ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Icon(
-        Icons.music_note,
-        color: Colors.white,
-        size: 28,
-      ),
+      ],
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/sort_providers.dart';
 
 class SortBottomSheet extends ConsumerWidget {
@@ -53,7 +54,7 @@ class SortBottomSheet extends ConsumerWidget {
             ),
             const Divider(height: 1),
             _SortOption(
-              icon: Icons.sort_by_alpha,
+              svgPath: AppIcons.sortAlphaAZ,
               label: '按字母A-Z排序',
               isSelected: currentMode == SortMode.alphabeticalAsc,
               onTap: () {
@@ -63,10 +64,9 @@ class SortBottomSheet extends ConsumerWidget {
               },
             ),
             _SortOption(
-              icon: Icons.sort_by_alpha,
+              svgPath: AppIcons.sortAlphaZA,
               label: '按字母Z-A排序',
               isSelected: currentMode == SortMode.alphabeticalDesc,
-              iconTransform: true,
               onTap: () {
                 ref
                     .read(sortModeNotifierProvider.notifier)
@@ -74,7 +74,7 @@ class SortBottomSheet extends ConsumerWidget {
               },
             ),
             _SortOption(
-              icon: Icons.arrow_upward,
+              svgPath: AppIcons.sortUp,
               label: '按时间正序',
               isSelected: currentMode == SortMode.timeAsc,
               onTap: () {
@@ -84,7 +84,7 @@ class SortBottomSheet extends ConsumerWidget {
               },
             ),
             _SortOption(
-              icon: Icons.arrow_downward,
+              svgPath: AppIcons.sortDown,
               label: '按时间倒序',
               isSelected: currentMode == SortMode.timeDesc,
               onTap: () {
@@ -102,33 +102,21 @@ class SortBottomSheet extends ConsumerWidget {
 
 class _SortOption extends StatelessWidget {
   const _SortOption({
-    required this.icon,
+    required this.svgPath,
     required this.label,
     required this.isSelected,
     required this.onTap,
-    this.iconTransform = false,
   });
 
-  final IconData icon;
+  final String svgPath;
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
-  final bool iconTransform;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Transform(
-        alignment: Alignment.center,
-        transform: iconTransform
-            ? Matrix4.rotationY(3.14159)
-            : Matrix4.identity(),
-        child: Icon(
-          icon,
-          color: isSelected ? AppColors.primary : const Color(0xFF49454F),
-          size: 24,
-        ),
-      ),
+      leading: AppIcons.icon(svgPath, size: 24, color: isSelected ? AppColors.primary : const Color(0xFF49454F)),
       title: Text(
         label,
         style: TextStyle(

@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/controller_providers.dart';
 import '../../domain/models/waveform.dart';
 
 class WaveformEditorScreen extends ConsumerStatefulWidget {
   final Waveform? existingWaveform;
-  final String channel; // 'swing' / 'vibration'
+  final WaveformChannel channel;
 
   const WaveformEditorScreen({
     super.key,
@@ -88,7 +89,7 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
     );
   }
 
-  String get _channelLabel => widget.channel == 'swing' ? '摇摆' : '震动';
+  String get _channelLabel => widget.channel == WaveformChannel.swing ? '摇摆' : '震动';
 
   @override
   Widget build(BuildContext context) {
@@ -187,7 +188,7 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
           padding: const EdgeInsets.all(16),
           child: _WaveformChart(
             points: _pages[pageIndex],
-            color: widget.channel == 'swing'
+            color: widget.channel == WaveformChannel.swing
                 ? AppColors.primary
                 : AppColors.secondary,
             onUpdate: (points) => setState(() {
@@ -213,7 +214,7 @@ class _WaveformEditorScreenState extends ConsumerState<WaveformEditorScreen>
           if (widget.existingWaveform != null)
             OutlinedButton.icon(
               onPressed: _delete,
-              icon: const Icon(Icons.delete_outline, color: AppColors.error),
+              icon: AppIcons.icon(AppIcons.delete, size: 20, color: AppColors.error),
               label: const Text(
                 '删除',
                 style: TextStyle(color: AppColors.error),

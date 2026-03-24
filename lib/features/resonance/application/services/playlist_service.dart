@@ -154,42 +154,32 @@ class PlaylistService {
   }
 
   /// Select an existing item as current play item.
-  /// In shuffle mode: selecting the last item reshuffles with selected as first.
   bool playItem(String uid) {
     final index = _playlist.items.indexWhere((item) => item.uid == uid);
     if (index < 0) return false;
 
-    if (_playlist.repeatMode == RepeatMode.shuffle &&
-        index == _playlist.length - 1 &&
-        _playlist.length > 1) {
-      final selected = _playlist.items[index];
-      final others =
-          _playlist.items.where((i) => i.uid != uid).toList()..shuffle(_random);
-      _playlist = _playlist.copyWith(
-        items: [selected, ...others],
-        currentIndex: 0,
-      );
-    } else {
-      _playlist = _playlist.copyWith(currentIndex: index);
-    }
+    _playlist = _playlist.copyWith(currentIndex: index);
 
     _emit();
     return true;
   }
 
-  /// Move to next track. Returns true if there is a next track.
+  /// Move to next track. Returns true if the current entry actually changed.
   bool next() {
     if (_playlist.isEmpty) return false;
+    if (_playlist.length == 1) return false;
 
     switch (_playlist.repeatMode) {
       case RepeatMode.sequential:
         final nextIndex = (_playlist.currentIndex + 1) % _playlist.length;
         _playlist = _playlist.copyWith(currentIndex: nextIndex);
       case RepeatMode.single:
-        // Stay on the same track (will replay)
-        break;
+        // Single repeat: next still moves to the next track per requirement
+        final nextIndex = (_playlist.currentIndex + 1) % _playlist.length;
+        _playlist = _playlist.copyWith(currentIndex: nextIndex);
       case RepeatMode.shuffle:
         if (_playlist.currentIndex >= _playlist.length - 1) {
+          // Last item: reshuffle then play new first item
           _reshuffle();
         } else {
           _playlist = _playlist.copyWith(
@@ -202,45 +192,51 @@ class PlaylistService {
     return true;
   }
 
-  /// Move to previous track. Returns true if there is a previous track.
+  /// Move to previous track. Returns true if the current entry actually changed.
   bool previous() {
     if (_playlist.isEmpty) return false;
+    if (_playlist.length == 1) return false;
+
+    final oldIndex = _playlist.currentIndex;
 
     switch (_playlist.repeatMode) {
       case RepeatMode.sequential:
-        final prevIndex =
-            (_playlist.currentIndex - 1 + _playlist.length) % _playlist.length;
+        final prevIndex = (oldIndex - 1 + _playlist.length) % _playlist.length;
         _playlist = _playlist.copyWith(currentIndex: prevIndex);
       case RepeatMode.single:
-        break;
+        final prevIndex = (oldIndex - 1 + _playlist.length) % _playlist.length;
+        _playlist = _playlist.copyWith(currentIndex: prevIndex);
       case RepeatMode.shuffle:
-        if (_playlist.currentIndex <= 0) {
+        if (oldIndex <= 0) {
           _playlist = _playlist.copyWith(currentIndex: _playlist.length - 1);
         } else {
-          _playlist = _playlist.copyWith(
-            currentIndex: _playlist.currentIndex - 1,
-          );
+          _playlist = _playlist.copyWith(currentIndex: oldIndex - 1);
         }
     }
 
     _emit();
-    return true;
+    return _playlist.currentIndex != oldIndex;
   }
 
   void _reshuffle() {
     if (_playlist.length <= 1) return;
 
+    // Reshuffle all items, ensuring the previously-playing item
+    // does NOT end up first (to avoid repeating it immediately).
     final current = _playlist.currentItem;
     if (current == null) return;
 
-    final others =
-        _playlist.items.where((i) => i.uid != current.uid).toList()
-          ..shuffle(_random);
+    final allItems = List<PlaylistItem>.of(_playlist.items)..shuffle(_random);
 
-    _playlist = _playlist.copyWith(
-      items: [current, ...others],
-      currentIndex: 0,
-    );
+    // If the last-played item ended up first, swap it away
+    if (allItems.first.uid == current.uid && allItems.length > 1) {
+      final swapIndex = 1 + _random.nextInt(allItems.length - 1);
+      final tmp = allItems[0];
+      allItems[0] = allItems[swapIndex];
+      allItems[swapIndex] = tmp;
+    }
+
+    _playlist = _playlist.copyWith(items: allItems, currentIndex: 0);
   }
 
   /// Update an entry's metadata in the playlist (e.g. after cover import).
@@ -313,6 +309,26 @@ class PlaylistService {
 
   void clear() {
     _playlist = const Playlist();
+    _emit();
+  }
+
+  /// Update the in-memory entry for the currently playing item.
+  /// Used when metadata (e.g. coverPath) changes in the DB.
+  void updateCurrentEntry(AudioEntry entry) {
+    final current = _playlist.currentItem;
+    if (current == null || current.entry.id != entry.id) return;
+
+    final items =
+        _playlist.items
+            .map(
+              (item) =>
+                  item.entry.id == entry.id
+                      ? PlaylistItem(uid: item.uid, entry: entry)
+                      : item,
+            )
+            .toList();
+
+    _playlist = _playlist.copyWith(items: items);
     _emit();
   }
 

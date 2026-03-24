@@ -6,8 +6,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/omao_toast.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/collection_providers.dart';
 import '../../application/providers/player_providers.dart';
+import '../../application/providers/sort_providers.dart';
 import '../../domain/models/audio_collection.dart';
 import '../../domain/models/audio_entry.dart';
 import '../widgets/audio_entry_action_sheet.dart';
@@ -43,7 +46,8 @@ class CollectionDetailScreen extends ConsumerWidget {
             child: Column(
               children: [
                 _buildAppBar(context, ref, collection),
-                if (collection != null) _buildCollectionHeader(collection),
+                if (collection != null)
+                  _buildCollectionHeader(context, ref, collection),
                 Expanded(
                   child: Container(
                     decoration: const BoxDecoration(
@@ -84,16 +88,9 @@ class CollectionDetailScreen extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFE0E0E0).withValues(alpha: 0.6),
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.chevron_left, size: 28),
-              onPressed: () => context.pop(),
-              color: const Color(0xFF49454F),
-            ),
+          GestureDetector(
+            onTap: () => context.pop(),
+            child: AppIcons.asset(AppIcons.arrowLeft, width: 40, height: 40),
           ),
           const Expanded(
             child: Text(
@@ -112,7 +109,11 @@ class CollectionDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildCollectionHeader(AudioCollection collection) {
+  Widget _buildCollectionHeader(
+    BuildContext context,
+    WidgetRef ref,
+    AudioCollection collection,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Row(
@@ -149,10 +150,13 @@ class CollectionDetailScreen extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    const Icon(
-                      Icons.edit_outlined,
-                      size: 18,
-                      color: Color(0xFF79747E),
+                    GestureDetector(
+                      onTap: () => _showRenameDialog(context, ref, collection),
+                      child: AppIcons.icon(
+                        AppIcons.edit,
+                        size: 18,
+                        color: const Color(0xFF79747E),
+                      ),
                     ),
                   ],
                 ),
@@ -161,7 +165,9 @@ class CollectionDetailScreen extends ConsumerWidget {
                   children: [
                     _InfoChip('${collection.entryCount} 个'),
                     const SizedBox(width: 12),
-                    _InfoChip('${(collection.entryCount * 3.5).toInt()} 分钟'),
+                    _InfoChip(
+                      '${(collection.totalDurationMs / 60000).round()} 分钟',
+                    ),
                   ],
                 ),
               ],
@@ -173,17 +179,13 @@ class CollectionDetailScreen extends ConsumerWidget {
   }
 
   Widget _placeholderCover() {
-    return Container(
-      width: 100,
-      height: 100,
-      decoration: BoxDecoration(
-        color: const Color(0xFFE0E0E0),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Icon(
-        Icons.library_music,
-        size: 40,
-        color: Color(0xFF79747E),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.asset(
+        'assets/figma/player/default_cover.png',
+        width: 100,
+        height: 100,
+        fit: BoxFit.cover,
       ),
     );
   }
@@ -194,6 +196,9 @@ class CollectionDetailScreen extends ConsumerWidget {
     List<AudioEntry> entries,
     AudioCollection? collection,
   ) {
+    final sortMode = ref.watch(sortModeNotifierProvider);
+    final sorted = _sortEntries(entries, sortMode);
+
     return Column(
       children: [
         // Play all + sort + add
@@ -201,51 +206,59 @@ class CollectionDetailScreen extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              // Play all button
-              _PlayAllButton(
-                onTap:
-                    entries.isEmpty
-                        ? null
-                        : () => _playAndOpenCollectionPlayer(
-                          context,
-                          ref,
-                          entries.first,
-                          entries,
-                          collection?.title ?? '合集播放',
+              // Play all button + label
+              Expanded(
+                child: GestureDetector(
+                  onTap:
+                      sorted.isEmpty
+                          ? null
+                          : () => _playAndOpenCollectionPlayer(
+                            context,
+                            ref,
+                            sorted.first,
+                            sorted,
+                            collection?.title ?? '合集播放',
+                          ),
+                  behavior: HitTestBehavior.opaque,
+                  child: Opacity(
+                    opacity: sorted.isEmpty ? 0.38 : 1.0,
+                    child: Row(
+                      children: [
+                        AppIcons.asset(AppIcons.play2, width: 46, height: 32),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '播放全部',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-              ),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  '播放全部',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               IconButton(
-                icon: const Icon(
-                  Icons.delete_outline,
-                  color: Color(0xFF49454F),
+                icon: AppIcons.icon(
+                  AppIcons.delete,
                   size: 22,
+                  color: const Color(0xFF49454F),
                 ),
                 onPressed: () => _confirmDelete(context, ref),
               ),
               IconButton(
-                icon: const Icon(
-                  Icons.add_box_outlined,
-                  color: Color(0xFF49454F),
-                  size: 22,
-                ),
+                icon: AppIcons.asset(AppIcons.add1, width: 19, height: 19),
                 onPressed:
                     () => _navigateToAddAudio(
                       context,
-                      entries.map((e) => e.id).toList(),
+                      sorted.map((e) => e.id).toList(),
                     ),
               ),
               IconButton(
-                icon: const Icon(
-                  Icons.sort,
-                  color: Color(0xFF49454F),
+                icon: AppIcons.icon(
+                  AppIcons.sort,
                   size: 22,
+                  color: const Color(0xFF49454F),
                 ),
                 onPressed: () => SortBottomSheet.show(context),
               ),
@@ -254,7 +267,7 @@ class CollectionDetailScreen extends ConsumerWidget {
         ),
         Expanded(
           child:
-              entries.isEmpty
+              sorted.isEmpty
                   ? const Center(
                     child: Text(
                       '暂无音频',
@@ -263,9 +276,9 @@ class CollectionDetailScreen extends ConsumerWidget {
                   )
                   : ListView.builder(
                     padding: const EdgeInsets.only(bottom: 8),
-                    itemCount: entries.length,
+                    itemCount: sorted.length,
                     itemBuilder: (context, index) {
-                      final entry = entries[index];
+                      final entry = sorted[index];
                       return AudioEntryTile(
                         entry: entry,
                         onTap:
@@ -273,7 +286,7 @@ class CollectionDetailScreen extends ConsumerWidget {
                               context,
                               ref,
                               entry,
-                              entries,
+                              sorted,
                               collection?.title ?? '合集播放',
                             ),
                         onMoreTap: () {
@@ -291,7 +304,35 @@ class CollectionDetailScreen extends ConsumerWidget {
     );
   }
 
+  List<AudioEntry> _sortEntries(List<AudioEntry> entries, SortMode mode) {
+    final sorted = List<AudioEntry>.of(entries);
+    switch (mode) {
+      case SortMode.alphabeticalAsc:
+        sorted.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
+      case SortMode.alphabeticalDesc:
+        sorted.sort(
+          (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+        );
+      case SortMode.timeAsc:
+        sorted.sort(
+          (a, b) => (a.createdAt ?? DateTime(0)).compareTo(
+            b.createdAt ?? DateTime(0),
+          ),
+        );
+      case SortMode.timeDesc:
+        sorted.sort(
+          (a, b) => (b.createdAt ?? DateTime(0)).compareTo(
+            a.createdAt ?? DateTime(0),
+          ),
+        );
+    }
+    return sorted;
+  }
+
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final service = ref.read(collectionServiceProvider);
     final confirmed = await showDialog<bool>(
       context: context,
       builder:
@@ -312,9 +353,61 @@ class CollectionDetailScreen extends ConsumerWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      await ref.read(collectionServiceProvider).deleteCollection(collectionId);
+      try {
+        await service.deleteCollection(collectionId);
+      } catch (e) {
+        if (context.mounted) {
+          OmaoToast.show(context, '删除失败: $e', isSuccess: false);
+        }
+        return;
+      }
       if (context.mounted) context.pop();
     }
+  }
+
+  void _showRenameDialog(
+    BuildContext context,
+    WidgetRef ref,
+    AudioCollection collection,
+  ) {
+    final controller = TextEditingController(text: collection.title);
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('修改合集名称'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: '请输入合集名称'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  var newTitle = controller.text.trim();
+                  if (newTitle.isEmpty || newTitle == collection.title) {
+                    if (ctx.mounted) Navigator.of(ctx).pop();
+                    return;
+                  }
+                  final service = ref.read(collectionServiceProvider);
+                  newTitle = await service.uniqueCollectionTitle(
+                    newTitle,
+                    excludeTitle: collection.title,
+                  );
+                  await service.updateCollection(
+                    collection.copyWith(title: newTitle),
+                  );
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                },
+                child: const Text('确定'),
+              ),
+            ],
+          ),
+    );
   }
 
   void _navigateToAddAudio(BuildContext context, List<int> existingIds) {
@@ -355,30 +448,10 @@ Future<void> _playAndOpenCollectionPlayer(
 
   final message = errorMessage;
   if (message != null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message.isEmpty ? '当前音频无法播放' : message)),
-    );
-  }
-}
-
-class _PlayAllButton extends StatelessWidget {
-  const _PlayAllButton({this.onTap});
-
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Icon(Icons.play_arrow, color: Colors.white, size: 28),
-      ),
+    OmaoToast.show(
+      context,
+      message.isEmpty ? '当前音频无法播放' : message,
+      isSuccess: false,
     );
   }
 }

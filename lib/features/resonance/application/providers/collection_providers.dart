@@ -15,8 +15,10 @@ CollectionService collectionService(Ref ref) {
 }
 
 @riverpod
-Stream<List<AudioCollection>> collections(Ref ref) {
-  return ref.watch(collectionServiceProvider).watchCollections();
+Future<List<AudioCollection>> collections(Ref ref) async {
+  // 监听 collections stream 获取变化通知，但用 getAllCollections 获取带 count 的数据
+  ref.watch(watchCollectionsProvider);
+  return ref.watch(collectionServiceProvider).getAllCollections();
 }
 
 @riverpod

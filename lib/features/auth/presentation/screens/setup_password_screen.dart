@@ -5,12 +5,20 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../application/providers/auth_providers.dart';
+import '../../domain/models/auth_exception.dart';
 import '../../../profile/application/providers/profile_providers.dart';
 import '../widgets/auth_chrome.dart';
 import '../widgets/auth_fields.dart';
 
 class SetupPasswordScreen extends ConsumerStatefulWidget {
-  const SetupPasswordScreen({super.key});
+  const SetupPasswordScreen({
+    super.key,
+    required this.phone,
+    required this.code,
+  });
+
+  final String phone;
+  final String code;
 
   @override
   ConsumerState<SetupPasswordScreen> createState() =>
@@ -43,17 +51,37 @@ class _SetupPasswordScreenState extends ConsumerState<SetupPasswordScreen> {
 
     setState(() => _isLoading = true);
     try {
+      await ref.read(authNotifierProvider.notifier).register(
+            phone: widget.phone,
+            code: widget.code,
+            password: _passwordController.text,
+          );
+
+      if (!mounted) return;
+      final authState = ref.read(authNotifierProvider);
+      if (authState.hasError) {
+        TopBannerToast.show(
+          context,
+          message:
+              authState.error is AuthException
+                  ? (authState.error as AuthException).displayMessage
+                  : '注册失败',
+        );
+        return;
+      }
+
       await ref.read(profileNotifierProvider.notifier).updateNickname(username);
       ref.read(authNotifierProvider.notifier).updateNicknameLocally(username);
-      await ref
-          .read(authNotifierProvider.notifier)
-          .setupPassword(_passwordController.text);
       if (mounted) {
         context.goNamed(RouteNames.home);
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
-        TopBannerToast.show(context, message: '设置失败，请重试');
+        TopBannerToast.show(
+          context,
+          message:
+              e is AuthException ? e.displayMessage : '设置失败，请重试',
+        );
       }
     } finally {
       if (mounted) {

@@ -21,8 +21,8 @@ class WaveformKeyframes extends Table {
 
   @override
   List<Set<Column>> get uniqueKeys => [
-        {waveformId, timeMs},
-      ];
+    {waveformId, timeMs},
+  ];
 }
 
 class FavoriteSlots extends Table {
@@ -34,8 +34,8 @@ class FavoriteSlots extends Table {
 
   @override
   List<Set<Column>> get uniqueKeys => [
-        {channel, page, slotIndex},
-      ];
+    {channel, page, slotIndex},
+  ];
 }
 
 class UsageLogs extends Table {

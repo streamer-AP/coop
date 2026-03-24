@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../domain/models/avatar_preset.dart';
 
 class AvatarPickerSheet extends StatelessWidget {
@@ -43,7 +44,7 @@ class AvatarPickerSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           ListTile(
-            leading: const Icon(Icons.photo_library_outlined),
+            leading: AppIcons.icon(AppIcons.album, size: 24),
             title: const Text('相册'),
             onTap: () {
               Navigator.of(context).pop();
@@ -51,7 +52,7 @@ class AvatarPickerSheet extends StatelessWidget {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.camera_alt_outlined),
+            leading: AppIcons.icon(AppIcons.camera, size: 24),
             title: const Text('相机'),
             onTap: () {
               Navigator.of(context).pop();

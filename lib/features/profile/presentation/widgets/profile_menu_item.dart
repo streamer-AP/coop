@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
 
 class ProfileMenuItem extends StatelessWidget {
   const ProfileMenuItem({
     super.key,
     required this.icon,
     required this.title,
+    this.svgPath,
     this.trailing,
     this.onTap,
     this.showDivider = true,
@@ -14,6 +16,7 @@ class ProfileMenuItem extends StatelessWidget {
 
   final IconData icon;
   final String title;
+  final String? svgPath;
   final Widget? trailing;
   final VoidCallback? onTap;
   final bool showDivider;
@@ -28,7 +31,9 @@ class ProfileMenuItem extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Row(
               children: [
-                Icon(icon, size: 22, color: AppColors.textPrimary),
+                svgPath != null
+                    ? AppIcons.icon(svgPath!, size: 22, color: AppColors.textPrimary)
+                    : Icon(icon, size: 22, color: AppColors.textPrimary),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -40,17 +45,18 @@ class ProfileMenuItem extends StatelessWidget {
                   ),
                 ),
                 if (trailing != null) trailing!,
-                const Icon(
-                  Icons.chevron_right,
-                  size: 20,
-                  color: AppColors.textHint,
-                ),
+                AppIcons.icon(AppIcons.arrowRight, size: 20, color: AppColors.textHint),
               ],
             ),
           ),
         ),
         if (showDivider)
-          const Divider(height: 1, indent: 54, endIndent: 20),
+          Divider(
+            height: 1,
+            indent: 54,
+            endIndent: 20,
+            color: Colors.white.withValues(alpha: 0.3),
+          ),
       ],
     );
   }

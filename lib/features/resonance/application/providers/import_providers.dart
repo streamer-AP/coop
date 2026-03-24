@@ -15,8 +15,8 @@ part 'import_providers.g.dart';
 
 @riverpod
 Future<ImportService> importService(Ref ref) async {
-  final fileManager = FileManager();
-  final importDir = await fileManager.getImportDirectory();
+  final fileManager = ref.read(fileManagerProvider);
+  final importDir = fileManager.getImportDirectory();
   return ImportService(importDirectory: importDir);
 }
 
@@ -226,6 +226,8 @@ class ImportProgressNotifier extends _$ImportProgressNotifier {
           filePath: item.filePath,
           coverPath: item.coverPath,
           mediaType: item.mediaType,
+          artist: item.artist,
+          durationMs: item.durationMs,
         ),
       );
 
