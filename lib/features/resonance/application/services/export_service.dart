@@ -83,6 +83,98 @@ class ExportService {
     return resolvedPath;
   }
 
+  /// 一键导出所有音频条目为单个 ZIP（每个条目一个子目录）。
+  /// [onProgress] 回调参数: (已处理数, 总数)。
+  Future<String?> exportAll({
+    void Function(int current, int total)? onProgress,
+  }) async {
+    final entries = await _repository.getAllEntries();
+    if (entries.isEmpty) {
+      throw Exception('没有可导出的音频');
+    }
+
+    final archive = Archive();
+    for (var i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      onProgress?.call(i, entries.length);
+
+      final dirName = p.basenameWithoutExtension(entry.filePath);
+      final mediaFile = File(entry.filePath);
+      if (!await mediaFile.exists()) continue;
+
+      archive.addFile(ArchiveFile(
+        '$dirName/${p.basename(entry.filePath)}',
+        (await mediaFile.length()),
+        await mediaFile.readAsBytes(),
+      ));
+
+      if (entry.coverPath != null) {
+        final coverFile = File(entry.coverPath!);
+        if (await coverFile.exists()) {
+          archive.addFile(ArchiveFile(
+            '$dirName/${p.basename(entry.coverPath!)}',
+            (await coverFile.length()),
+            await coverFile.readAsBytes(),
+          ));
+        }
+      }
+
+      final subtitles = await _repository.getSubtitlesForEntry(entry.id);
+      for (final sub in subtitles) {
+        final subFile = File(sub.filePath);
+        if (await subFile.exists()) {
+          archive.addFile(ArchiveFile(
+            '$dirName/${p.basename(sub.filePath)}',
+            (await subFile.length()),
+            await subFile.readAsBytes(),
+          ));
+        }
+      }
+
+      final scriptPath =
+          await _repository.getScriptFilePathForEntry(entry.id);
+      if (scriptPath != null) {
+        final scriptFile = File(scriptPath);
+        if (await scriptFile.exists()) {
+          archive.addFile(ArchiveFile(
+            '$dirName/${p.basename(scriptPath)}',
+            (await scriptFile.length()),
+            await scriptFile.readAsBytes(),
+          ));
+        }
+      }
+    }
+
+    onProgress?.call(entries.length, entries.length);
+
+    final zipBytes = ZipEncoder().encode(archive);
+    if (zipBytes.isEmpty) {
+      throw Exception('压缩导出文件失败');
+    }
+
+    final selectedPath = await FilePicker.platform.saveFile(
+      dialogTitle: '导出全部音声',
+      fileName: 'omao_export.zip',
+      type: FileType.any,
+      bytes: Uint8List.fromList(zipBytes),
+    );
+
+    if (selectedPath == null || selectedPath.isEmpty) {
+      return null;
+    }
+
+    final resolvedPath = await _persistZipIfNeeded(
+      selectedPath,
+      Uint8List.fromList(zipBytes),
+    );
+
+    AppLogger().info(
+      'Exported all ${entries.length} entries to $resolvedPath',
+    );
+
+    return resolvedPath;
+  }
+
   String _buildDefaultZipName(String mediaPath) {
     final baseName = p.basenameWithoutExtension(mediaPath);
     return '$baseName.zip';

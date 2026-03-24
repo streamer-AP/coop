@@ -234,7 +234,7 @@ class ResonanceScreen extends ConsumerWidget {
               isScrollable: true,
               tabAlignment: TabAlignment.start,
               padding: EdgeInsets.zero,
-              labelPadding: EdgeInsets.only(right: 24),
+              labelPadding: EdgeInsets.symmetric(horizontal: 14),
               labelColor: Color(0xFF6A53A7),
               unselectedLabelColor: Colors.white,
               labelStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
@@ -328,7 +328,13 @@ class _AllEntriesTab extends ConsumerWidget {
             return AudioEntryTile(
               entry: entry,
               onTap:
-                  () => _playEntry(context, ref, entry, playlistTitle: '全部音频'),
+                  () => _playEntry(
+                    context,
+                    ref,
+                    entry,
+                    playlistEntries: filtered,
+                    playlistTitle: '全部音频',
+                  ),
               onMoreTap: () {
                 AudioEntryActionSheet.show(context, entry: entry);
               },
@@ -345,9 +351,13 @@ class _AllEntriesTab extends ConsumerWidget {
     final sorted = List<AudioEntry>.of(entries);
     switch (mode) {
       case SortMode.alphabeticalAsc:
-        sorted.sort((a, b) => a.title.compareTo(b.title));
+        sorted.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
       case SortMode.alphabeticalDesc:
-        sorted.sort((a, b) => b.title.compareTo(a.title));
+        sorted.sort(
+          (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+        );
       case SortMode.timeAsc:
         sorted.sort(
           (a, b) => (a.createdAt ?? DateTime(0)).compareTo(

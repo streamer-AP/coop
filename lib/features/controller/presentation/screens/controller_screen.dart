@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/bluetooth/ble_connection_manager.dart';
 import '../../../../core/bluetooth/models/ble_device.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/controller_providers.dart';
 import '../../domain/models/device_binding.dart';
 import '../../domain/models/favorite_slot.dart';
@@ -315,7 +316,7 @@ class _ScanSheetState extends ConsumerState<_ScanSheet> {
               ),
               IconButton(
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close),
+                icon: AppIcons.icon(AppIcons.close, size: 24),
               ),
             ],
           ),
@@ -356,7 +357,7 @@ class _ScanSheetState extends ConsumerState<_ScanSheet> {
                     leading: const Icon(Icons.bluetooth),
                     title: Text(device.name),
                     subtitle: Text('信号: ${device.rssi} dBm'),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: AppIcons.icon(AppIcons.arrowRight, size: 24),
                     onTap: () => _connectDevice(device),
                   );
                 },

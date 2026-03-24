@@ -171,6 +171,14 @@ class _HomeBackdrop extends StatelessWidget {
           constraints.maxWidth,
         );
         final scale = contentWidth / HomePage._designWidth;
+        final backgroundHeight = math.max(
+          874 * scale,
+          constraints.maxHeight + 24 * scale,
+        );
+        final overlayHeight = math.max(
+          857 * scale,
+          constraints.maxHeight + 2 * scale,
+        );
 
         return Stack(
           fit: StackFit.expand,
@@ -188,10 +196,10 @@ class _HomeBackdrop extends StatelessWidget {
                       left: -48 * scale,
                       top: -10 * scale,
                       width: 490 * scale,
-                      height: 874 * scale,
+                      height: backgroundHeight,
                       child: Image.asset(
                         _HomeAssets.background,
-                        fit: BoxFit.fill,
+                        fit: BoxFit.cover,
                         alignment: Alignment.topCenter,
                         filterQuality: FilterQuality.high,
                       ),
@@ -200,7 +208,7 @@ class _HomeBackdrop extends StatelessWidget {
                       left: 0,
                       top: -1 * scale,
                       width: HomePage._designWidth * scale,
-                      height: 857 * scale,
+                      height: overlayHeight,
                       child: ClipRect(
                         child: BackdropFilter(
                           filter: ui.ImageFilter.blur(
@@ -398,42 +406,67 @@ class _PlayerSticker extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          // Ring (outer) – rotated bounding box centered at (39.1, 41.4)
           Positioned(
-            left: -4.8 * scale,
-            top: -0.2 * scale,
-            width: 71.6936 * scale,
-            height: 49.7466 * scale,
+            left: -4.4 * scale,
+            top: -0.5 * scale,
+            width: 87.0 * scale,
+            height: 83.9 * scale,
             child: Transform.rotate(
               angle: _rotation,
-              child: SvgPicture.asset(_HomeAssets.playerRing, fit: BoxFit.fill),
-            ),
-          ),
-          Positioned(
-            left: 3.5 * scale,
-            top: 7.6 * scale,
-            width: 58.1622 * scale,
-            height: 40.3575 * scale,
-            child: Transform.rotate(
-              angle: _rotation,
-              child: SvgPicture.asset(
-                _HomeAssets.playerMiddle,
-                fit: BoxFit.fill,
+              child: Center(
+                child: SizedBox(
+                  width: 71.6936 * scale,
+                  height: 49.7466 * scale,
+                  child: SvgPicture.asset(
+                    _HomeAssets.playerRing,
+                    fit: BoxFit.fill,
+                  ),
+                ),
               ),
             ),
           ),
+          // Middle ring – same center
           Positioned(
-            left: 12.7 * scale,
-            top: 16.3 * scale,
-            width: 43.2171 * scale,
-            height: 29.9913 * scale,
+            left: 3.8 * scale,
+            top: 7.4 * scale,
+            width: 70.6 * scale,
+            height: 68.1 * scale,
             child: Transform.rotate(
               angle: _rotation,
-              child: SvgPicture.asset(
-                _HomeAssets.playerInner,
-                fit: BoxFit.fill,
+              child: Center(
+                child: SizedBox(
+                  width: 58.1622 * scale,
+                  height: 40.3575 * scale,
+                  child: SvgPicture.asset(
+                    _HomeAssets.playerMiddle,
+                    fit: BoxFit.fill,
+                  ),
+                ),
               ),
             ),
           ),
+          // Inner ring – same center
+          Positioned(
+            left: 12.9 * scale,
+            top: 16.1 * scale,
+            width: 52.4 * scale,
+            height: 50.6 * scale,
+            child: Transform.rotate(
+              angle: _rotation,
+              child: Center(
+                child: SizedBox(
+                  width: 43.2171 * scale,
+                  height: 29.9913 * scale,
+                  child: SvgPicture.asset(
+                    _HomeAssets.playerInner,
+                    fit: BoxFit.fill,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Music note (not rotated)
           Positioned(
             left: 29.6 * scale,
             top: 14 * scale,
@@ -441,6 +474,7 @@ class _PlayerSticker extends StatelessWidget {
             height: 36.1349 * scale,
             child: SvgPicture.asset(_HomeAssets.playerNote, fit: BoxFit.fill),
           ),
+          // Shine note icon (not rotated)
           Positioned(
             left: 9 * scale,
             top: 12 * scale,

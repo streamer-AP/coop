@@ -148,10 +148,13 @@ class AudioPlayerService {
   }
 
   void updateMediaItem(AudioEntry entry) {
+    if (!_initialized) return;
+
     _audioHandler.mediaItem.add(
       MediaItem(
         id: entry.id.toString(),
         title: entry.title,
+        artist: entry.artist,
         duration: Duration(milliseconds: entry.durationMs),
         artUri: entry.coverPath != null ? Uri.file(entry.coverPath!) : null,
       ),

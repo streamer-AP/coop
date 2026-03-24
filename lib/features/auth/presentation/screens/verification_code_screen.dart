@@ -16,12 +16,14 @@ class VerificationCodeScreen extends ConsumerStatefulWidget {
     required this.title,
     required this.onVerified,
     this.isRegister = false,
+    this.onResendCode,
   });
 
   final String phone;
   final String title;
   final FutureOr<void> Function(String code) onVerified;
   final bool isRegister;
+  final Future<void> Function()? onResendCode;
 
   @override
   ConsumerState<VerificationCodeScreen> createState() =>
@@ -66,9 +68,13 @@ class _VerificationCodeScreenState
 
   Future<void> _resend() async {
     try {
-      await ref
-          .read(authNotifierProvider.notifier)
-          .sendVerificationCode(widget.phone, isRegister: widget.isRegister);
+      if (widget.onResendCode != null) {
+        await widget.onResendCode!.call();
+      } else {
+        await ref
+            .read(authNotifierProvider.notifier)
+            .sendVerificationCode(widget.phone, isRegister: widget.isRegister);
+      }
       _startCountdown();
       if (mounted) {
         TopBannerToast.show(context, message: '验证码已重新发送', isError: false);

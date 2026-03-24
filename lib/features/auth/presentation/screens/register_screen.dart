@@ -78,31 +78,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               phone: _phoneDigits,
               title: '验证码注册',
               isRegister: true,
-              onVerified: _registerWithCode,
+              onVerified: _onCodeVerified,
             ),
       ),
     );
   }
 
-  Future<void> _registerWithCode(String code) async {
-    await ref
-        .read(authNotifierProvider.notifier)
-        .register(phone: _phoneDigits, code: code);
-
+  void _onCodeVerified(String code) {
     if (!mounted) return;
-    final authState = ref.read(authNotifierProvider);
-    if (authState.hasError) {
-      TopBannerToast.show(
-        context,
-        message:
-            authState.error is AuthException
-                ? (authState.error as AuthException).displayMessage
-                : '注册失败',
-      );
-      return;
-    }
-
-    context.goNamed(RouteNames.setupPassword);
+    context.pushNamed(
+      RouteNames.setupPassword,
+      extra: {'phone': _phoneDigits, 'code': code},
+    );
   }
 
   @override

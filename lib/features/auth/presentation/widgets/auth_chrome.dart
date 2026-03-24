@@ -1,9 +1,10 @@
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../../core/theme/app_icons.dart';
 
 class AuthPalette {
   AuthPalette._();
@@ -16,7 +17,7 @@ class AuthPalette {
   static const link = Color(0xFF7761C8);
   static const action = link;
   static const actionDark = Color(0xFF5737B7);
-  static const buttonTop = Color(0xFFAA90F0);
+  static const buttonTop = Color(0xFF8B6ED6);
   static const buttonBottom = Color(0xFF5D3ABC);
   static const buttonDisabledTop = Color(0xFFD7CCEA);
   static const buttonDisabledBottom = Color(0xFFC7BBDD);
@@ -25,6 +26,110 @@ class AuthPalette {
   static const heroTop = Color(0xFF7E7AA4);
   static const heroMid = Color(0xFFC3BEDD);
   static const heroBottom = Color(0xFFF3F1FA);
+}
+
+class AuthFonts {
+  AuthFonts._();
+
+  static const chinese = 'PingFang SC';
+  static const english = 'Alegreya Sans';
+
+  static const _chineseFallback = [
+    'PingFang HK',
+    'PingFang TC',
+    'SourceHanSansCN',
+    'Source Han Sans SC',
+    'Noto Sans SC',
+    'sans-serif',
+  ];
+
+  static const _englishFallback = [
+    'AlegreyaSans',
+    'Avenir Next',
+    'Avenir',
+    'Helvetica Neue',
+    'sans-serif',
+  ];
+
+  static TextStyle chineseTextStyle({
+    double? fontSize,
+    double? height,
+    FontWeight? fontWeight,
+    Color? color,
+    double? letterSpacing,
+    FontStyle? fontStyle,
+    List<Shadow>? shadows,
+  }) {
+    return TextStyle(
+      fontFamily: chinese,
+      fontFamilyFallback: _chineseFallback,
+      fontSize: fontSize,
+      height: height,
+      fontWeight: fontWeight,
+      color: color,
+      letterSpacing: letterSpacing,
+      fontStyle: fontStyle,
+      shadows: shadows,
+    );
+  }
+
+  static TextStyle englishTextStyle({
+    double? fontSize,
+    double? height,
+    FontWeight? fontWeight,
+    Color? color,
+    double? letterSpacing,
+    FontStyle? fontStyle,
+    List<Shadow>? shadows,
+  }) {
+    return TextStyle(
+      fontFamily: english,
+      fontFamilyFallback: [..._englishFallback, ..._chineseFallback],
+      fontSize: fontSize,
+      height: height,
+      fontWeight: fontWeight,
+      color: color,
+      letterSpacing: letterSpacing,
+      fontStyle: fontStyle,
+      shadows: shadows,
+    );
+  }
+
+  static TextStyle styleForText(
+    String text, {
+    double? fontSize,
+    double? height,
+    FontWeight? fontWeight,
+    Color? color,
+    double? letterSpacing,
+    FontStyle? fontStyle,
+    List<Shadow>? shadows,
+  }) {
+    final hasLatin = RegExp(r'[A-Za-z]').hasMatch(text);
+    final hasChinese = RegExp(r'[\u3400-\u9FFF]').hasMatch(text);
+
+    if (hasLatin && !hasChinese) {
+      return englishTextStyle(
+        fontSize: fontSize,
+        height: height,
+        fontWeight: fontWeight,
+        color: color,
+        letterSpacing: letterSpacing,
+        fontStyle: fontStyle,
+        shadows: shadows,
+      );
+    }
+
+    return chineseTextStyle(
+      fontSize: fontSize,
+      height: height,
+      fontWeight: fontWeight,
+      color: color,
+      letterSpacing: letterSpacing,
+      fontStyle: fontStyle,
+      shadows: shadows,
+    );
+  }
 }
 
 class AuthBackground extends StatelessWidget {
@@ -117,28 +222,6 @@ class AuthBackground extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            top: 120,
-            right: 18,
-            child: IgnorePointer(
-              child: Container(
-                width: 126,
-                height: 126,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.16),
-                  ),
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.white.withValues(alpha: 0.08),
-                      Colors.white.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
           const Positioned(
             left: -80,
             right: -80,
@@ -148,19 +231,16 @@ class AuthBackground extends StatelessWidget {
           ),
           if (showWatermark)
             Positioned(
-              right: -48,
-              top: 172,
+              right: -16,
+              top: 122,
               child: IgnorePointer(
-                child: Transform.rotate(
-                  angle: math.pi / 2,
-                  child: Text(
-                    'OMAO',
-                    style: TextStyle(
-                      fontSize: 54,
-                      letterSpacing: 8,
-                      color: Colors.white.withValues(alpha: 0.12),
-                      fontWeight: FontWeight.w300,
-                    ),
+                child: Opacity(
+                  opacity: 0.21,
+                  child: Image.asset(
+                    'assets/figma/auth/omao_watermark.png',
+                    width: 64,
+                    height: 169,
+                    fit: BoxFit.contain,
                   ),
                 ),
               ),
@@ -205,8 +285,8 @@ class AuthBackButton extends StatelessWidget {
           color: backgroundColor ?? Colors.white.withValues(alpha: 0.28),
           shape: BoxShape.circle,
         ),
-        child: Icon(
-          Icons.arrow_back_ios_new_rounded,
+        child: AppIcons.icon(
+          AppIcons.arrowLeft,
           size: 16,
           color: iconColor,
         ),
@@ -298,7 +378,7 @@ class AuthTitleBlock extends StatelessWidget {
       children: [
         Text(
           title,
-          style: TextStyle(
+          style: AuthFonts.chineseTextStyle(
             fontSize: 24,
             height: 1.1,
             fontWeight: FontWeight.w700,
@@ -309,14 +389,13 @@ class AuthTitleBlock extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             subtitle,
-            style: TextStyle(
+            style: AuthFonts.englishTextStyle(
               fontSize: 13,
               height: 1.05,
               color: subtitleColor.withValues(alpha: 0.62),
               fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w400,
               letterSpacing: 0.24,
-              fontFamilyFallback: const ['Snell Roundhand', 'Apple Chancery'],
             ),
           ),
         ],
@@ -357,7 +436,7 @@ class AuthUnderlineField extends StatelessWidget {
         if (label != null) ...[
           Text(
             label!,
-            style: const TextStyle(
+            style: AuthFonts.chineseTextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
               color: AuthPalette.body,
@@ -377,7 +456,8 @@ class AuthUnderlineField extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 6),
                   child: Text(
                     leadingText!,
-                    style: const TextStyle(
+                    style: AuthFonts.styleForText(
+                      leadingText!,
                       fontSize: 16,
                       color: AuthPalette.title,
                     ),
@@ -390,14 +470,14 @@ class AuthUnderlineField extends StatelessWidget {
                   inputFormatters: inputFormatters,
                   obscureText: obscureText,
                   cursorColor: AuthPalette.link,
-                  style: const TextStyle(
+                  style: AuthFonts.englishTextStyle(
                     fontSize: 16,
                     color: AuthPalette.title,
                   ),
                   decoration: InputDecoration(
                     isDense: true,
                     hintText: hintText,
-                    hintStyle: const TextStyle(
+                    hintStyle: AuthFonts.chineseTextStyle(
                       fontSize: 16,
                       color: AuthPalette.hint,
                     ),
@@ -438,20 +518,20 @@ class AuthPrimaryButton extends StatelessWidget {
       onTap: canTap ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        height: 46,
+        height: 52,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+            begin: const Alignment(-0.05, -1.0),
+            end: const Alignment(0.05, 1.0),
             colors:
                 canTap
-                    ? const [AuthPalette.buttonTop, AuthPalette.buttonBottom]
+                    ? const [Color(0xFF8B6ED6), Color(0xFF543A99)]
                     : const [
                       AuthPalette.buttonDisabledTop,
                       AuthPalette.buttonDisabledBottom,
                     ],
           ),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(35),
           boxShadow:
               canTap
                   ? [
@@ -476,9 +556,9 @@ class AuthPrimaryButton extends StatelessWidget {
                 )
                 : Text(
                   label,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
+                  style: AuthFonts.chineseTextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
                     color: Colors.white,
                   ),
                 ),
@@ -503,7 +583,7 @@ class AuthClearButton extends StatelessWidget {
           color: const Color(0xFF9893A6).withValues(alpha: 0.9),
           shape: BoxShape.circle,
         ),
-        child: const Icon(Icons.close_rounded, size: 12, color: Colors.white),
+        child: AppIcons.icon(AppIcons.close2, size: 12, color: Colors.white),
       ),
     );
   }
@@ -544,8 +624,8 @@ class AuthAgreementRow extends StatelessWidget {
             ),
             child:
                 agreed
-                    ? const Center(
-                      child: Icon(Icons.check, size: 10, color: Colors.white),
+                    ? Center(
+                      child: AppIcons.icon(AppIcons.check, size: 10, color: Colors.white),
                     )
                     : null,
           ),
@@ -558,24 +638,40 @@ class AuthAgreementRow extends StatelessWidget {
             children: [
               const Text(
                 '我已阅读并同意',
-                style: TextStyle(fontSize: 12, color: AuthPalette.body),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AuthPalette.body,
+                  fontFamily: AuthFonts.chinese,
+                  fontFamilyFallback: AuthFonts._chineseFallback,
+                ),
               ),
               GestureDetector(
                 onTap: onUserAgreementTap,
-                child: const Text(
+                child: Text(
                   '《用户协议》',
-                  style: TextStyle(fontSize: 12, color: AuthPalette.link),
+                  style: AuthFonts.chineseTextStyle(
+                    fontSize: 12,
+                    color: AuthPalette.link,
+                  ),
                 ),
               ),
               const Text(
                 '和',
-                style: TextStyle(fontSize: 12, color: AuthPalette.body),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AuthPalette.body,
+                  fontFamily: AuthFonts.chinese,
+                  fontFamilyFallback: AuthFonts._chineseFallback,
+                ),
               ),
               GestureDetector(
                 onTap: onPrivacyTap,
-                child: const Text(
+                child: Text(
                   '《隐私政策》',
-                  style: TextStyle(fontSize: 12, color: AuthPalette.link),
+                  style: AuthFonts.chineseTextStyle(
+                    fontSize: 12,
+                    color: AuthPalette.link,
+                  ),
                 ),
               ),
             ],
@@ -607,7 +703,8 @@ class AuthGhostLink extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: AuthFonts.styleForText(
+              label,
               fontSize: 15,
               fontWeight: FontWeight.w500,
               color: AuthPalette.link,

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
 
 class GlowingAvatar extends StatelessWidget {
   const GlowingAvatar({super.key, this.imageUrl, this.size = 72, this.onTap});
@@ -52,8 +53,8 @@ class GlowingAvatar extends StatelessWidget {
   }
 
   Widget _defaultIcon() {
-    return Icon(
-      Icons.person,
+    return AppIcons.icon(
+      AppIcons.user,
       size: size * 0.4,
       color: Colors.white.withValues(alpha: 0.8),
     );

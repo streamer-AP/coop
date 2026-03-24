@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+
 import '../app_database.dart';
 import '../tables/controller_tables.dart';
 
@@ -19,19 +20,33 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
   // --- 波形 ---
 
   Future<List<WaveformWithKeyframes>> getAllWaveforms() async {
-    final allWaveforms = await select(waveforms).get();
-    final allKeyframes = await select(waveformKeyframes).get();
+    final waveformRows =
+        await (select(waveforms)..orderBy([
+          (t) => OrderingTerm.asc(t.channel),
+          (t) => OrderingTerm.asc(t.id),
+        ])).get();
+    if (waveformRows.isEmpty) return const [];
 
-    final keyframesByWaveform = <int, List<WaveformKeyframe>>{};
-    for (final kf in allKeyframes) {
-      keyframesByWaveform.putIfAbsent(kf.waveformId, () => []).add(kf);
+    final ids = waveformRows.map((row) => row.id).toList();
+    final keyframeRows =
+        await (select(waveformKeyframes)
+              ..where((t) => t.waveformId.isIn(ids))
+              ..orderBy([
+                (t) => OrderingTerm.asc(t.waveformId),
+                (t) => OrderingTerm.asc(t.timeMs),
+              ]))
+            .get();
+
+    final grouped = <int, List<WaveformKeyframe>>{};
+    for (final row in keyframeRows) {
+      grouped.putIfAbsent(row.waveformId, () => []).add(row);
     }
 
-    return allWaveforms
+    return waveformRows
         .map(
-          (w) => WaveformWithKeyframes(
-            waveform: w,
-            keyframes: keyframesByWaveform[w.id] ?? [],
+          (waveform) => WaveformWithKeyframes(
+            waveform: waveform,
+            keyframes: grouped[waveform.id] ?? const [],
           ),
         )
         .toList();
@@ -41,28 +56,33 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
     String channel,
   ) async {
     final channelWaveforms =
-        await (select(waveforms)..where((t) => t.channel.equals(channel)))
+        await (select(waveforms)
+              ..where((t) => t.channel.equals(channel))
+              ..orderBy([(t) => OrderingTerm.asc(t.id)]))
             .get();
 
-    if (channelWaveforms.isEmpty) return [];
+    if (channelWaveforms.isEmpty) return const [];
 
     final ids = channelWaveforms.map((w) => w.id).toList();
     final kfs =
         await (select(waveformKeyframes)
               ..where((t) => t.waveformId.isIn(ids))
-              ..orderBy([(t) => OrderingTerm.asc(t.timeMs)]))
+              ..orderBy([
+                (t) => OrderingTerm.asc(t.waveformId),
+                (t) => OrderingTerm.asc(t.timeMs),
+              ]))
             .get();
 
-    final keyframesByWaveform = <int, List<WaveformKeyframe>>{};
+    final grouped = <int, List<WaveformKeyframe>>{};
     for (final kf in kfs) {
-      keyframesByWaveform.putIfAbsent(kf.waveformId, () => []).add(kf);
+      grouped.putIfAbsent(kf.waveformId, () => []).add(kf);
     }
 
     return channelWaveforms
         .map(
           (w) => WaveformWithKeyframes(
             waveform: w,
-            keyframes: keyframesByWaveform[w.id] ?? [],
+            keyframes: grouped[w.id] ?? const [],
           ),
         )
         .toList();
@@ -70,59 +90,54 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
 
   Future<WaveformWithKeyframes?> getWaveformById(int id) async {
     final waveform =
-        await (select(waveforms)..where((t) => t.id.equals(id)))
-            .getSingleOrNull();
+        await (select(waveforms)
+          ..where((t) => t.id.equals(id))).getSingleOrNull();
     if (waveform == null) return null;
 
-    final kfs =
+    final keyframes =
         await (select(waveformKeyframes)
               ..where((t) => t.waveformId.equals(id))
               ..orderBy([(t) => OrderingTerm.asc(t.timeMs)]))
             .get();
 
-    return WaveformWithKeyframes(waveform: waveform, keyframes: kfs);
+    return WaveformWithKeyframes(waveform: waveform, keyframes: keyframes);
   }
 
   Future<int> insertWaveform(WaveformsCompanion waveform) =>
       into(waveforms).insert(waveform);
 
   Future<void> updateWaveform(WaveformsCompanion waveform) async {
-    final withTimestamp = waveform.copyWith(
-      updatedAt: Value(DateTime.now()),
-    );
-    await update(waveforms).replace(withTimestamp);
+    await update(
+      waveforms,
+    ).replace(waveform.copyWith(updatedAt: Value(DateTime.now())));
   }
 
   Future<void> deleteWaveform(int id) async {
-    await transaction(() async {
-      await (delete(waveformKeyframes)
-            ..where((t) => t.waveformId.equals(id)))
-          .go();
-      await (delete(waveforms)..where((t) => t.id.equals(id))).go();
-    });
+    await (delete(waveforms)..where((t) => t.id.equals(id))).go();
   }
 
   Future<void> insertKeyframes(
-    List<WaveformKeyframesCompanion> kfs,
+    List<WaveformKeyframesCompanion> keyframes,
   ) async {
-    await batch((b) => b.insertAll(waveformKeyframes, kfs));
+    if (keyframes.isEmpty) return;
+
+    await batch((b) {
+      b.insertAll(waveformKeyframes, keyframes);
+    });
   }
 
-  Future<void> deleteKeyframesForWaveform(int waveformId) =>
+  Future<void> deleteKeyframesForWaveform(int waveformId) async =>
       (delete(waveformKeyframes)
-            ..where((t) => t.waveformId.equals(waveformId)))
-          .go();
+        ..where((t) => t.waveformId.equals(waveformId))).go();
 
   // --- 常用槽位 ---
 
   Future<List<FavoriteSlot>> getAllFavoriteSlots() =>
-      (select(favoriteSlots)
-            ..orderBy([
-              (t) => OrderingTerm.asc(t.channel),
-              (t) => OrderingTerm.asc(t.page),
-              (t) => OrderingTerm.asc(t.slotIndex),
-            ]))
-          .get();
+      (select(favoriteSlots)..orderBy([
+        (t) => OrderingTerm.asc(t.channel),
+        (t) => OrderingTerm.asc(t.page),
+        (t) => OrderingTerm.asc(t.slotIndex),
+      ])).get();
 
   Future<List<FavoriteSlot>> getFavoriteSlotsByChannel(String channel) =>
       (select(favoriteSlots)
@@ -133,22 +148,27 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
             ]))
           .get();
 
-  Future<void> upsertFavoriteSlot(FavoriteSlotsCompanion slot) =>
-      into(favoriteSlots).insertOnConflictUpdate(slot);
+  Future<void> upsertFavoriteSlot(FavoriteSlotsCompanion slot) async {
+    await into(favoriteSlots).insert(slot, mode: InsertMode.insertOrReplace);
+  }
 
   Future<void> deleteFavoriteSlot(
     String channel,
     int page,
     int slotIndex,
-  ) =>
-      (delete(favoriteSlots)
-            ..where(
-              (t) =>
-                  t.channel.equals(channel) &
-                  t.page.equals(page) &
-                  t.slotIndex.equals(slotIndex),
-            ))
-          .go();
+  ) async {
+    await (delete(favoriteSlots)..where(
+      (t) =>
+          t.channel.equals(channel) &
+          t.page.equals(page) &
+          t.slotIndex.equals(slotIndex),
+    )).go();
+  }
+
+  Future<void> deleteFavoriteSlotsForWaveform(int waveformId) async {
+    await (delete(favoriteSlots)
+      ..where((t) => t.waveformId.equals(waveformId))).go();
+  }
 
   Future<void> updateSlotsOnPage(
     String channel,
@@ -157,25 +177,30 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
   ) async {
     await transaction(() async {
       await (delete(favoriteSlots)
-            ..where(
-              (t) => t.channel.equals(channel) & t.page.equals(page),
-            ))
-          .go();
-      await batch((b) => b.insertAll(favoriteSlots, slots));
+        ..where((t) => t.channel.equals(channel) & t.page.equals(page))).go();
+      if (slots.isEmpty) return;
+      await batch((b) {
+        b.insertAll(favoriteSlots, slots);
+      });
     });
   }
 
   // --- 使用日志 ---
 
-  Future<void> insertUsageLog(UsageLogsCompanion log) =>
+  Future<void> insertUsageLog(UsageLogsCompanion log) async =>
       into(usageLogs).insert(log);
 
   Future<List<UsageLog>> getUnsyncedLogs() =>
-      (select(usageLogs)..where((t) => t.isSynced.equals(false))).get();
+      (select(usageLogs)
+            ..where((t) => t.isSynced.equals(false))
+            ..orderBy([(t) => OrderingTerm.asc(t.startTime)]))
+          .get();
 
   Future<void> markLogsSynced(List<int> ids) async {
-    await (update(usageLogs)..where((t) => t.id.isIn(ids))).write(
-      const UsageLogsCompanion(isSynced: Value(true)),
-    );
+    if (ids.isEmpty) return;
+
+    await (update(usageLogs)..where(
+      (t) => t.id.isIn(ids),
+    )).write(const UsageLogsCompanion(isSynced: Value(true)));
   }
 }

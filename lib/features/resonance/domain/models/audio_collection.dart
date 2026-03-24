@@ -12,6 +12,7 @@ class AudioCollection with _$AudioCollection {
     String? description,
     @Default([]) List<int> entryIds,
     @Default(0) int entryCount,
+    @Default(0) int totalDurationMs,
   }) = _AudioCollection;
 
   factory AudioCollection.fromJson(Map<String, dynamic> json) =>

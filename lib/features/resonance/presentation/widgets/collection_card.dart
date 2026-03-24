@@ -147,31 +147,9 @@ class CollectionArtwork extends StatelessWidget {
     return SizedBox(
       width: _size,
       height: _size,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(_radius),
-              child: isCreateTile ? _buildCreateTile() : _buildCover(),
-            ),
-          ),
-          if (!isCreateTile)
-            Positioned(
-              top: 6,
-              right: 0,
-              child: Container(
-                width: 5,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.6),
-                  borderRadius: const BorderRadius.only(
-                    topRight: Radius.circular(4),
-                    bottomRight: Radius.circular(4),
-                  ),
-                ),
-              ),
-            ),
-        ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(_radius),
+        child: isCreateTile ? _buildCreateTile() : _buildCover(),
       ),
     );
   }

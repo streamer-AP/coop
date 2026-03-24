@@ -142,7 +142,7 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
     return Container(
       height: 42,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.94),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFD9D9DD)),
       ),
@@ -150,6 +150,8 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
         controller: _controller,
         focusNode: _focusNode,
         autofocus: true,
+        cursorColor: AppColors.primary,
+        textAlignVertical: TextAlignVertical.center,
         textInputAction: TextInputAction.done,
         onSubmitted:
             (_) =>
@@ -159,7 +161,11 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
         decoration: InputDecoration(
           hintText: widget.hintText,
           hintStyle: const TextStyle(fontSize: 14, color: Color(0xFFAEAEB2)),
+          filled: true,
+          fillColor: Colors.transparent,
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
           isCollapsed: true,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 14,
@@ -186,7 +192,11 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
             minHeight: 38,
           ),
         ),
-        style: const TextStyle(fontSize: 14, color: Color(0xFF1C1B1F)),
+        style: const TextStyle(
+          fontSize: 14,
+          height: 1.2,
+          color: Color(0xFF1C1B1F),
+        ),
       ),
     );
   }

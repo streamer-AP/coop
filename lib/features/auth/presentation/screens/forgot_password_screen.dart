@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../../../../shared/widgets/top_banner_toast.dart';
-import '../../application/providers/auth_providers.dart';
 import '../../domain/models/auth_exception.dart';
 import '../widgets/auth_chrome.dart';
 import '../widgets/auth_fields.dart';
@@ -53,8 +52,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
     try {
       await ref
-          .read(authNotifierProvider.notifier)
-          .sendVerificationCode(_phoneDigits);
+          .read(apiClientProvider)
+          .post(
+            ApiEndpoints.forgotPwdSendCode,
+            queryParameters: {'mobile': _phoneDigits},
+          );
     } catch (e) {
       if (mounted) {
         TopBannerToast.show(
@@ -77,6 +79,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               phone: _phoneDigits,
               title: '重置密码',
               onVerified: _resetPassword,
+              onResendCode: () async {
+                await ref
+                    .read(apiClientProvider)
+                    .post(
+                      ApiEndpoints.forgotPwdSendCode,
+                      queryParameters: {'mobile': _phoneDigits},
+                    );
+              },
             ),
       ),
     );
@@ -87,12 +97,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       await ref
           .read(apiClientProvider)
           .post(
-            ApiEndpoints.resetPassword,
+            ApiEndpoints.forgotPwd,
             queryParameters: {
               'mobile': _phoneDigits,
               'code': code,
-              'password': _passwordController.text,
-              'veryPassword': _passwordController.text,
+              'newPwd': _passwordController.text,
             },
           );
     } catch (_) {

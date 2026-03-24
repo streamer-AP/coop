@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../../core/logging/app_logger.dart';
@@ -16,7 +17,7 @@ typedef ImportProgressCallback = void Function(int current, int total);
 /// File import service: handles previewing and importing files, zip extraction,
 /// audio extraction from videos, and automatic resource matching.
 class ImportService {
-  static const _subtitleExtensions = {'srt', 'vtt', 'lrc', 'sub', 'stl', 'txt'};
+  static const _subtitleExtensions = {'srt', 'vtt', 'lrc', 'sub', 'stl'};
   static const _coverExtensions = {
     'jpg',
     'jpeg',
@@ -30,17 +31,10 @@ class ImportService {
     'heic',
     'hdr',
   };
-  static const _scriptExtensions = {
-    'md',
-    'markdown',
-    'pdf',
-    'rtf',
-    'doc',
-    'docx',
-  };
+  static const _scriptExtensions = {'md', 'markdown', 'pdf', 'txt'};
   static const _signalExtensions = {'json'};
 
-  static const _subtitlePriority = ['srt', 'vtt', 'sub', 'stl', 'lrc', 'txt'];
+  static const _subtitlePriority = ['srt', 'vtt', 'sub', 'stl', 'lrc'];
   static const _coverPriority = [
     'jpeg',
     'jpg',
@@ -54,14 +48,7 @@ class ImportService {
     'heic',
     'hdr',
   ];
-  static const _scriptPriority = [
-    'md',
-    'markdown',
-    'pdf',
-    'rtf',
-    'docx',
-    'doc',
-  ];
+  static const _scriptPriority = ['md', 'markdown', 'pdf', 'txt'];
 
   final String _importDir;
   final MediaExtractionBridge _mediaExtractionBridge;
@@ -232,6 +219,31 @@ class ImportService {
           signalDest = await _copyToImportDir(matchedSignal);
         }
 
+        // Try to read audio duration
+        String? artist;
+        int durationMs = 0;
+        try {
+          final player = AudioPlayer();
+          final duration = await player.setFilePath(destPath);
+          durationMs = duration?.inMilliseconds ?? 0;
+          await player.dispose();
+        } catch (_) {}
+
+        // Try to read artist from LRC metadata tags [ar:xxx]
+        if (matchedSubtitle != null) {
+          try {
+            final subExt = p.extension(matchedSubtitle).toLowerCase();
+            if (subExt == '.lrc') {
+              final lrcContent =
+                  await File(subtitleDest ?? matchedSubtitle).readAsString();
+              final arMatch = RegExp(r'\[ar:(.+?)\]').firstMatch(lrcContent);
+              if (arMatch != null) {
+                artist = arMatch.group(1)?.trim();
+              }
+            }
+          } catch (_) {}
+        }
+
         succeeded.add(
           ImportedItem(
             title: title,
@@ -240,6 +252,8 @@ class ImportService {
             subtitlePath: subtitleDest,
             scriptPath: scriptDest,
             signalPath: signalDest,
+            artist: artist,
+            durationMs: durationMs,
             mediaType: mediaType,
           ),
         );
@@ -334,10 +348,11 @@ class ImportService {
   Future<String> _importMediaFile(String mediaPath, String rawTitle) async {
     final ext = p.extension(mediaPath).toLowerCase().replaceFirst('.', '');
     if (ResonanceMediaSupport.videoExtensions.contains(ext)) {
-      final outputPath = await _reserveImportPath('$rawTitle.m4a');
+      // Native extraction now decides the real output container by audio codec.
+      final suggestedOutputPath = await _reserveImportPath('$rawTitle.m4a');
       final extractedPath = await _mediaExtractionBridge.extractAudio(
         inputPath: mediaPath,
-        outputPath: outputPath,
+        outputPath: suggestedOutputPath,
       );
       await ResonanceMediaSupport.ensureLikelyPlayableMediaFile(
         extractedPath,
@@ -413,7 +428,27 @@ class ImportService {
     String? password,
   }) async {
     final bytes = await File(zipPath).readAsBytes();
-    final archive = ZipDecoder().decodeBytes(bytes, password: password);
+
+    Archive archive;
+    try {
+      archive = ZipDecoder().decodeBytes(bytes, password: password);
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('filter') ||
+          msg.contains('bad data') ||
+          msg.contains('password') ||
+          msg.contains('encrypted')) {
+        if (password == null || password.isEmpty) {
+          throw Exception('该压缩包可能有密码保护，请输入密码后重试');
+        }
+        throw Exception('密码错误或压缩包损坏，请检查密码后重试');
+      }
+      rethrow;
+    }
+
+    if (archive.isEmpty) {
+      throw Exception('压缩包为空或密码错误');
+    }
 
     final extractDir = await Directory.systemTemp.createTemp(
       'omao_zip_${p.basenameWithoutExtension(zipPath)}_',
@@ -490,10 +525,28 @@ class ImportService {
     return ImportPreviewItemType.unsupported;
   }
 
+  /// On Android, FilePicker copies files to cache, so paths may differ even
+  /// when the user selected from one directory. We only enforce this check
+  /// when paths clearly come from different real directories (non-cache paths).
   bool _isSingleDirectorySelection(List<String> paths) {
+    if (paths.length <= 1) return true;
+
     final parentDirectories =
         paths.map((path) => p.normalize(p.dirname(path))).toSet();
-    return parentDirectories.length <= 1;
+
+    // If all files share the same parent, pass.
+    if (parentDirectories.length <= 1) return true;
+
+    // On Android, FilePicker caches files under the app cache directory.
+    // Different picker invocations or content providers may use different
+    // cache sub-paths. Allow this case.
+    final allCacheOrPicker = parentDirectories.every(
+      (dir) => dir.contains('cache') || dir.contains('file_picker'),
+    );
+    if (allCacheOrPicker) return true;
+
+    // Otherwise, genuinely different directories.
+    return false;
   }
 
   int? _matchRulePriority(String mediaBaseName, String candidateBaseName) {

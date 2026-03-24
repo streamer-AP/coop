@@ -14,6 +14,7 @@ class AuthInterceptor extends Interceptor {
   ) async {
     final token = await _tokenStorage.getToken();
     if (token != null) {
+      options.headers['satoken'] = token;
       options.headers['Cookie'] = 'satoken=$token';
     }
     handler.next(options);

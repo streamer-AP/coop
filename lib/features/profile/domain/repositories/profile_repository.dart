@@ -15,6 +15,7 @@ abstract class ProfileRepository {
     required String code,
     required String newPassword,
   });
+  Future<void> sendPasswordResetCode(String phone);
   Future<void> changePhone({
     required String oldPhone,
     required String oldCode,
@@ -23,8 +24,5 @@ abstract class ProfileRepository {
   });
   Future<void> submitFeedback(String content);
   Future<AppVersion> checkForUpdate();
-  Future<void> deactivateAccount({
-    required String phone,
-    required String code,
-  });
+  Future<void> deactivateAccount({required String phone, required String code});
 }

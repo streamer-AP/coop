@@ -35,12 +35,17 @@ import 'route_names.dart';
 
 part 'app_router.g.dart';
 
+const _debugRouteDefine = String.fromEnvironment('OMAO_DEBUG_ROUTE');
+const _debugBypassAuthDefine = bool.fromEnvironment('OMAO_DEBUG_BYPASS_AUTH');
+
 @riverpod
 GoRouter appRouter(Ref ref) {
   final notifier = _AuthChangeNotifier(ref);
+  final debugBypassAuth = _isDebugAuthBypassEnabled;
+  final debugInitialLocation = _debugInitialLocation;
 
   return GoRouter(
-    initialLocation: '/startup',
+    initialLocation: debugInitialLocation ?? '/startup',
     refreshListenable: notifier,
     routes: [
       GoRoute(
@@ -71,7 +76,13 @@ GoRouter appRouter(Ref ref) {
       GoRoute(
         path: '/setup-password',
         name: RouteNames.setupPassword,
-        builder: (context, state) => const SetupPasswordScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, String>? ?? {};
+          return SetupPasswordScreen(
+            phone: extra['phone'] ?? '',
+            code: extra['code'] ?? '',
+          );
+        },
       ),
       GoRoute(
         path: '/forgot-password',
@@ -126,7 +137,8 @@ GoRouter appRouter(Ref ref) {
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           final waveform = extra?['waveform'] as Waveform?;
-          final channel = extra?['channel'] as String? ?? 'swing';
+          final channel =
+              extra?['channel'] as WaveformChannel? ?? WaveformChannel.swing;
           return WaveformEditorScreen(
             existingWaveform: waveform,
             channel: channel,
@@ -199,6 +211,10 @@ GoRouter appRouter(Ref ref) {
       ),
     ],
     redirect: (context, state) {
+      if (debugBypassAuth) {
+        return null;
+      }
+
       final authState = ref.read(authNotifierProvider);
 
       // Don't redirect while auth state is still loading
@@ -229,6 +245,32 @@ GoRouter appRouter(Ref ref) {
       return null;
     },
   );
+}
+
+bool get _isDebugAuthBypassEnabled =>
+    kDebugMode && (_debugBypassAuthDefine || _debugRouteDefine.isNotEmpty);
+
+String? get _debugInitialLocation {
+  if (!_isDebugAuthBypassEnabled) return null;
+  return _resolveDebugLocation(_debugRouteDefine) ?? '/';
+}
+
+String? _resolveDebugLocation(String value) {
+  final normalized = value.trim().toLowerCase();
+  if (normalized.isEmpty) return null;
+
+  return switch (normalized) {
+    '/' || '/home' || 'home' => '/',
+    '/startup' || 'startup' => '/startup',
+    '/resonance' || 'resonance' => '/resonance',
+    '/player' || 'player' => '/player',
+    '/controller' || 'controller' => '/controller',
+    '/story' || 'story' => '/story',
+    '/import' || 'import' => '/import',
+    '/login' || 'login' => '/login',
+    _ when normalized.startsWith('/') => normalized,
+    _ => null,
+  };
 }
 
 class _AuthChangeNotifier extends ChangeNotifier {

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/network/api_client.dart';
@@ -75,27 +74,15 @@ class ProfileRepositoryImpl implements ProfileRepository {
       throw Exception('用户名不能为空');
     }
 
-    Object? firstError;
-    try {
-      await _submitNicknameUpdate(value, mode: _NicknameUpdateMode.body);
-      return;
-    } catch (error) {
-      firstError = error;
-    }
-
-    try {
-      await _submitNicknameUpdate(value, mode: _NicknameUpdateMode.query);
-      return;
-    } catch (secondError) {
-      try {
-        await _submitNicknameUpdate(
-          value,
-          mode: _NicknameUpdateMode.bodyAndQuery,
-        );
-        return;
-      } catch (thirdError) {
-        throw _preferNicknameUpdateError(firstError, secondError, thirdError);
-      }
+    final json = await _apiClient.put(
+      ApiEndpoints.updateNickname,
+      queryParameters: {'userName': value},
+    );
+    final code = json['code'] as int?;
+    if (code != 200) {
+      throw Exception(
+        json['message'] as String? ?? json['msg'] as String? ?? '修改用户名失败',
+      );
     }
   }
 
@@ -139,7 +126,24 @@ class ProfileRepositoryImpl implements ProfileRepository {
     required String oldPassword,
     required String newPassword,
   }) async {
-    // TODO: implement
+    final previousValue = oldPassword.trim();
+    final nextValue = newPassword.trim();
+    if (previousValue.isEmpty) {
+      throw Exception('原密码不能为空');
+    }
+    if (nextValue.isEmpty) {
+      throw Exception('新密码不能为空');
+    }
+
+    final json = await _apiClient.post(
+      ApiEndpoints.updatePwd,
+      data: {
+        'oldPwd': previousValue,
+        'newPwd': nextValue,
+        'confirmPassword': nextValue,
+      },
+    );
+    _ensureSuccess(json, fallbackMessage: '修改密码失败');
   }
 
   @override
@@ -148,7 +152,42 @@ class ProfileRepositoryImpl implements ProfileRepository {
     required String code,
     required String newPassword,
   }) async {
-    // TODO: implement
+    final phoneValue = phone.trim();
+    final codeValue = code.trim();
+    final passwordValue = newPassword.trim();
+    if (phoneValue.isEmpty) {
+      throw Exception('手机号不能为空');
+    }
+    if (codeValue.isEmpty) {
+      throw Exception('验证码不能为空');
+    }
+    if (passwordValue.isEmpty) {
+      throw Exception('新密码不能为空');
+    }
+
+    final json = await _apiClient.post(
+      ApiEndpoints.forgotPwd,
+      queryParameters: {
+        'mobile': phoneValue,
+        'code': codeValue,
+        'newPwd': passwordValue,
+      },
+    );
+    _ensureSuccess(json, fallbackMessage: '修改密码失败');
+  }
+
+  @override
+  Future<void> sendPasswordResetCode(String phone) async {
+    final phoneValue = phone.trim();
+    if (phoneValue.isEmpty) {
+      throw Exception('手机号不能为空');
+    }
+
+    final json = await _apiClient.post(
+      ApiEndpoints.forgotPwdSendCode,
+      queryParameters: {'mobile': phoneValue},
+    );
+    _ensureSuccess(json, fallbackMessage: '验证码发送失败');
   }
 
   @override
@@ -237,85 +276,6 @@ class ProfileRepositoryImpl implements ProfileRepository {
     return normalized;
   }
 
-  Future<void> _submitNicknameUpdate(
-    String value, {
-    required _NicknameUpdateMode mode,
-  }) async {
-    final useBody =
-        mode == _NicknameUpdateMode.body ||
-        mode == _NicknameUpdateMode.bodyAndQuery;
-    final useQuery =
-        mode == _NicknameUpdateMode.query ||
-        mode == _NicknameUpdateMode.bodyAndQuery;
-
-    final json = await _apiClient.post(
-      ApiEndpoints.updateNickname,
-      data: useBody ? {'userName': value} : null,
-      queryParameters: useQuery ? {'userName': value} : null,
-    );
-    final code = json['code'] as int?;
-    if (code == 200 || code == 0) {
-      return;
-    }
-
-    throw Exception(
-      json['message'] as String? ?? json['msg'] as String? ?? '用户名更新失败',
-    );
-  }
-
-  Exception _preferNicknameUpdateError(
-    Object? firstError,
-    Object? secondError,
-    Object? thirdError,
-  ) {
-    final messages =
-        [
-          _extractNicknameUpdateMessage(firstError),
-          _extractNicknameUpdateMessage(secondError),
-          _extractNicknameUpdateMessage(thirdError),
-        ].where((message) => message.isNotEmpty).toList();
-
-    if (messages.isEmpty) {
-      return Exception('用户名更新失败');
-    }
-
-    final specificMessage = messages.cast<String?>().firstWhere(
-      (message) => !_isGenericNicknameUpdateMessage(message!),
-      orElse: () => null,
-    );
-
-    return Exception(specificMessage ?? messages.last);
-  }
-
-  String _extractNicknameUpdateMessage(Object? error) {
-    if (error is DioException) {
-      final data = error.response?.data;
-      if (data is Map<String, dynamic>) {
-        final message = data['message'] ?? data['msg'] ?? data['error'];
-        if (message is String && message.trim().isNotEmpty) {
-          return message.trim();
-        }
-      }
-      if (error.message?.trim().isNotEmpty ?? false) {
-        return error.message!.trim();
-      }
-    }
-
-    final raw = '$error'.replaceFirst('Exception: ', '').trim();
-    if (raw == 'null') {
-      return '';
-    }
-    return raw;
-  }
-
-  bool _isGenericNicknameUpdateMessage(String message) {
-    return message.isEmpty ||
-        message.contains('系统异常') ||
-        message.contains('请求失败') ||
-        message.contains('Internal Server Error') ||
-        message.contains('500');
-  }
-
   Future<void> _persistCurrentUserId(String userId) async {
     if (userId.trim().isEmpty) return;
     await _tokenStorage.saveCurrentUserId(userId);
@@ -349,6 +309,17 @@ class ProfileRepositoryImpl implements ProfileRepository {
       await file.delete();
     }
   }
-}
 
-enum _NicknameUpdateMode { body, query, bodyAndQuery }
+  void _ensureSuccess(
+    Map<String, dynamic> json, {
+    required String fallbackMessage,
+  }) {
+    final code = json['code'] as int?;
+    if (code == 200 || code == 0) {
+      return;
+    }
+    throw Exception(
+      json['message'] as String? ?? json['msg'] as String? ?? fallbackMessage,
+    );
+  }
+}

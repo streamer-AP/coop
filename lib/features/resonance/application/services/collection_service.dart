@@ -19,6 +19,24 @@ class CollectionService {
   Future<int> createCollection(AudioCollection collection) =>
       _repository.createCollection(collection);
 
+  /// Generate a unique collection title, appending 1, 2, 3... if duplicated.
+  Future<String> uniqueCollectionTitle(
+    String desired, {
+    String? excludeTitle,
+  }) async {
+    final allTitles = await _repository.getAllCollectionTitles();
+    final others =
+        excludeTitle != null
+            ? allTitles.where((t) => t != excludeTitle).toSet()
+            : allTitles.toSet();
+    if (!others.contains(desired)) return desired;
+    var suffix = 1;
+    while (others.contains('$desired$suffix')) {
+      suffix++;
+    }
+    return '$desired$suffix';
+  }
+
   Future<void> updateCollection(AudioCollection collection) =>
       _repository.updateCollection(collection);
 

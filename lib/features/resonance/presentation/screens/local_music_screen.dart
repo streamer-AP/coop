@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/local_music_providers.dart';
 import '../widgets/audio_entry_tile.dart';
 
@@ -92,7 +93,7 @@ class LocalMusicScreen extends ConsumerWidget {
                   ref.read(localMusicListProvider.notifier).scan();
                 }
               },
-              icon: const Icon(Icons.check),
+              icon: AppIcons.icon(AppIcons.check, size: 20, color: Colors.white),
               label: const Text('授予权限'),
             ),
           ],

@@ -17,6 +17,7 @@ class ProfileEditScreen extends ConsumerStatefulWidget {
 class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   late TextEditingController _nicknameController;
   static const _maxLength = 8;
+  bool _didSeedNicknameFromProfile = false;
 
   @override
   void initState() {
@@ -25,6 +26,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     final profile = ref.read(profileNotifierProvider).valueOrNull;
     if (profile != null) {
       _nicknameController.text = _normalizeNickname(profile.nickname);
+      _didSeedNicknameFromProfile = true;
     }
   }
 
@@ -40,15 +42,16 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     final loadedNickname = _normalizeNickname(
       profileAsync.valueOrNull?.nickname,
     );
-    if (_nicknameController.text.isEmpty && loadedNickname.isNotEmpty) {
+    if (!_didSeedNicknameFromProfile && loadedNickname.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _nicknameController.text.isNotEmpty) {
+        if (!mounted || _didSeedNicknameFromProfile) {
           return;
         }
         _nicknameController.value = TextEditingValue(
           text: loadedNickname,
           selection: TextSelection.collapsed(offset: loadedNickname.length),
         );
+        _didSeedNicknameFromProfile = true;
       });
     }
 

@@ -6,9 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../../core/storage/file_manager.dart';
+import '../../../../core/theme/app_icons.dart';
+import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../application/providers/import_providers.dart';
 import '../../application/providers/player_providers.dart';
 import '../../application/providers/resonance_providers.dart';
+import '../../application/providers/subtitle_providers.dart';
+import '../../application/services/import_service.dart';
+import '../../application/services/media_support.dart';
+import '../../application/services/subtitle_service.dart';
 import '../../domain/models/audio_entry.dart';
 import '../../domain/models/subtitle.dart';
 import '../../domain/repositories/resonance_repository.dart';
@@ -49,10 +55,10 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
                   ),
                   GestureDetector(
                     onTap: () => ImportInstructionSheet.show(context),
-                    child: const Icon(
-                      Icons.help_outline,
-                      color: Color(0xFF79747E),
+                    child: AppIcons.icon(
+                      AppIcons.search01,
                       size: 22,
+                      color: const Color(0xFF79747E),
                     ),
                   ),
                 ],
@@ -61,28 +67,14 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
             const Divider(height: 1),
             const SizedBox(height: 8),
             _ImportOption(
-              icon: Icons.subtitles_outlined,
+              svgPath: AppIcons.subtitle,
               label: '字幕',
-              onTap: () {
-                Navigator.of(context).pop();
-                _pickAndImport(context, ref, _ManualImportType.subtitle);
-              },
+              onTap: () => _onTap(context, ref, _ManualImportType.subtitle),
             ),
             _ImportOption(
-              icon: Icons.article_outlined,
+              svgPath: AppIcons.translate,
               label: '台本',
-              onTap: () {
-                Navigator.of(context).pop();
-                _pickAndImport(context, ref, _ManualImportType.script);
-              },
-            ),
-            _ImportOption(
-              icon: Icons.image_outlined,
-              label: '封面',
-              onTap: () {
-                Navigator.of(context).pop();
-                _pickAndImport(context, ref, _ManualImportType.cover);
-              },
+              onTap: () => _onTap(context, ref, _ManualImportType.script),
             ),
           ],
         ),
@@ -90,65 +82,110 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
     );
   }
 
-  Future<void> _pickAndImport(
-    BuildContext context,
-    WidgetRef ref,
-    _ManualImportType type,
-  ) async {
-    final importService = await ref.read(importServiceProvider.future);
+  void _onTap(BuildContext context, WidgetRef ref, _ManualImportType type) {
+    // 在 pop 之前把所有需要的 provider 值读出来，避免 dispose 后使用 ref
+    final feedbackOverlay = Navigator.of(context, rootNavigator: true).overlay;
+    final feedbackTopPadding = MediaQuery.paddingOf(context).top;
+    final importServiceFuture = ref.read(importServiceProvider.future);
+    final fileManager = ref.read(fileManagerProvider);
+    final repo = ref.read(resonanceRepositoryProvider);
+    final playerNotifier = ref.read(playerStateNotifierProvider.notifier);
+    final subtitleService = ref.read(subtitleServiceProvider);
+    final resourceRefreshTick = ref.read(
+      entryResourceRefreshTickProvider(entry.id).notifier,
+    );
+    final playerState = ref.read(playerStateNotifierProvider);
+    final resumePlaybackAfterPicker =
+        playerState.currentEntry != null && playerState.isPlaying;
+
+    Navigator.of(context).pop();
+
+    _pickAndImport(
+      type: type,
+      feedbackOverlay: feedbackOverlay,
+      feedbackTopPadding: feedbackTopPadding,
+      importServiceFuture: importServiceFuture,
+      fileManager: fileManager,
+      repo: repo,
+      playerNotifier: playerNotifier,
+      subtitleService: subtitleService,
+      resourceRefreshTick: resourceRefreshTick,
+      resumePlaybackAfterPicker: resumePlaybackAfterPicker,
+    );
+  }
+
+  Future<void> _pickAndImport({
+    required _ManualImportType type,
+    required OverlayState? feedbackOverlay,
+    required double feedbackTopPadding,
+    required Future<ImportService> importServiceFuture,
+    required FileManager fileManager,
+    required ResonanceRepository repo,
+    required PlayerStateNotifier playerNotifier,
+    required SubtitleService subtitleService,
+    required StateController<int> resourceRefreshTick,
+    required bool resumePlaybackAfterPicker,
+  }) async {
+    final importService = await importServiceFuture;
     final allowedExtensions = switch (type) {
       _ManualImportType.subtitle => importService.subtitleExtensions.toList(),
       _ManualImportType.script => importService.scriptExtensions.toList(),
-      _ManualImportType.cover => importService.coverExtensions.toList(),
     };
 
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
       type: FileType.custom,
       allowedExtensions: allowedExtensions,
+      withData: true,
+      withReadStream: true,
     );
-    if (result == null || result.files.isEmpty) return;
-
-    final pickedPath = result.files.first.path;
-    if (pickedPath == null) return;
+    if (result == null || result.files.isEmpty) {
+      await _resumePlaybackIfNeeded(
+        playerNotifier,
+        shouldResume: resumePlaybackAfterPicker,
+      );
+      return;
+    }
 
     try {
-      final fileManager = FileManager();
-      final importDir = await fileManager.getImportDirectory();
-      final destPath = await _copyIntoImportDirectory(importDir, pickedPath);
-      final repo = ref.read(resonanceRepositoryProvider);
+      final importDir = fileManager.getImportDirectory();
+      final pickedFile = result.files.first;
+      final destPath = await _copyIntoImportDirectory(importDir, pickedFile);
 
       switch (type) {
         case _ManualImportType.subtitle:
-          await _replaceSubtitles(repo, destPath);
+          await _replaceSubtitles(repo, destPath, subtitleService);
+          resourceRefreshTick.state++;
+          break;
         case _ManualImportType.script:
           await _replaceScript(repo, destPath);
-        case _ManualImportType.cover:
-          await _replaceCover(repo, destPath);
-          // Sync the in-memory player state so the UI updates immediately.
-          await ref
-              .read(playerStateNotifierProvider.notifier)
-              .refreshCurrentEntry();
+          resourceRefreshTick.state++;
+          break;
       }
 
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${type.label}导入成功')));
-      }
+      _showMessage(
+        feedbackOverlay,
+        feedbackTopPadding,
+        '${type.label}导入成功',
+        isError: false,
+      );
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('导入失败: $e')));
-      }
+      _showMessage(feedbackOverlay, feedbackTopPadding, '导入失败: $e');
+    } finally {
+      await _resumePlaybackIfNeeded(
+        playerNotifier,
+        shouldResume: resumePlaybackAfterPicker,
+      );
     }
   }
 
   Future<void> _replaceSubtitles(
     ResonanceRepository repo,
     String destPath,
+    SubtitleService subtitleService,
   ) async {
+    await _validateSubtitleFile(destPath, subtitleService);
+
     final existingSubs = await repo.getSubtitlesForEntry(entry.id);
     for (final sub in existingSubs) {
       await _deleteFileIfExists(sub.filePath);
@@ -171,6 +208,43 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
     );
   }
 
+  Future<void> _validateSubtitleFile(
+    String path,
+    SubtitleService subtitleService,
+  ) async {
+    final content = await subtitleService.readTextFile(path);
+    if (content.trim().isEmpty) {
+      throw Exception('字幕文件为空');
+    }
+
+    final ext = p.extension(path).toLowerCase().replaceFirst('.', '');
+    final format =
+        SubtitleFormat.values.where((f) => f.name == ext).firstOrNull;
+    if (format == null) {
+      throw Exception('不支持的字幕格式: .$ext');
+    }
+
+    try {
+      final parsed = subtitleService.parse(
+        SubtitleRef(
+          id: 0,
+          entryId: entry.id,
+          language: 'default',
+          filePath: path,
+          format: format,
+        ),
+        content,
+      );
+      if (parsed.cues.isEmpty) {
+        throw Exception('字幕内容为空或格式不受支持');
+      }
+    } on Exception {
+      rethrow;
+    } catch (_) {
+      throw Exception('字幕解析失败，请检查字幕格式或编码');
+    }
+  }
+
   Future<void> _replaceScript(ResonanceRepository repo, String destPath) async {
     final existingScriptPath = await repo.getScriptFilePathForEntry(entry.id);
     if (existingScriptPath != null) {
@@ -180,18 +254,15 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
     await repo.insertScriptFile(entry.id, destPath);
   }
 
-  Future<void> _replaceCover(ResonanceRepository repo, String destPath) async {
-    if (entry.coverPath != null) {
-      await _deleteFileIfExists(entry.coverPath!);
-    }
-    await repo.updateEntry(entry.copyWith(coverPath: destPath));
-  }
-
   Future<String> _copyIntoImportDirectory(
     String importDir,
-    String sourcePath,
+    PlatformFile file,
   ) async {
-    final fileName = p.basename(sourcePath);
+    final fileName = file.name.trim();
+    if (fileName.isEmpty) {
+      throw Exception('所选文件缺少文件名');
+    }
+
     var destPath = p.join(importDir, fileName);
     var counter = 1;
     while (await File(destPath).exists()) {
@@ -200,7 +271,48 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
       destPath = p.join(importDir, '$baseName($counter)$ext');
       counter++;
     }
-    await File(sourcePath).copy(destPath);
+
+    await ResonanceMediaSupport.runWithPendingFsRetry(() async {
+      final destFile = File(destPath);
+      if (await destFile.exists()) {
+        await destFile.delete();
+      }
+
+      final readStream = file.readStream;
+      if (readStream != null) {
+        final sink = destFile.openWrite();
+        try {
+          await sink.addStream(readStream);
+        } finally {
+          await sink.close();
+        }
+        return;
+      }
+
+      final bytes = file.bytes;
+      if (bytes != null) {
+        await destFile.writeAsBytes(bytes, flush: true);
+        return;
+      }
+
+      final sourcePath = file.path?.trim();
+      if (sourcePath == null || sourcePath.isEmpty) {
+        throw Exception('系统未返回可读取的文件内容，请换用“文件”来源后重试');
+      }
+
+      final sourceFile = File(sourcePath);
+      if (!await sourceFile.exists()) {
+        throw Exception('所选文件无法读取: ${file.name}');
+      }
+
+      final sink = destFile.openWrite();
+      try {
+        await sink.addStream(sourceFile.openRead());
+      } finally {
+        await sink.close();
+      }
+    });
+
     return destPath;
   }
 
@@ -210,12 +322,36 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
       await file.delete();
     }
   }
+
+  Future<void> _resumePlaybackIfNeeded(
+    PlayerStateNotifier playerNotifier, {
+    required bool shouldResume,
+  }) async {
+    if (!shouldResume) return;
+    try {
+      await playerNotifier.play();
+    } catch (_) {}
+  }
+
+  void _showMessage(
+    OverlayState? overlay,
+    double topPadding,
+    String text, {
+    bool isError = true,
+  }) {
+    if (overlay == null || !overlay.mounted) return;
+    TopBannerToast.showOnOverlay(
+      overlay,
+      message: text,
+      isError: isError,
+      topPadding: topPadding,
+    );
+  }
 }
 
 enum _ManualImportType {
   subtitle('字幕'),
-  script('台本'),
-  cover('封面');
+  script('台本');
 
   const _ManualImportType(this.label);
 
@@ -224,12 +360,12 @@ enum _ManualImportType {
 
 class _ImportOption extends StatelessWidget {
   const _ImportOption({
-    required this.icon,
+    required this.svgPath,
     required this.label,
     required this.onTap,
   });
 
-  final IconData icon;
+  final String svgPath;
   final String label;
   final VoidCallback onTap;
 
@@ -247,7 +383,11 @@ class _ImportOption extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                Icon(icon, color: const Color(0xFF49454F), size: 24),
+                AppIcons.icon(
+                  svgPath,
+                  size: 24,
+                  color: const Color(0xFF49454F),
+                ),
                 const SizedBox(width: 12),
                 Text(
                   label,
