@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 class TopBannerToast {
+  static const Duration defaultDuration = Duration(milliseconds: 1600);
+
   static void show(
     BuildContext context, {
     required String message,
     bool isError = true,
-    Duration duration = const Duration(seconds: 3),
+    Duration duration = defaultDuration,
   }) {
     final overlay = Overlay.of(context);
     final topPadding = MediaQuery.of(context).padding.top;
@@ -22,7 +24,7 @@ class TopBannerToast {
     OverlayState overlay, {
     required String message,
     bool isError = true,
-    Duration duration = const Duration(seconds: 3),
+    Duration duration = defaultDuration,
     double topPadding = 0,
   }) {
     late OverlayEntry entry;
@@ -118,9 +120,13 @@ class _TopBannerState extends State<_TopBanner>
             child: Text(
               widget.message,
               style: const TextStyle(
+                inherit: false,
                 fontSize: 14,
                 color: Colors.white,
                 fontWeight: FontWeight.w500,
+                decoration: TextDecoration.none,
+                decorationColor: Colors.transparent,
+                textBaseline: TextBaseline.alphabetic,
               ),
               textAlign: TextAlign.center,
             ),

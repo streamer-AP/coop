@@ -24,7 +24,11 @@ class PlaylistScreen extends ConsumerWidget {
       } catch (error) {
         if (!context.mounted) return;
         final message = '$error'.replaceFirst('Exception: ', '').trim();
-        OmaoToast.show(context, message.isEmpty ? '当前音频无法播放' : message, isSuccess: false);
+        OmaoToast.show(
+          context,
+          message.isEmpty ? '当前音频无法播放' : message,
+          isSuccess: false,
+        );
       }
     }
 
@@ -135,9 +139,21 @@ class PlaylistScreen extends ConsumerWidget {
 
   Widget _repeatModeIcon(RepeatMode mode) {
     return switch (mode) {
-      RepeatMode.sequential => AppIcons.icon(AppIcons.refresh1, size: 24),
-      RepeatMode.single => AppIcons.icon(AppIcons.refresh2, size: 24),
-      RepeatMode.shuffle => AppIcons.icon(AppIcons.shuffle, size: 24),
+      RepeatMode.sequential => AppIcons.icon(
+        AppIcons.refresh2,
+        size: 24,
+        color: AppColors.primary,
+      ),
+      RepeatMode.single => AppIcons.icon(
+        AppIcons.refresh1,
+        size: 24,
+        color: AppColors.primary,
+      ),
+      RepeatMode.shuffle => AppIcons.icon(
+        AppIcons.shuffle,
+        size: 24,
+        color: AppColors.primary,
+      ),
     };
   }
 

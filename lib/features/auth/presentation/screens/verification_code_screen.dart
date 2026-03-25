@@ -3,27 +3,41 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/api_endpoints.dart';
 import '../../../../shared/widgets/pin_code_input.dart';
 import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../application/providers/auth_providers.dart';
 import '../../domain/models/auth_exception.dart';
 import '../widgets/auth_chrome.dart';
 
+enum VerificationCodeFlow {
+  login,
+  register,
+  forgotPassword;
+
+  static VerificationCodeFlow fromRouteValue(String? value) {
+    return switch (value) {
+      'register' => VerificationCodeFlow.register,
+      'forgot-password' => VerificationCodeFlow.forgotPassword,
+      _ => VerificationCodeFlow.login,
+    };
+  }
+
+  bool get isRegister => this == VerificationCodeFlow.register;
+}
+
 class VerificationCodeScreen extends ConsumerStatefulWidget {
   const VerificationCodeScreen({
     super.key,
     required this.phone,
     required this.title,
-    required this.onVerified,
-    this.isRegister = false,
-    this.onResendCode,
+    required this.flow,
   });
 
   final String phone;
   final String title;
-  final FutureOr<void> Function(String code) onVerified;
-  final bool isRegister;
-  final Future<void> Function()? onResendCode;
+  final VerificationCodeFlow flow;
 
   @override
   ConsumerState<VerificationCodeScreen> createState() =>
@@ -68,12 +82,22 @@ class _VerificationCodeScreenState
 
   Future<void> _resend() async {
     try {
-      if (widget.onResendCode != null) {
-        await widget.onResendCode!.call();
-      } else {
-        await ref
-            .read(authNotifierProvider.notifier)
-            .sendVerificationCode(widget.phone, isRegister: widget.isRegister);
+      switch (widget.flow) {
+        case VerificationCodeFlow.login:
+        case VerificationCodeFlow.register:
+          await ref
+              .read(authNotifierProvider.notifier)
+              .sendVerificationCode(
+                widget.phone,
+                isRegister: widget.flow.isRegister,
+              );
+        case VerificationCodeFlow.forgotPassword:
+          await ref
+              .read(apiClientProvider)
+              .post(
+                ApiEndpoints.forgotPwdSendCode,
+                queryParameters: {'mobile': widget.phone},
+              );
       }
       _startCountdown();
       if (mounted) {
@@ -92,13 +116,8 @@ class _VerificationCodeScreenState
     if (_isSubmitting) return;
 
     setState(() => _isSubmitting = true);
-    try {
-      await widget.onVerified(code);
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
-    }
+    if (!mounted) return;
+    Navigator.of(context).pop(code);
   }
 
   String get _maskedPhone {

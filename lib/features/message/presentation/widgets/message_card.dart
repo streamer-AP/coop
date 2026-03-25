@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../domain/models/message.dart';
 
 class MessageCard extends StatelessWidget {
@@ -11,63 +10,66 @@ class MessageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isRead = message.isRead;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.fromLTRB(20, 6, 20, 8),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
         decoration: BoxDecoration(
-          color:
-              message.isRead
-                  ? AppColors.cardBg.withValues(alpha: 0.76)
-                  : AppColors.cardBg.withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isRead
+                ? Colors.white.withValues(alpha: 0.0)
+                : Colors.white.withValues(alpha: 0.88),
+          ),
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: isRead
+                ? [
+                    const Color(0xFFCDCDF0).withValues(alpha: 0.54),
+                    Colors.white.withValues(alpha: 0.72),
+                  ]
+                : [
+                    const Color(0xFFCDCDF0).withValues(alpha: 0.54),
+                    Colors.white.withValues(alpha: 0.90),
+                  ],
+            stops: const [0.0, 1.0],
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
+              color: Colors.white.withValues(alpha: 0.12),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                if (!message.isRead)
-                  Container(
-                    width: 6,
-                    height: 6,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: const BoxDecoration(
-                      color: AppColors.unreadDot,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                Expanded(
-                  child: Text(
-                    message.title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight:
-                          message.isRead ? FontWeight.w400 : FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+            Text(
+              message.title,
+              style: TextStyle(
+                fontSize: 14,
+                height: 24 / 14,
+                fontWeight: isRead ? FontWeight.w500 : FontWeight.w600,
+                color: isRead ? const Color(0xFF797979) : Colors.black,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 8),
             Text(
               message.body,
-              style: const TextStyle(
-                fontSize: 13,
-                height: 1.45,
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                fontSize: 14,
+                height: 24 / 14,
+                fontWeight: FontWeight.w300,
+                color: const Color(0xFF797979).withValues(
+                  alpha: isRead ? 0.88 : 1.0,
+                ),
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -80,14 +82,19 @@ class MessageCard extends StatelessWidget {
                   _formatDate(message.createdAt),
                   style: const TextStyle(
                     fontSize: 12,
-                    color: AppColors.textHint,
+                    height: 24 / 12,
+                    color: Color(0xFF979797),
                   ),
                 ),
                 Text(
                   '查看详情',
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.primary.withValues(alpha: 0.8),
+                    height: 24 / 12,
+                    color: isRead
+                        ? const Color(0xFF7E7E80)
+                        : const Color(0xFF6A53A7),
+                    letterSpacing: 1.2,
                   ),
                 ),
               ],

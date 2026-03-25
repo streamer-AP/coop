@@ -26,6 +26,7 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
       signalFilePath: row.signalFilePath,
       mediaType: row.mediaType,
       artist: row.artist,
+      album: row.album,
       createdAt: row.createdAt,
     );
   }
@@ -40,6 +41,7 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
       signalFilePath: Value(entry.signalFilePath),
       mediaType: Value(entry.mediaType),
       artist: Value(entry.artist),
+      album: Value(entry.album),
       createdAt:
           entry.createdAt != null
               ? Value(entry.createdAt!)
@@ -155,6 +157,34 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
     }
     await deleteFile(signalPath);
     await deleteFile(scriptPath);
+  }
+
+  @override
+  Future<void> deleteEntriesCompletely(List<int> ids) async {
+    if (ids.isEmpty) return;
+
+    final entries = await _dao.getEntriesByIds(ids);
+    final subtitles = await _dao.getSubtitlesForEntries(ids);
+    final signalFiles = await _dao.getSignalFilesForEntries(ids);
+    final scriptFiles = await _dao.getScriptFilesForEntries(ids);
+
+    await _dao.deleteEntriesCompletely(ids);
+
+    final paths = <String>{
+      for (final entry in entries) entry.filePath,
+      for (final entry in entries)
+        if (entry.coverPath != null) entry.coverPath!,
+      for (final subtitle in subtitles) subtitle.filePath,
+      for (final signalFile in signalFiles) signalFile.filePath,
+      for (final scriptFile in scriptFiles) scriptFile.filePath,
+    };
+
+    for (final path in paths) {
+      final file = File(path);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
   }
 
   @override
@@ -325,6 +355,14 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
   @override
   Future<void> deleteSubtitlesForEntry(int entryId) async {
     await _dao.deleteSubtitlesForEntry(entryId);
+  }
+
+  @override
+  Future<void> deleteSubtitlesForEntryLanguage(
+    int entryId,
+    String language,
+  ) async {
+    await _dao.deleteSubtitlesForEntryLanguage(entryId, language);
   }
 
   // ── SignalFiles ───────────────────────────────────────────────────────

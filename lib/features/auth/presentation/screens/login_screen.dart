@@ -9,7 +9,6 @@ import '../../application/providers/auth_providers.dart';
 import '../../domain/models/auth_exception.dart';
 import '../widgets/auth_chrome.dart';
 import '../widgets/auth_fields.dart';
-import 'verification_code_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -72,16 +71,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder:
-            (_) => VerificationCodeScreen(
-              phone: _phoneDigits,
-              title: '验证码登录',
-              onVerified: _loginWithCode,
-            ),
-      ),
+    final code = await context.pushNamed<String>(
+      RouteNames.verificationCode,
+      queryParameters: {
+        'phone': _phoneDigits,
+        'title': '验证码登录',
+        'flow': 'login',
+      },
     );
+    if (code == null || !mounted) return;
+    await _loginWithCode(code);
   }
 
   Future<void> _loginWithCode(String code) async {

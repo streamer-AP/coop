@@ -1,22 +1,25 @@
 import 'dart:async';
+
+import 'package:collection/collection.dart';
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../../core/storage/file_manager.dart';
 import '../../domain/models/subtitle.dart';
 import '../services/subtitle_service.dart';
+import '../services/subtitle_translation_service.dart';
 import 'player_providers.dart';
 import 'resonance_providers.dart';
 
 part 'subtitle_providers.g.dart';
 
 enum SubtitleTranslationLanguage {
-  zh('中文'),
-  en('English'),
-  ja('日本語'),
-  ko('한국어');
+  zh('中文', 'zh'),
+  ja('日本語', 'ja');
 
-  const SubtitleTranslationLanguage(this.label);
+  const SubtitleTranslationLanguage(this.label, this.code);
   final String label;
+  final String code;
 }
 
 final subtitleFollowEnabledProvider = StateProvider<bool>((ref) => true);
@@ -32,6 +35,15 @@ final entryResourceRefreshTickProvider = StateProvider.family<int, int>(
 @riverpod
 SubtitleService subtitleService(Ref ref) {
   return SubtitleService();
+}
+
+@riverpod
+SubtitleTranslationService subtitleTranslationService(Ref ref) {
+  return SubtitleTranslationService(
+    repository: ref.watch(resonanceRepositoryProvider),
+    subtitleService: ref.watch(subtitleServiceProvider),
+    fileManager: ref.watch(fileManagerProvider),
+  );
 }
 
 @riverpod
@@ -62,7 +74,7 @@ class CurrentSubtitleNotifier extends _$CurrentSubtitleNotifier {
       return;
     }
 
-    final subtitleRef = subtitleRefs.first;
+    final subtitleRef = _pickPrimarySubtitleRef(subtitleRefs);
     try {
       final content = await subtitleSvc.readTextFile(subtitleRef.filePath);
       state = subtitleSvc.parse(subtitleRef, content);
@@ -70,6 +82,57 @@ class CurrentSubtitleNotifier extends _$CurrentSubtitleNotifier {
       state = null;
     }
   }
+}
+
+SubtitleRef _pickPrimarySubtitleRef(List<SubtitleRef> subtitleRefs) {
+  return subtitleRefs.firstWhereOrNull(
+        (ref) => _normalizeSubtitleLanguage(ref.language) == 'default',
+      ) ??
+      subtitleRefs.firstWhereOrNull(
+        (ref) =>
+            !_translationLanguageCodes.contains(
+              _normalizeSubtitleLanguage(ref.language),
+            ),
+      ) ??
+      subtitleRefs.first;
+}
+
+String _normalizeSubtitleLanguage(String language) {
+  final normalized = language.trim().toLowerCase();
+  if (normalized.startsWith('zh')) {
+    return 'zh';
+  }
+  if (normalized.startsWith('ja')) {
+    return 'ja';
+  }
+  return normalized;
+}
+
+const _translationLanguageCodes = {'zh', 'ja'};
+
+@riverpod
+Future<ParsedSubtitle?> translatedSubtitle(Ref ref) async {
+  final enabled = ref.watch(subtitleTranslationEnabledProvider);
+  if (!enabled) {
+    return null;
+  }
+
+  final currentEntry = ref.watch(
+    playerStateNotifierProvider.select((state) => state.currentEntry),
+  );
+  if (currentEntry == null) {
+    return null;
+  }
+
+  ref.watch(entryResourceRefreshTickProvider(currentEntry.id));
+  final targetLanguage = ref.watch(subtitleTranslationLanguageProvider);
+
+  return ref
+      .watch(subtitleTranslationServiceProvider)
+      .loadOrCreateTranslatedSubtitle(
+        entryId: currentEntry.id,
+        targetLanguage: targetLanguage.code,
+      );
 }
 
 @Riverpod(keepAlive: true)

@@ -15,7 +15,7 @@ class SubtitleView extends ConsumerStatefulWidget {
 
 class _SubtitleViewState extends ConsumerState<SubtitleView> {
   final _scrollController = ScrollController();
-  static const _estimatedItemHeight = 56.0;
+  double _estimatedItemHeight = 56.0;
   int _lastScrolledCueIndex = -1;
   bool _wasFollowEnabled = true;
   bool _userScrolledAway = false;
@@ -49,6 +49,9 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
   @override
   Widget build(BuildContext context) {
     final subtitle = ref.watch(currentSubtitleNotifierProvider);
+    final translationEnabled = ref.watch(subtitleTranslationEnabledProvider);
+    final translatedSubtitleAsync = ref.watch(translatedSubtitleProvider);
+    final translatedSubtitle = translatedSubtitleAsync.valueOrNull;
     final activeCueIndex = ref.watch(activeCueNotifierProvider);
     final followMode = ref.watch(followModeNotifierProvider);
     final followEnabled = ref.watch(subtitleFollowEnabledProvider);
@@ -72,6 +75,8 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
     }
 
     _cueCount = subtitle.cues.length;
+    _estimatedItemHeight =
+        translationEnabled && translatedSubtitle != null ? 88.0 : 56.0;
 
     if (_wasFollowEnabled && !followEnabled) {
       _scrollToTop();
@@ -100,106 +105,165 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
           (constraints.maxHeight - _estimatedItemHeight) / 2,
         );
 
-        return NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            if (_isAutoScrolling) return false;
-
-            final isUserDragUpdate =
-                notification is ScrollUpdateNotification &&
-                notification.dragDetails != null;
-            final isUserScroll = notification is UserScrollNotification;
-
-            if (isUserDragUpdate || isUserScroll) {
-              if (followEnabled) {
-                ref
-                    .read(followModeNotifierProvider.notifier)
-                    .disableTemporarily();
-              }
-              if (!_userScrolledAway) {
-                setState(() {
-                  _userScrolledAway = true;
-                  _seekTargetIndex = _findCenterCueIndex();
-                });
-              }
-            }
-            return false;
-          },
-          child: ListView.builder(
-            controller: _scrollController,
-            physics: const BouncingScrollPhysics(),
-            itemCount: subtitle.cues.length,
-            padding: EdgeInsets.symmetric(vertical: _listVerticalPadding),
-            itemBuilder: (context, index) {
-              final cue = subtitle.cues[index];
-              final isActive = index == activeCueIndex;
-              final isSeekTarget =
-                  _userScrolledAway && index == _seekTargetIndex;
-
-              return GestureDetector(
-                onTap: () => _seekToCue(cue, index),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Row(
-                    children: [
-                      // Left: time label (only for seek target)
-                      SizedBox(
-                        width: 44,
-                        child:
-                            isSeekTarget
-                                ? Text(
-                                  _formatDuration(cue.start),
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xFF6A53A7),
-                                  ),
-                                )
-                                : null,
-                      ),
-                      // Center: lyrics text
-                      Expanded(
-                        child: Text(
-                          cue.text,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: isActive || isSeekTarget ? 16 : 14,
-                            height: 1.5,
-                            fontWeight:
-                                isActive || isSeekTarget
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                            color:
-                                isActive
-                                    ? const Color(0xFF4A4A4A)
-                                    : isSeekTarget
-                                    ? const Color(0xFF4A4A4A)
-                                    : const Color(
-                                      0xFF4A4A4A,
-                                    ).withValues(alpha: 0.28),
-                          ),
-                        ),
-                      ),
-                      // Right: play arrow (only for seek target)
-                      SizedBox(
-                        width: 30,
-                        child:
-                            isSeekTarget
-                                ? GestureDetector(
-                                  onTap: () => _seekToCue(cue, index),
-                                  child: const Icon(
-                                    Icons.play_arrow_rounded,
-                                    size: 22,
-                                    color: Color(0xFF6A53A7),
-                                  ),
-                                )
-                                : null,
-                      ),
-                    ],
+        return Column(
+          children: [
+            if (translationEnabled && translatedSubtitleAsync.isLoading)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '正在翻译字幕...',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: const Color(0xFF6A53A7).withValues(alpha: 0.75),
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+            if (translationEnabled && translatedSubtitleAsync.hasError)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '翻译暂不可用，当前显示原字幕',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: const Color(0xFFB66A4D).withValues(alpha: 0.85),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  if (_isAutoScrolling) return false;
+
+                  final isUserDragUpdate =
+                      notification is ScrollUpdateNotification &&
+                      notification.dragDetails != null;
+                  final isUserScroll = notification is UserScrollNotification;
+
+                  if (isUserDragUpdate || isUserScroll) {
+                    if (followEnabled) {
+                      ref
+                          .read(followModeNotifierProvider.notifier)
+                          .disableTemporarily();
+                    }
+                    if (!_userScrolledAway) {
+                      setState(() {
+                        _userScrolledAway = true;
+                        _seekTargetIndex = _findCenterCueIndex();
+                      });
+                    }
+                  }
+                  return false;
+                },
+                child: ListView.builder(
+                  controller: _scrollController,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: subtitle.cues.length,
+                  padding: EdgeInsets.symmetric(vertical: _listVerticalPadding),
+                  itemBuilder: (context, index) {
+                    final cue = subtitle.cues[index];
+                    final translatedText =
+                        translatedSubtitle != null &&
+                                index < translatedSubtitle.cues.length
+                            ? translatedSubtitle.cues[index].text.trim()
+                            : null;
+                    final isActive = index == activeCueIndex;
+                    final isSeekTarget =
+                        _userScrolledAway && index == _seekTargetIndex;
+
+                    return GestureDetector(
+                      onTap: () => _seekToCue(cue, index),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 44,
+                              child:
+                                  isSeekTarget
+                                      ? Text(
+                                        _formatDuration(cue.start),
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFF6A53A7),
+                                        ),
+                                      )
+                                      : null,
+                            ),
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    cue.text,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize:
+                                          isActive || isSeekTarget ? 16 : 14,
+                                      height: 1.5,
+                                      fontWeight:
+                                          isActive || isSeekTarget
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
+                                      color:
+                                          isActive
+                                              ? const Color(0xFF4A4A4A)
+                                              : isSeekTarget
+                                              ? const Color(0xFF4A4A4A)
+                                              : const Color(
+                                                0xFF4A4A4A,
+                                              ).withValues(alpha: 0.28),
+                                    ),
+                                  ),
+                                  if (translationEnabled &&
+                                      translatedText != null &&
+                                      translatedText.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      translatedText,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize:
+                                            isActive || isSeekTarget ? 13 : 12,
+                                        height: 1.4,
+                                        fontWeight: FontWeight.w400,
+                                        color:
+                                            isActive || isSeekTarget
+                                                ? const Color(
+                                                  0xFF6A53A7,
+                                                ).withValues(alpha: 0.88)
+                                                : const Color(
+                                                  0xFF6A53A7,
+                                                ).withValues(alpha: 0.42),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            SizedBox(
+                              width: 30,
+                              child:
+                                  isSeekTarget
+                                      ? GestureDetector(
+                                        onTap: () => _seekToCue(cue, index),
+                                        child: const Icon(
+                                          Icons.play_arrow_rounded,
+                                          size: 22,
+                                          color: Color(0xFF6A53A7),
+                                        ),
+                                      )
+                                      : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -227,7 +291,8 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
     final centerOffset =
         _scrollController.offset +
         _scrollController.position.viewportDimension / 2;
-    return ((centerOffset - _listVerticalPadding) / _estimatedItemHeight)
+    return ((centerOffset - _listVerticalPadding - (_estimatedItemHeight / 2)) /
+            _estimatedItemHeight)
         .round()
         .clamp(0, _cueCount - 1);
   }

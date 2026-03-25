@@ -14,10 +14,12 @@ import 'media_support.dart';
 /// playback and system media controls.
 class AudioPlayerService {
   final AudioPlayer _player = AudioPlayer();
+  final _playbackErrorController = StreamController<Object>.broadcast();
   late final OmaoAudioHandler _audioHandler;
   bool _initialized = false;
   VoidCallback? _onSkipToNext;
   VoidCallback? _onSkipToPrevious;
+  StreamSubscription<PlaybackEvent>? _playbackErrorSubscription;
 
   AudioPlayer get player => _player;
 
@@ -26,6 +28,7 @@ class AudioPlayerService {
   Stream<bool> get playingStream => _player.playingStream;
   Stream<ProcessingState> get processingStateStream =>
       _player.processingStateStream;
+  Stream<Object> get playbackErrorStream => _playbackErrorController.stream;
 
   /// Stream that emits when a track completes naturally.
   Stream<void> get completionStream => _player.processingStateStream.where(
@@ -43,12 +46,26 @@ class AudioPlayerService {
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.omao.audio',
         androidNotificationChannelName: 'OMAO Playback',
+        androidNotificationIcon: 'mipmap/ic_launcher',
         androidNotificationOngoing: true,
         androidStopForegroundOnPause: true,
       ),
     );
     _audioHandler.onSkipToNext = _onSkipToNext;
     _audioHandler.onSkipToPrevious = _onSkipToPrevious;
+    _playbackErrorSubscription = _player.playbackEventStream.listen(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {
+        AppLogger().error(
+          'Playback stream error',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        if (!_playbackErrorController.isClosed) {
+          _playbackErrorController.add(error);
+        }
+      },
+    );
 
     _initialized = true;
     AppLogger().info('AudioPlayerService initialized');
@@ -74,10 +91,6 @@ class AudioPlayerService {
         throw Exception('音频路径为空');
       }
 
-      AppLogger().info(
-        'Loading media entry id=${entry.id}, title=${entry.title}, ext=${p.extension(path)}, path=$path',
-      );
-
       await ResonanceMediaSupport.ensureLikelyPlayableMediaFile(
         path,
         label: '音频文件',
@@ -89,6 +102,7 @@ class AudioPlayerService {
           id: entry.id.toString(),
           title: entry.title,
           artist: entry.artist,
+          album: entry.album,
           duration:
               duration ??
               (entry.durationMs > 0
@@ -147,6 +161,10 @@ class AudioPlayerService {
     await _player.stop();
   }
 
+  Future<void> setSingleTrackLooping(bool enabled) async {
+    await _player.setLoopMode(enabled ? LoopMode.one : LoopMode.off);
+  }
+
   void updateMediaItem(AudioEntry entry) {
     if (!_initialized) return;
 
@@ -155,6 +173,7 @@ class AudioPlayerService {
         id: entry.id.toString(),
         title: entry.title,
         artist: entry.artist,
+        album: entry.album,
         duration: Duration(milliseconds: entry.durationMs),
         artUri: entry.coverPath != null ? Uri.file(entry.coverPath!) : null,
       ),
@@ -162,6 +181,8 @@ class AudioPlayerService {
   }
 
   Future<void> dispose() async {
+    await _playbackErrorSubscription?.cancel();
+    await _playbackErrorController.close();
     await _player.dispose();
   }
 }

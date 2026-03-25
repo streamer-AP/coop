@@ -13,8 +13,10 @@ abstract class ResonanceRepository {
   Future<void> insertEntries(List<AudioEntry> entries);
   Future<void> updateEntry(AudioEntry entry);
   Future<void> deleteEntry(int id);
+
   /// Delete entry and all associated data (subtitles, signals, scripts, cross-refs).
   Future<void> deleteEntryCompletely(int id);
+  Future<void> deleteEntriesCompletely(List<int> ids);
   Future<void> deleteEntries(List<int> ids);
 
   // ── AudioCollections ──────────────────────────────────────────────────
@@ -47,6 +49,7 @@ abstract class ResonanceRepository {
   Future<List<SubtitleRef>> getSubtitlesForEntry(int entryId);
   Future<int> insertSubtitle(SubtitleRef subtitle);
   Future<void> deleteSubtitlesForEntry(int entryId);
+  Future<void> deleteSubtitlesForEntryLanguage(int entryId, String language);
 
   // ── SignalFiles ───────────────────────────────────────────────────────
 

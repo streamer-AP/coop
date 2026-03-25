@@ -32,12 +32,12 @@ class PlaylistService {
         repeatMode: _playlist.repeatMode,
       );
     } else {
-      final currentIndex = _clampInt(
+      final currentItem = _playlist.currentItem;
+      final originalCurrentIndex = _clampInt(
         _playlist.currentIndex,
         0,
         items.length - 1,
       );
-      final targetIndex = currentIndex + 1;
       PlaylistItem target;
       if (existingIndex >= 0) {
         target = items.removeAt(existingIndex);
@@ -45,9 +45,15 @@ class PlaylistService {
         target = PlaylistItem(uid: _uuid.v4(), entry: entry);
       }
 
-      var insertAt = targetIndex;
-      if (existingIndex >= 0 && existingIndex < insertAt) {
-        insertAt -= 1;
+      int insertAt;
+      if (currentItem != null && currentItem.uid == target.uid) {
+        insertAt = _clampInt(originalCurrentIndex + 1, 0, items.length);
+      } else {
+        final anchorIndex =
+            currentItem == null
+                ? -1
+                : items.indexWhere((item) => item.uid == currentItem.uid);
+        insertAt = anchorIndex >= 0 ? anchorIndex + 1 : items.length;
       }
       insertAt = _clampInt(insertAt, 0, items.length);
       items.insert(insertAt, target);
@@ -69,6 +75,21 @@ class PlaylistService {
   ) {
     final startIndex = collectionEntries.indexWhere((e) => e.id == entry.id);
     if (startIndex < 0 || collectionEntries.isEmpty) return;
+
+    final hadExistingPlaylist = _playlist.isNotEmpty;
+
+    if (!hadExistingPlaylist) {
+      _playlist = Playlist(
+        items:
+            collectionEntries
+                .map((e) => PlaylistItem(uid: _uuid.v4(), entry: e))
+                .toList(),
+        currentIndex: startIndex,
+        repeatMode: RepeatMode.sequential,
+      );
+      _emit();
+      return;
+    }
 
     switch (_playlist.repeatMode) {
       case RepeatMode.sequential:
@@ -274,6 +295,44 @@ class PlaylistService {
     }
 
     _emit();
+  }
+
+  /// Remove all playlist items whose entry ids are present in [entryIds].
+  /// Returns true when the playlist actually changed.
+  bool removeEntriesByEntryIds(Set<int> entryIds) {
+    if (entryIds.isEmpty || _playlist.isEmpty) return false;
+
+    final currentUid = _playlist.currentItem?.uid;
+    final newItems =
+        _playlist.items
+            .where((item) => !entryIds.contains(item.entry.id))
+            .toList();
+
+    if (newItems.length == _playlist.items.length) {
+      return false;
+    }
+
+    if (newItems.isEmpty) {
+      _playlist = _playlist.copyWith(items: [], currentIndex: -1);
+      _emit();
+      return true;
+    }
+
+    final preservedCurrentIndex =
+        currentUid == null
+            ? -1
+            : newItems.indexWhere((item) => item.uid == currentUid);
+    final nextCurrentIndex =
+        preservedCurrentIndex >= 0
+            ? preservedCurrentIndex
+            : _clampInt(_playlist.currentIndex, 0, newItems.length - 1);
+
+    _playlist = _playlist.copyWith(
+      items: newItems,
+      currentIndex: nextCurrentIndex,
+    );
+    _emit();
+    return true;
   }
 
   void setRepeatMode(RepeatMode mode) {

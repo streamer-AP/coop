@@ -24,48 +24,54 @@ class CollectionCard extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Row(
-          children: [
-            CollectionArtwork(coverPath: collection.coverPath),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    collection.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56),
+          child: Row(
+            children: [
+              CollectionArtwork(coverPath: collection.coverPath),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      collection.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  CollectionCountText(
-                    count: collection.entryCount,
-                    textStyle: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF797979),
-                      height: 22 / 14,
+                    const SizedBox(height: 2),
+                    CollectionCountText(
+                      count: collection.entryCount,
+                      textStyle: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF797979),
+                        height: 22 / 14,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            if (onMoreTap != null)
-              IconButton(
-                icon: AppIcons.icon(
-                  AppIcons.more1,
-                  size: 20,
-                  color: const Color(0xFF79747E),
+                  ],
                 ),
-                onPressed: onMoreTap,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               ),
-          ],
+              if (onMoreTap != null)
+                IconButton(
+                  icon: AppIcons.icon(
+                    AppIcons.more1,
+                    size: 20,
+                    color: const Color(0xFF79747E),
+                  ),
+                  onPressed: onMoreTap,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

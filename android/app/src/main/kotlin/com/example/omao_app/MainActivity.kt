@@ -12,9 +12,21 @@ class MainActivity : AudioServiceActivity() {
         MediaExtractionHost.attach(
             messenger = flutterEngine.dartExecutor.binaryMessenger,
         )
+        AudioArtworkHost.attach(
+            messenger = flutterEngine.dartExecutor.binaryMessenger,
+        )
+        AudioMetadataHost.attach(
+            messenger = flutterEngine.dartExecutor.binaryMessenger,
+        )
+        TextTranslationHost.attach(
+            messenger = flutterEngine.dartExecutor.binaryMessenger,
+        )
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        TextTranslationHost.detach()
+        AudioMetadataHost.detach()
+        AudioArtworkHost.detach()
         MediaExtractionHost.detach()
         UnityChannelHost.detach()
         super.cleanUpFlutterEngine(flutterEngine)

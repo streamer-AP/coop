@@ -21,14 +21,27 @@ import '../../domain/repositories/resonance_repository.dart';
 import 'import_instruction_sheet.dart';
 
 class SubtitleCoverImportSheet extends ConsumerWidget {
-  const SubtitleCoverImportSheet({super.key, required this.entry});
+  const SubtitleCoverImportSheet({
+    super.key,
+    required this.entry,
+    this.allowCoverImport = false,
+  });
 
   final AudioEntry entry;
+  final bool allowCoverImport;
 
-  static Future<void> show(BuildContext context, {required AudioEntry entry}) {
+  static Future<void> show(
+    BuildContext context, {
+    required AudioEntry entry,
+    bool allowCoverImport = false,
+  }) {
     return showModalBottomSheet(
       context: context,
-      builder: (_) => SubtitleCoverImportSheet(entry: entry),
+      builder:
+          (_) => SubtitleCoverImportSheet(
+            entry: entry,
+            allowCoverImport: allowCoverImport,
+          ),
     );
   }
 
@@ -76,6 +89,12 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
               label: '台本',
               onTap: () => _onTap(context, ref, _ManualImportType.script),
             ),
+            if (allowCoverImport)
+              _ImportOption(
+                svgPath: AppIcons.changeCover,
+                label: '封面',
+                onTap: () => _onTap(context, ref, _ManualImportType.cover),
+              ),
           ],
         ),
       ),
@@ -130,6 +149,7 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
     final allowedExtensions = switch (type) {
       _ManualImportType.subtitle => importService.subtitleExtensions.toList(),
       _ManualImportType.script => importService.scriptExtensions.toList(),
+      _ManualImportType.cover => importService.coverExtensions.toList(),
     };
 
     final result = await FilePicker.platform.pickFiles(
@@ -160,6 +180,9 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
         case _ManualImportType.script:
           await _replaceScript(repo, destPath);
           resourceRefreshTick.state++;
+          break;
+        case _ManualImportType.cover:
+          await _replaceCover(repo, playerNotifier, destPath);
           break;
       }
 
@@ -252,6 +275,20 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
     }
     await repo.deleteScriptFilesForEntry(entry.id);
     await repo.insertScriptFile(entry.id, destPath);
+  }
+
+  Future<void> _replaceCover(
+    ResonanceRepository repo,
+    PlayerStateNotifier playerNotifier,
+    String destPath,
+  ) async {
+    if (entry.coverPath != null) {
+      await _deleteFileIfExists(entry.coverPath!);
+    }
+
+    final updatedEntry = entry.copyWith(coverPath: destPath);
+    await repo.updateEntry(updatedEntry);
+    await playerNotifier.refreshCurrentEntry(updatedEntry);
   }
 
   Future<String> _copyIntoImportDirectory(
@@ -351,7 +388,8 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
 
 enum _ManualImportType {
   subtitle('字幕'),
-  script('台本');
+  script('台本'),
+  cover('封面');
 
   const _ManualImportType(this.label);
 

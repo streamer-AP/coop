@@ -37,11 +37,7 @@ class ChangePasswordScreen extends ConsumerWidget {
               _OptionCard(
                 title: '原密码修改',
                 onTap:
-                    () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const _OriginalPasswordScreen(),
-                      ),
-                    ),
+                    () => context.pushNamed(RouteNames.originalPasswordChange),
               ),
             ],
           ),
@@ -90,16 +86,16 @@ class _OptionCard extends StatelessWidget {
   }
 }
 
-class _OriginalPasswordScreen extends ConsumerStatefulWidget {
-  const _OriginalPasswordScreen();
+class OriginalPasswordScreen extends ConsumerStatefulWidget {
+  const OriginalPasswordScreen({super.key});
 
   @override
-  ConsumerState<_OriginalPasswordScreen> createState() =>
+  ConsumerState<OriginalPasswordScreen> createState() =>
       _OriginalPasswordScreenState();
 }
 
 class _OriginalPasswordScreenState
-    extends ConsumerState<_OriginalPasswordScreen> {
+    extends ConsumerState<OriginalPasswordScreen> {
   final _oldPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();

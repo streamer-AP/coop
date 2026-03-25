@@ -15,8 +15,8 @@ import '../../domain/models/audio_collection.dart';
 import '../../domain/models/audio_entry.dart';
 import '../widgets/audio_entry_action_sheet.dart';
 import '../widgets/audio_entry_tile.dart';
+import '../widgets/create_collection_dialog.dart';
 import '../widgets/sort_bottom_sheet.dart';
-import 'add_to_collection_screen.dart';
 
 class CollectionDetailScreen extends ConsumerWidget {
   const CollectionDetailScreen({super.key, required this.collectionId});
@@ -208,32 +208,45 @@ class CollectionDetailScreen extends ConsumerWidget {
             children: [
               // Play all button + label
               Expanded(
-                child: GestureDetector(
-                  onTap:
-                      sorted.isEmpty
-                          ? null
-                          : () => _playAndOpenCollectionPlayer(
-                            context,
-                            ref,
-                            sorted.first,
-                            sorted,
-                            collection?.title ?? '合集播放',
-                          ),
-                  behavior: HitTestBehavior.opaque,
-                  child: Opacity(
-                    opacity: sorted.isEmpty ? 0.38 : 1.0,
-                    child: Row(
-                      children: [
-                        AppIcons.asset(AppIcons.play2, width: 46, height: 32),
-                        const SizedBox(width: 8),
-                        const Text(
-                          '播放全部',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
+                child: Opacity(
+                  opacity: sorted.isEmpty ? 0.38 : 1.0,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap:
+                          sorted.isEmpty
+                              ? null
+                              : () => _playCollection(
+                                context,
+                                ref,
+                                sorted.first,
+                                sorted,
+                                collection?.title ?? '合集播放',
+                              ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 6,
                         ),
-                      ],
+                        child: Row(
+                          children: [
+                            AppIcons.asset(
+                              AppIcons.play2,
+                              width: 46,
+                              height: 32,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              '播放全部',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -274,30 +287,31 @@ class CollectionDetailScreen extends ConsumerWidget {
                       style: TextStyle(color: Color(0xFF79747E)),
                     ),
                   )
-                  : ListView.builder(
+                  : SingleChildScrollView(
                     padding: const EdgeInsets.only(bottom: 8),
-                    itemCount: sorted.length,
-                    itemBuilder: (context, index) {
-                      final entry = sorted[index];
-                      return AudioEntryTile(
-                        entry: entry,
-                        onTap:
-                            () => _playAndOpenCollectionPlayer(
-                              context,
-                              ref,
-                              entry,
-                              sorted,
-                              collection?.title ?? '合集播放',
-                            ),
-                        onMoreTap: () {
-                          AudioEntryActionSheet.show(
-                            context,
+                    child: Column(
+                      children: [
+                        for (final entry in sorted)
+                          AudioEntryTile(
                             entry: entry,
-                            collectionId: collectionId,
-                          );
-                        },
-                      );
-                    },
+                            onTap:
+                                () => _playAndOpenCollectionPlayer(
+                                  context,
+                                  ref,
+                                  entry,
+                                  sorted,
+                                  collection?.title ?? '合集播放',
+                                ),
+                            onMoreTap: () {
+                              AudioEntryActionSheet.show(
+                                context,
+                                entry: entry,
+                                collectionId: collectionId,
+                              );
+                            },
+                          ),
+                      ],
+                    ),
                   ),
         ),
       ],
@@ -355,6 +369,7 @@ class CollectionDetailScreen extends ConsumerWidget {
     if (confirmed == true && context.mounted) {
       try {
         await service.deleteCollection(collectionId);
+        ref.invalidate(collectionsProvider);
       } catch (e) {
         if (context.mounted) {
           OmaoToast.show(context, '删除失败: $e', isSuccess: false);
@@ -369,56 +384,31 @@ class CollectionDetailScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     AudioCollection collection,
-  ) {
-    final controller = TextEditingController(text: collection.title);
-    showDialog(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('修改合集名称'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: '请输入合集名称'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('取消'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  var newTitle = controller.text.trim();
-                  if (newTitle.isEmpty || newTitle == collection.title) {
-                    if (ctx.mounted) Navigator.of(ctx).pop();
-                    return;
-                  }
-                  final service = ref.read(collectionServiceProvider);
-                  newTitle = await service.uniqueCollectionTitle(
-                    newTitle,
-                    excludeTitle: collection.title,
-                  );
-                  await service.updateCollection(
-                    collection.copyWith(title: newTitle),
-                  );
-                  if (ctx.mounted) Navigator.of(ctx).pop();
-                },
-                child: const Text('确定'),
-              ),
-            ],
-          ),
+  ) async {
+    final newTitle = await CreateCollectionDialog.show(
+      context,
+      initialValue: collection.title,
+      title: '修改合集名称',
+      hintText: '请输入合集名称',
     );
+    if (newTitle == null || newTitle.isEmpty || newTitle == collection.title) {
+      return;
+    }
+
+    final service = ref.read(collectionServiceProvider);
+    final uniqueTitle = await service.uniqueCollectionTitle(
+      newTitle,
+      excludeTitle: collection.title,
+    );
+    await service.updateCollection(collection.copyWith(title: uniqueTitle));
+    ref.invalidate(collectionsProvider);
   }
 
   void _navigateToAddAudio(BuildContext context, List<int> existingIds) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder:
-            (_) => AddToCollectionScreen(
-              collectionId: collectionId,
-              existingEntryIds: existingIds,
-            ),
-      ),
+    context.pushNamed(
+      RouteNames.addToCollection,
+      pathParameters: {'id': collectionId.toString()},
+      extra: existingIds,
     );
   }
 }
@@ -430,18 +420,12 @@ Future<void> _playAndOpenCollectionPlayer(
   List<AudioEntry> entries,
   String playlistTitle,
 ) async {
-  String? errorMessage;
-  try {
-    await ref
-        .read(playerStateNotifierProvider.notifier)
-        .playEntryWithTitle(
-          entry,
-          context: entries,
-          playlistTitle: playlistTitle,
-        );
-  } catch (error) {
-    errorMessage = '$error'.replaceFirst('Exception: ', '').trim();
-  }
+  final errorMessage = await _playCollectionEntry(
+    ref,
+    entry,
+    entries,
+    playlistTitle,
+  );
 
   if (!context.mounted) return;
   context.pushNamed(RouteNames.resonancePlayer);
@@ -454,6 +438,53 @@ Future<void> _playAndOpenCollectionPlayer(
       isSuccess: false,
     );
   }
+}
+
+Future<void> _playCollection(
+  BuildContext context,
+  WidgetRef ref,
+  AudioEntry entry,
+  List<AudioEntry> entries,
+  String playlistTitle,
+) async {
+  final errorMessage = await _playCollectionEntry(
+    ref,
+    entry,
+    entries,
+    playlistTitle,
+  );
+
+  if (!context.mounted) return;
+  final message = errorMessage;
+  if (message != null) {
+    OmaoToast.show(
+      context,
+      message.isEmpty ? '当前音频无法播放' : message,
+      isSuccess: false,
+    );
+  }
+}
+
+Future<String?> _playCollectionEntry(
+  WidgetRef ref,
+  AudioEntry entry,
+  List<AudioEntry> entries,
+  String playlistTitle,
+) async {
+  String? errorMessage;
+  try {
+    await ref
+        .read(playerStateNotifierProvider.notifier)
+        .playCollectionEntry(
+          entry,
+          context: entries,
+          playlistTitle: playlistTitle,
+        );
+  } catch (error) {
+    errorMessage = '$error'.replaceFirst('Exception: ', '').trim();
+  }
+
+  return errorMessage;
 }
 
 class _InfoChip extends StatelessWidget {

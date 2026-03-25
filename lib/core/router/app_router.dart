@@ -10,6 +10,7 @@ import '../../features/auth/presentation/screens/password_login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/setup_password_screen.dart';
 import '../../features/auth/presentation/screens/startup_screen.dart';
+import '../../features/auth/presentation/screens/verification_code_screen.dart';
 import '../../features/controller/domain/models/waveform.dart';
 import '../../features/controller/presentation/screens/controller_screen.dart';
 import '../../features/controller/presentation/screens/waveform_editor_screen.dart';
@@ -25,7 +26,9 @@ import '../../features/profile/presentation/screens/deactivate_account_screen.da
 import '../../features/profile/presentation/screens/feedback_screen.dart';
 import '../../features/profile/presentation/screens/privacy_policy_screen.dart';
 import '../../features/profile/presentation/screens/profile_edit_screen.dart';
+import '../../features/profile/presentation/screens/qr_scanner_screen.dart';
 import '../../features/profile/presentation/screens/user_agreement_screen.dart';
+import '../../features/resonance/presentation/screens/add_to_collection_screen.dart';
 import '../../features/resonance/presentation/screens/collection_detail_screen.dart';
 import '../../features/resonance/presentation/screens/import_screen.dart';
 import '../../features/resonance/presentation/screens/player_screen.dart';
@@ -74,6 +77,18 @@ GoRouter appRouter(Ref ref) {
         builder: (context, state) => const RegisterScreen(),
       ),
       GoRoute(
+        path: '/verification-code',
+        name: RouteNames.verificationCode,
+        builder: (context, state) {
+          final query = state.uri.queryParameters;
+          final phone = query['phone'] ?? '';
+          final title = query['title'] ?? '';
+          final flow = VerificationCodeFlow.fromRouteValue(query['flow']);
+
+          return VerificationCodeScreen(phone: phone, title: title, flow: flow);
+        },
+      ),
+      GoRoute(
         path: '/setup-password',
         name: RouteNames.setupPassword,
         builder: (context, state) {
@@ -107,6 +122,24 @@ GoRouter appRouter(Ref ref) {
         builder: (context, state) {
           final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
           return CollectionDetailScreen(collectionId: id);
+        },
+      ),
+      GoRoute(
+        path: '/collection/:id/add-audio',
+        name: RouteNames.addToCollection,
+        builder: (context, state) {
+          final collectionId =
+              int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          final extra = state.extra;
+          final existingEntryIds =
+              extra is List
+                  ? extra.whereType<int>().toList(growable: false)
+                  : const <int>[];
+
+          return AddToCollectionScreen(
+            collectionId: collectionId,
+            existingEntryIds: existingEntryIds,
+          );
         },
       ),
       GoRoute(
@@ -170,6 +203,11 @@ GoRouter appRouter(Ref ref) {
         builder: (context, state) => const ChangePasswordScreen(),
       ),
       GoRoute(
+        path: '/profile/change-password/original',
+        name: RouteNames.originalPasswordChange,
+        builder: (context, state) => const OriginalPasswordScreen(),
+      ),
+      GoRoute(
         path: '/profile/change-password-code',
         name: RouteNames.changePasswordCode,
         builder: (context, state) => const ChangePasswordCodeScreen(),
@@ -188,6 +226,11 @@ GoRouter appRouter(Ref ref) {
         path: '/profile/contact',
         name: RouteNames.contact,
         builder: (context, state) => const ContactScreen(),
+      ),
+      GoRoute(
+        path: '/profile/qr-scanner',
+        name: RouteNames.qrScanner,
+        builder: (context, state) => const QrScannerScreen(),
       ),
       GoRoute(
         path: '/profile/user-agreement',
@@ -227,6 +270,7 @@ GoRouter appRouter(Ref ref) {
         '/login',
         '/password-login',
         '/register',
+        '/verification-code',
         '/setup-password',
         '/forgot-password',
         '/profile/user-agreement',

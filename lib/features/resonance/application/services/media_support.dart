@@ -75,6 +75,10 @@ class ResonanceMediaSupport {
 
     final header = await _readHeader(file, length: 128);
     if (header.isEmpty) return;
+    final obviousNonMediaType = _detectObviousNonMediaType(header);
+    if (obviousNonMediaType != null) {
+      throw Exception('$label 内容与后缀不匹配，实际是$obviousNonMediaType');
+    }
     if (!_looksLikeText(header)) return;
 
     final headerText = String.fromCharCodes(header).trimLeft();
@@ -129,6 +133,55 @@ class ResonanceMediaSupport {
     });
   }
 
+  static String? _detectObviousNonMediaType(List<int> bytes) {
+    if (_startsWith(bytes, const [0x50, 0x4B, 0x03, 0x04]) ||
+        _startsWith(bytes, const [0x50, 0x4B, 0x05, 0x06]) ||
+        _startsWith(bytes, const [0x50, 0x4B, 0x07, 0x08])) {
+      return 'ZIP 压缩包';
+    }
+
+    if (_startsWith(bytes, const [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07])) {
+      return 'RAR 压缩包';
+    }
+
+    if (_startsWith(bytes, const [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C])) {
+      return '7Z 压缩包';
+    }
+
+    if (_startsWith(bytes, const [0x25, 0x50, 0x44, 0x46])) {
+      return 'PDF 文档';
+    }
+
+    if (_startsWith(bytes, const [0x89, 0x50, 0x4E, 0x47])) {
+      return 'PNG 图片';
+    }
+
+    if (_startsWith(bytes, const [0xFF, 0xD8, 0xFF])) {
+      return 'JPEG 图片';
+    }
+
+    if (_startsWithAscii(bytes, 'GIF87a') ||
+        _startsWithAscii(bytes, 'GIF89a')) {
+      return 'GIF 图片';
+    }
+
+    if (_startsWith(bytes, const [0x42, 0x4D])) {
+      return 'BMP 图片';
+    }
+
+    if (_startsWithAscii(bytes, 'RIFF') &&
+        bytes.length >= 12 &&
+        _startsWithAscii(bytes.sublist(8), 'WEBP')) {
+      return 'WEBP 图片';
+    }
+
+    if (_startsWith(bytes, const [0x1F, 0x8B])) {
+      return 'GZIP 压缩包';
+    }
+
+    return null;
+  }
+
   static bool _looksLikeText(List<int> bytes) {
     if (bytes.isEmpty) return false;
     var printable = 0;
@@ -139,5 +192,20 @@ class ResonanceMediaSupport {
       }
     }
     return printable / bytes.length > 0.9;
+  }
+
+  static bool _startsWith(List<int> bytes, List<int> prefix) {
+    if (bytes.length < prefix.length) return false;
+    for (var i = 0; i < prefix.length; i++) {
+      if (bytes[i] != prefix[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _startsWithAscii(List<int> bytes, String prefix) {
+    final prefixBytes = prefix.codeUnits;
+    return _startsWith(bytes, prefixBytes);
   }
 }

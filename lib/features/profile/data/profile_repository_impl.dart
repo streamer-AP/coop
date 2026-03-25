@@ -105,13 +105,12 @@ class ProfileRepositoryImpl implements ProfileRepository {
     }
 
     final ext = p.extension(localFile.path);
-    final destPath = p.join(_avatarDirectory, 'avatar$ext');
+    final destPath = p.join(
+      _avatarDirectory,
+      'avatar_${DateTime.now().millisecondsSinceEpoch}$ext',
+    );
 
-    // 删除旧头像
-    final previousAvatar = await _findLocalAvatar();
-    if (previousAvatar != null && previousAvatar != destPath) {
-      await _deleteFileIfExists(previousAvatar);
-    }
+    await _deleteAllLocalAvatars();
 
     final destFile = File(destPath);
     if (await destFile.exists()) {
@@ -229,15 +228,25 @@ class ProfileRepositoryImpl implements ProfileRepository {
     final avatarDir = Directory(_avatarDirectory);
     if (!await avatarDir.exists()) return null;
 
+    FileSystemEntity? latestAvatar;
+    DateTime? latestModifiedAt;
+
     await for (final entity in avatarDir.list()) {
       if (entity is File) {
         final basename = p.basenameWithoutExtension(entity.path);
-        if (basename == 'avatar') {
-          return entity.path;
+        if (!basename.startsWith('avatar')) {
+          continue;
+        }
+
+        final modifiedAt = await entity.lastModified();
+        if (latestModifiedAt == null || modifiedAt.isAfter(latestModifiedAt)) {
+          latestAvatar = entity;
+          latestModifiedAt = modifiedAt;
         }
       }
     }
-    return null;
+
+    return latestAvatar?.path;
   }
 
   File? _resolveLocalFile(String value) {
@@ -263,7 +272,8 @@ class ProfileRepositoryImpl implements ProfileRepository {
   }
 
   String _extractUserId(Map<String, dynamic> data) {
-    final raw = data['id'] ?? data['userId'] ?? data['loginId'];
+    // userId/loginId 才是用户维度标识，id 可能只是资料记录主键。
+    final raw = data['userId'] ?? data['loginId'] ?? data['id'];
     if (raw == null) return '';
     return '$raw'.trim();
   }
@@ -307,6 +317,26 @@ class ProfileRepositoryImpl implements ProfileRepository {
     final file = File(path);
     if (await file.exists()) {
       await file.delete();
+    }
+  }
+
+  Future<void> _deleteAllLocalAvatars() async {
+    final avatarDir = Directory(_avatarDirectory);
+    if (!await avatarDir.exists()) {
+      return;
+    }
+
+    await for (final entity in avatarDir.list()) {
+      if (entity is! File) {
+        continue;
+      }
+
+      final basename = p.basenameWithoutExtension(entity.path);
+      if (!basename.startsWith('avatar')) {
+        continue;
+      }
+
+      await _deleteFileIfExists(entity.path);
     }
   }
 

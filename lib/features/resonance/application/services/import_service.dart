@@ -1,11 +1,16 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../../core/logging/app_logger.dart';
+import '../../../../core/platform/audio_artwork_bridge.dart';
+import '../../../../core/platform/audio_embedded_lyrics_extractor.dart';
+import '../../../../core/platform/audio_metadata_bridge.dart';
 import '../../../../core/platform/media_extraction_bridge.dart';
 import '../models/import_preview.dart';
 import '../../domain/models/import_result.dart';
@@ -49,16 +54,29 @@ class ImportService {
     'hdr',
   ];
   static const _scriptPriority = ['md', 'markdown', 'pdf', 'txt'];
+  static const _cp437ExtendedChars =
+      'ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛'
+      '┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ';
 
   final String _importDir;
   final MediaExtractionBridge _mediaExtractionBridge;
+  final AudioArtworkBridge _audioArtworkBridge;
+  final AudioMetadataBridge _audioMetadataBridge;
+  final AudioEmbeddedLyricsExtractor _audioEmbeddedLyricsExtractor;
 
   ImportService({
     required String importDirectory,
     MediaExtractionBridge? mediaExtractionBridge,
+    AudioArtworkBridge? audioArtworkBridge,
+    AudioMetadataBridge? audioMetadataBridge,
+    AudioEmbeddedLyricsExtractor? audioEmbeddedLyricsExtractor,
   }) : _importDir = importDirectory,
        _mediaExtractionBridge =
-           mediaExtractionBridge ?? MediaExtractionBridge();
+           mediaExtractionBridge ?? MediaExtractionBridge(),
+       _audioArtworkBridge = audioArtworkBridge ?? AudioArtworkBridge(),
+       _audioMetadataBridge = audioMetadataBridge ?? AudioMetadataBridge(),
+       _audioEmbeddedLyricsExtractor =
+           audioEmbeddedLyricsExtractor ?? AudioEmbeddedLyricsExtractor();
 
   /// Pick regular files (non-zip) using the system file picker.
   Future<List<String>?> pickFiles() async {
@@ -211,6 +229,11 @@ class ImportService {
         }
         if (matchedCover != null) {
           coverDest = await _copyToImportDir(matchedCover);
+        } else {
+          coverDest = await _extractEmbeddedCoverIfAvailable(
+            audioPath: destPath,
+            rawTitle: rawTitle,
+          );
         }
         if (matchedScript != null) {
           scriptDest = await _copyToImportDir(matchedScript);
@@ -221,16 +244,51 @@ class ImportService {
 
         // Try to read audio duration
         String? artist;
+        String? album;
         int durationMs = 0;
         try {
           final player = AudioPlayer();
-          final duration = await player.setFilePath(destPath);
-          durationMs = duration?.inMilliseconds ?? 0;
-          await player.dispose();
-        } catch (_) {}
+          try {
+            final duration = await player.setFilePath(destPath);
+            durationMs = duration?.inMilliseconds ?? 0;
+          } finally {
+            await player.dispose();
+          }
+        } catch (error) {
+          throw Exception(_normalizeMediaProbeError(error, destPath));
+        }
 
-        // Try to read artist from LRC metadata tags [ar:xxx]
-        if (matchedSubtitle != null) {
+        final embeddedMetadata = await _extractEmbeddedMetadataIfAvailable(
+          audioPath: destPath,
+        );
+        artist = embeddedMetadata?.artist;
+        album = embeddedMetadata?.album;
+
+        if (subtitleDest == null) {
+          final embeddedLyrics = await _extractEmbeddedLyricsIfAvailable(
+            audioPath: destPath,
+          );
+          if (embeddedLyrics?.timedLyrics != null) {
+            subtitleDest = await _writeGeneratedTextResource(
+              rawTitle: rawTitle,
+              suffix: '_embedded_lyrics',
+              extension: '.lrc',
+              content: embeddedLyrics!.timedLyrics!,
+            );
+          } else if (scriptDest == null &&
+              embeddedLyrics?.plainLyrics != null) {
+            scriptDest = await _writeGeneratedTextResource(
+              rawTitle: rawTitle,
+              suffix: '_embedded_lyrics',
+              extension: '.txt',
+              content: embeddedLyrics!.plainLyrics!,
+            );
+          }
+        }
+
+        // LRC metadata tags are a fallback only. We don't override the
+        // preserved filename-based title, and we only fill missing artist data.
+        if (artist == null && matchedSubtitle != null) {
           try {
             final subExt = p.extension(matchedSubtitle).toLowerCase();
             if (subExt == '.lrc') {
@@ -253,6 +311,7 @@ class ImportService {
             scriptPath: scriptDest,
             signalPath: signalDest,
             artist: artist,
+            album: album,
             durationMs: durationMs,
             mediaType: mediaType,
           ),
@@ -376,6 +435,68 @@ class ImportService {
     return destPath;
   }
 
+  Future<String?> _extractEmbeddedCoverIfAvailable({
+    required String audioPath,
+    required String rawTitle,
+  }) async {
+    try {
+      final suggestedOutputPath = await _reserveImportPath(
+        '${rawTitle}_cover.jpg',
+      );
+      return await _audioArtworkBridge.extractEmbeddedArtwork(
+        inputPath: audioPath,
+        outputPath: suggestedOutputPath,
+      );
+    } catch (error, stackTrace) {
+      AppLogger().warning(
+        'Failed to extract embedded artwork for $audioPath: $error\n$stackTrace',
+      );
+      return null;
+    }
+  }
+
+  Future<AudioEmbeddedMetadata?> _extractEmbeddedMetadataIfAvailable({
+    required String audioPath,
+  }) async {
+    try {
+      return await _audioMetadataBridge.extractEmbeddedMetadata(
+        inputPath: audioPath,
+      );
+    } catch (error, stackTrace) {
+      AppLogger().warning(
+        'Failed to extract embedded metadata for $audioPath: $error\n$stackTrace',
+      );
+      return null;
+    }
+  }
+
+  Future<EmbeddedLyricsData?> _extractEmbeddedLyricsIfAvailable({
+    required String audioPath,
+  }) async {
+    try {
+      return await _audioEmbeddedLyricsExtractor.extract(inputPath: audioPath);
+    } catch (error, stackTrace) {
+      AppLogger().warning(
+        'Failed to extract embedded lyrics for $audioPath: $error\n$stackTrace',
+      );
+      return null;
+    }
+  }
+
+  Future<String> _writeGeneratedTextResource({
+    required String rawTitle,
+    required String suffix,
+    required String extension,
+    required String content,
+  }) async {
+    final destPath = await _reserveImportPath('$rawTitle$suffix$extension');
+    await File(destPath).writeAsString(
+      content.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim(),
+      encoding: utf8,
+    );
+    return destPath;
+  }
+
   Future<void> _copyFileWithRetry(String sourcePath, String destPath) async {
     final sourceFile = File(sourcePath);
     final destFile = File(destPath);
@@ -458,7 +579,8 @@ class ImportService {
 
     for (final file in archive) {
       if (file.isFile) {
-        final outPath = p.join(extractDir.path, file.name);
+        final repairedEntryName = _repairZipEntryName(file.name);
+        final outPath = p.join(extractDir.path, repairedEntryName);
         final outFile = File(outPath);
         await outFile.parent.create(recursive: true);
         await outFile.writeAsBytes(file.content as List<int>);
@@ -584,6 +706,99 @@ class ImportService {
       return message.substring('Unsupported operation: '.length);
     }
     return message;
+  }
+
+  String _repairZipEntryName(String rawName) {
+    final normalized = rawName.replaceAll('\\', '/');
+    final repairedUtf8 = _tryDecodeCp437AsUtf8(normalized);
+    if (repairedUtf8 != null &&
+        _isRepairBetter(original: normalized, repaired: repairedUtf8)) {
+      return repairedUtf8;
+    }
+    return normalized;
+  }
+
+  String? _tryDecodeCp437AsUtf8(String value) {
+    final bytes = <int>[];
+
+    for (final rune in value.runes) {
+      if (rune >= 0 && rune < 128) {
+        bytes.add(rune);
+        continue;
+      }
+
+      final char = String.fromCharCode(rune);
+      final index = _cp437ExtendedChars.indexOf(char);
+      if (index < 0) {
+        return null;
+      }
+      bytes.add(128 + index);
+    }
+
+    try {
+      return utf8.decode(bytes, allowMalformed: false);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isRepairBetter({required String original, required String repaired}) {
+    if (original == repaired) {
+      return false;
+    }
+
+    return _nameReadabilityScore(repaired) >
+        _nameReadabilityScore(original) + 2;
+  }
+
+  int _nameReadabilityScore(String value) {
+    var score = 0;
+
+    for (final rune in value.runes) {
+      if (_isCjkRune(rune)) {
+        score += 3;
+        continue;
+      }
+
+      if (rune >= 0x20 && rune <= 0x7E) {
+        score += 1;
+        continue;
+      }
+
+      final char = String.fromCharCode(rune);
+      if (_cp437ExtendedChars.contains(char)) {
+        score -= 1;
+      }
+    }
+
+    return score;
+  }
+
+  bool _isCjkRune(int rune) {
+    return (rune >= 0x4E00 && rune <= 0x9FFF) ||
+        (rune >= 0x3400 && rune <= 0x4DBF) ||
+        (rune >= 0xF900 && rune <= 0xFAFF);
+  }
+
+  String _normalizeMediaProbeError(Object error, String path) {
+    final raw = '$error'.trim();
+    if (raw.startsWith('Exception: ')) {
+      return raw.substring('Exception: '.length);
+    }
+
+    if (error is PlayerInterruptedException) {
+      return '音频导入被中断，请重新导入：${p.basename(path)}';
+    }
+
+    if (error is PlayerException) {
+      return '音频加载失败，请检查文件格式或重新导入：${p.basename(path)}';
+    }
+
+    if (error is PlatformException || error is FileSystemException) {
+      return '媒体文件读取失败，请检查文件是否完整：${p.basename(path)}';
+    }
+
+    return '当前音频无法播放，请检查文件格式后重试';
   }
 
   Set<String> get subtitleExtensions => _subtitleExtensions;

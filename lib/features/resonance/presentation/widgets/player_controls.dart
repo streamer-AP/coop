@@ -27,7 +27,7 @@ class PlayerControls extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           _ControlIconButton(
-            icon: _repeatIcon(repeatMode),
+            icon: _repeatIcon(repeatMode, enabled: hasEntry),
             color: hasEntry ? mutedColor : disabledColor,
             onTap:
                 hasEntry
@@ -76,19 +76,16 @@ class PlayerControls extends ConsumerWidget {
     );
   }
 
-  Widget _repeatIcon(RepeatMode mode) {
-    final (svgPath, isActive) = switch (mode) {
-      RepeatMode.sequential => (AppIcons.refresh1, false),
-      RepeatMode.single => (AppIcons.refresh2, true),
-      RepeatMode.shuffle => (AppIcons.shuffle, true),
+  Widget _repeatIcon(RepeatMode mode, {required bool enabled}) {
+    final svgPath = switch (mode) {
+      RepeatMode.sequential => AppIcons.refresh2,
+      RepeatMode.single => AppIcons.refresh1,
+      RepeatMode.shuffle => AppIcons.shuffle,
     };
 
     return AppIcons.icon(
       svgPath,
-      color:
-          isActive
-              ? const Color(0xFF6A53A7)
-              : const Color(0xFF797979).withValues(alpha: 0.7),
+      color: enabled ? const Color(0xFF6A53A7) : const Color(0xFFC8C8C8),
     );
   }
 }

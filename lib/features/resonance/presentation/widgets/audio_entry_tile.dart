@@ -14,42 +14,64 @@ class AudioEntryTile extends ConsumerWidget {
     super.key,
     required this.entry,
     this.onTap,
+    this.onLongPress,
     this.onMoreTap,
     this.trailing,
     this.showMoreButton = true,
+    this.selectionMode = false,
+    this.selected = false,
   });
 
   final AudioEntry entry;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final VoidCallback? onMoreTap;
   final Widget? trailing;
   final bool showMoreButton;
+  final bool selectionMode;
+  final bool selected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final playerState = ref.watch(playerStateNotifierProvider);
-    final isCurrent = playerState.currentEntry?.id == entry.id;
-    final theme = Theme.of(context);
+    final currentEntryId = ref.watch(
+      playerStateNotifierProvider.select((state) => state.currentEntry?.id),
+    );
+    final isCurrent = currentEntryId == entry.id;
+    final textColor = isCurrent ? AppColors.primary : const Color(0xFF1C1B1F);
+    final subColor =
+        isCurrent
+            ? AppColors.primary.withValues(alpha: 0.72)
+            : const Color(0xFF79747E);
+    final selectionDecoration =
+        selected
+            ? BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            )
+            : null;
 
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
+        constraints: const BoxConstraints(minHeight: 76),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration:
-            isCurrent
+            selectionDecoration ??
+            (isCurrent
                 ? BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 )
-                : null,
+                : null),
         child: Row(
           children: [
-            _buildCover(theme, isCurrent),
+            SizedBox(width: 56, height: 56, child: _buildCover(isCurrent)),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     entry.title,
@@ -58,10 +80,7 @@ class AudioEntryTile extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color:
-                          isCurrent
-                              ? AppColors.primary
-                              : const Color(0xFF1C1B1F),
+                      color: textColor,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -69,19 +88,22 @@ class AudioEntryTile extends ConsumerWidget {
                     entry.artist ?? '',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color:
-                          isCurrent
-                              ? AppColors.primary.withValues(alpha: 0.7)
-                              : const Color(0xFF79747E),
-                    ),
+                    style: TextStyle(fontSize: 13, color: subColor),
                   ),
                 ],
               ),
             ),
+            if (selectionMode)
+              Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: AppIcons.icon(
+                  selected ? AppIcons.circleCheck : AppIcons.circleUnchecked,
+                  size: 24,
+                  color: selected ? AppColors.primary : const Color(0xFFB8B2BE),
+                ),
+              ),
             if (trailing != null) trailing!,
-            if (trailing == null && showMoreButton)
+            if (!selectionMode && trailing == null && showMoreButton)
               IconButton(
                 icon: AppIcons.icon(
                   AppIcons.more1,
@@ -98,7 +120,7 @@ class AudioEntryTile extends ConsumerWidget {
     );
   }
 
-  Widget _buildCover(ThemeData theme, bool isCurrent) {
+  Widget _buildCover(bool isCurrent) {
     Widget cover;
     if (entry.coverPath != null) {
       cover = ClipRRect(
@@ -108,11 +130,11 @@ class AudioEntryTile extends ConsumerWidget {
           width: 56,
           height: 56,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _placeholderCover(theme),
+          errorBuilder: (_, __, ___) => _placeholderCover(),
         ),
       );
     } else {
-      cover = _placeholderCover(theme);
+      cover = _placeholderCover();
     }
 
     if (isCurrent) {
@@ -122,7 +144,7 @@ class AudioEntryTile extends ConsumerWidget {
     return cover;
   }
 
-  Widget _placeholderCover(ThemeData theme) {
+  Widget _placeholderCover() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Image.asset(
@@ -148,11 +170,12 @@ class _CurrentOverlay extends ConsumerWidget {
       playerStateNotifierProvider.select((s) => s.isPlaying),
     );
 
-    return Stack(
-      children: [
-        cover,
-        Positioned.fill(
-          child: Container(
+    return SizedBox.expand(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          cover,
+          DecoratedBox(
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(12),
@@ -168,8 +191,8 @@ class _CurrentOverlay extends ConsumerWidget {
                       ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

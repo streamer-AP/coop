@@ -13,6 +13,10 @@ import 'resonance_providers.dart';
 
 part 'import_providers.g.dart';
 
+final recentlyImportedEntryIdsProvider = StateProvider<List<int>>(
+  (ref) => const [],
+);
+
 @riverpod
 Future<ImportService> importService(Ref ref) async {
   final fileManager = ref.read(fileManagerProvider);
@@ -217,6 +221,7 @@ class ImportProgressNotifier extends _$ImportProgressNotifier {
 
   Future<void> _persistImportedItems(ImportResult result) async {
     final repo = ref.read(resonanceRepositoryProvider);
+    final importedEntryIds = <int>[];
 
     for (final item in result.succeeded) {
       final entryId = await repo.insertEntry(
@@ -227,9 +232,11 @@ class ImportProgressNotifier extends _$ImportProgressNotifier {
           coverPath: item.coverPath,
           mediaType: item.mediaType,
           artist: item.artist,
+          album: item.album,
           durationMs: item.durationMs,
         ),
       );
+      importedEntryIds.add(entryId);
 
       if (item.subtitlePath != null) {
         final ext = item.subtitlePath!.split('.').last.toLowerCase();
@@ -255,6 +262,9 @@ class ImportProgressNotifier extends _$ImportProgressNotifier {
         await repo.insertScriptFile(entryId, item.scriptPath!);
       }
     }
+
+    ref.read(recentlyImportedEntryIdsProvider.notifier).state =
+        importedEntryIds;
   }
 
   Future<void> reset() async {

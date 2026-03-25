@@ -30,7 +30,7 @@ class _AddToCollectionScreenState extends ConsumerState<AddToCollectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final entriesAsync = ref.watch(watchEntriesProvider);
+    final entriesAsync = ref.watch(audioEntriesProvider);
 
     return Scaffold(
       appBar: AppBar(

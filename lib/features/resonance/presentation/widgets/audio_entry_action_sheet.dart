@@ -86,7 +86,11 @@ class AudioEntryActionSheet extends ConsumerWidget {
               label: '导入字幕/封面/台本',
               onTap: () {
                 Navigator.of(context).pop();
-                SubtitleCoverImportSheet.show(context, entry: entry);
+                SubtitleCoverImportSheet.show(
+                  context,
+                  entry: entry,
+                  allowCoverImport: true,
+                );
               },
             ),
             _ActionItem(

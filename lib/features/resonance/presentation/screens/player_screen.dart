@@ -12,11 +12,13 @@ import '../../../../core/bluetooth/models/ble_signal.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_icons.dart';
+import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../../controller/application/providers/controller_providers.dart';
 import '../../application/providers/player_providers.dart';
 import '../../application/providers/signal_providers.dart';
 import '../../application/providers/subtitle_providers.dart';
 import '../../domain/models/player_state.dart';
+import '../../domain/models/subtitle.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/script_view.dart';
 import '../widgets/seek_bar.dart';
@@ -41,6 +43,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   bool _isDraggingDevicePanel = false;
   late final AnimationController _discRotationController;
   late final AnimationController _tonearmController;
+  late final ProviderSubscription<PlayerState> _playerStateSubscription;
+  late final ProviderSubscription<AsyncValue<ParsedSubtitle?>>
+  _translatedSubtitleSubscription;
+  String? _lastTranslationErrorMessage;
 
   // The exported arm asset already matches the playing posture. Rotate it a
   // little further left when paused so it visibly lifts away from the disc.
@@ -59,16 +65,44 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    // If already playing when screen opens, snap tonearm to playing position
-    final ps = ref.read(playerStateNotifierProvider);
-    if (ps.currentEntry != null && ps.isPlaying) {
+    final initialPlayerState = ref.read(playerStateNotifierProvider);
+    if (initialPlayerState.currentEntry != null &&
+        initialPlayerState.isPlaying) {
       _tonearmController.value = 1.0;
       _discRotationController.repeat();
     }
+    _playerStateSubscription = ref.listenManual<PlayerState>(
+      playerStateNotifierProvider,
+      (_, next) => _syncPlaybackAnimations(next),
+    );
+    _translatedSubtitleSubscription = ref
+        .listenManual<AsyncValue<ParsedSubtitle?>>(translatedSubtitleProvider, (
+          _,
+          next,
+        ) {
+          final error = next.error;
+          if (error == null) {
+            _lastTranslationErrorMessage = null;
+            return;
+          }
+
+          final message = '$error'.replaceFirst('Exception: ', '').trim();
+          if (message.isEmpty || message == _lastTranslationErrorMessage) {
+            return;
+          }
+          _lastTranslationErrorMessage = message;
+
+          if (!mounted) {
+            return;
+          }
+          TopBannerToast.show(context, message: message);
+        });
   }
 
   @override
   void dispose() {
+    _translatedSubtitleSubscription.close();
+    _playerStateSubscription.close();
     _discRotationController.dispose();
     _tonearmController.dispose();
     super.dispose();
@@ -88,7 +122,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     final isDeviceConnected =
         connectionState == BleConnectionState.connected &&
         connectedDevice != null;
-    final shouldRotate = hasEntry && playerState.isPlaying;
     final showSubtitleStage = hasEntry && _displayMode == 1;
     final showScriptStage = hasEntry && _displayMode == 2;
     final bottomInset = MediaQuery.of(context).padding.bottom;
@@ -106,14 +139,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
     final showPanelScrim = panelProgress > 0.18;
     final contentBottomPadding = collapsedPanelHeight + 12;
-
-    if (shouldRotate && !_discRotationController.isAnimating) {
-      _discRotationController.repeat();
-      _tonearmController.forward(); // arm down onto disc
-    } else if (!shouldRotate && _discRotationController.isAnimating) {
-      _discRotationController.stop();
-      _tonearmController.reverse(); // arm lifts off disc
-    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -191,14 +216,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                               ),
                               const SizedBox(width: 12),
                               GestureDetector(
-                                onTap: () {
-                                  cRef
-                                      .read(
-                                        subtitleTranslationEnabledProvider
-                                            .notifier,
-                                      )
-                                      .state = !translationEnabled;
-                                },
+                                onTap:
+                                    () => _setSubtitleTranslationEnabled(
+                                      cRef,
+                                      !translationEnabled,
+                                    ),
                                 child: Container(
                                   width: 24,
                                   height: 24,
@@ -399,10 +421,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child: Image.file(
-              File(coverPath),
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _buildVinylStage(onTap: null),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const ColoredBox(color: Color(0xFFF0ECE6)),
+                Image.file(
+                  File(coverPath),
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, __, ___) => _buildVinylStage(onTap: null),
+                ),
+              ],
             ),
           ),
         ),
@@ -474,8 +503,99 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     return const SubtitleView();
   }
 
+  void _syncPlaybackAnimations(PlayerState playerState) {
+    final shouldRotate =
+        playerState.currentEntry != null && playerState.isPlaying;
+
+    if (shouldRotate) {
+      if (!_discRotationController.isAnimating) {
+        _discRotationController.repeat();
+      }
+      if (_tonearmController.value < 1.0 &&
+          _tonearmController.status != AnimationStatus.forward) {
+        _tonearmController.forward();
+      }
+      return;
+    }
+
+    if (_discRotationController.isAnimating) {
+      _discRotationController.stop();
+    }
+    if (_tonearmController.value > 0.0 &&
+        _tonearmController.status != AnimationStatus.reverse) {
+      _tonearmController.reverse();
+    }
+  }
+
   void _cycleDisplayMode() {
     setState(() => _displayMode = (_displayMode + 1) % 3);
+  }
+
+  void _setSubtitleTranslationEnabled(WidgetRef ref, bool enabled) {
+    if (!enabled) {
+      ref.read(subtitleTranslationEnabledProvider.notifier).state = false;
+      return;
+    }
+
+    final currentSubtitle = ref.read(currentSubtitleNotifierProvider);
+    if (currentSubtitle != null) {
+      final detectedLanguage = _detectSubtitleLanguage(currentSubtitle);
+      final translationLanguageNotifier = ref.read(
+        subtitleTranslationLanguageProvider.notifier,
+      );
+      if (detectedLanguage != null &&
+          translationLanguageNotifier.state == detectedLanguage) {
+        final nextLanguage =
+            detectedLanguage == SubtitleTranslationLanguage.zh
+                ? SubtitleTranslationLanguage.ja
+                : SubtitleTranslationLanguage.zh;
+        translationLanguageNotifier.state = nextLanguage;
+        if (mounted) {
+          TopBannerToast.show(
+            context,
+            message: '已切换为翻译成${nextLanguage.label}',
+            isError: false,
+          );
+        }
+      }
+    }
+
+    ref.read(subtitleTranslationEnabledProvider.notifier).state = true;
+  }
+
+  SubtitleTranslationLanguage? _detectSubtitleLanguage(
+    ParsedSubtitle subtitle,
+  ) {
+    final sample = subtitle.cues
+        .take(12)
+        .map((cue) => cue.text.trim())
+        .where((text) => text.isNotEmpty)
+        .join('\n');
+    if (sample.isEmpty) {
+      return null;
+    }
+
+    for (final rune in sample.runes) {
+      final isKana =
+          (rune >= 0x3040 && rune <= 0x309F) ||
+          (rune >= 0x30A0 && rune <= 0x30FF) ||
+          (rune >= 0x31F0 && rune <= 0x31FF);
+      if (isKana) {
+        return SubtitleTranslationLanguage.ja;
+      }
+    }
+
+    final hasCjk = sample.runes.any(
+      (rune) =>
+          (rune >= 0x4E00 && rune <= 0x9FFF) ||
+          (rune >= 0x3400 && rune <= 0x4DBF) ||
+          (rune >= 0xF900 && rune <= 0xFAFF),
+    );
+    if (hasCjk) {
+      return SubtitleTranslationLanguage.zh;
+    }
+
+    return null;
   }
 
   Widget _buildSongMeta({required String title, required String artist}) {
@@ -775,48 +895,34 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 
   Widget _buildControlPanelContent(SignalMode signalMode) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
     final isResonanceMode = signalMode == SignalMode.resonance;
     final isPresetMode = signalMode == SignalMode.preset;
 
-    return Column(
-      children: [
-        _buildSignalToggleCard(
-          label: '同步共鸣',
-          selected: isResonanceMode,
-          onChanged: (enabled) async {
-            if (enabled) {
-              await ref
-                  .read(signalModeNotifierProvider.notifier)
-                  .setMode(SignalMode.resonance);
-              ref
-                  .read(bleSignalArbitratorProvider)
-                  .releaseSource(SignalSource.preset);
-            } else {
-              await ref
-                  .read(signalModeNotifierProvider.notifier)
-                  .setMode(SignalMode.off);
-            }
-          },
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            padding: EdgeInsets.fromLTRB(26, 16, 26, 18 + bottomInset),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const fixedHeaderHeight = 68.0;
+        final cardMinHeight = math.max(
+          0.0,
+          constraints.maxHeight - fixedHeaderHeight,
+        );
+
+        return SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: Column(
               children: [
-                _buildPresetModeHeader(
-                  selected: isPresetMode,
+                _buildSignalToggleCard(
+                  label: '同步共鸣',
+                  selected: isResonanceMode,
                   onChanged: (enabled) async {
                     if (enabled) {
                       await ref
                           .read(signalModeNotifierProvider.notifier)
-                          .setMode(SignalMode.preset);
-                      _sendPresetSignal();
+                          .setMode(SignalMode.resonance);
+                      ref
+                          .read(bleSignalArbitratorProvider)
+                          .releaseSource(SignalSource.preset);
                     } else {
                       await ref
                           .read(signalModeNotifierProvider.notifier)
@@ -824,33 +930,63 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                     }
                   },
                 ),
-                const SizedBox(height: 14),
-                _buildPresetSection(
-                  title: '摇摆',
-                  svgPath: AppIcons.swing,
-                  value: _swingLevel,
-                  enabled: isPresetMode,
-                  onChanged: (value) {
-                    setState(() => _swingLevel = value);
-                    _sendPresetSignal();
-                  },
-                ),
-                const SizedBox(height: 26),
-                _buildPresetSection(
-                  title: '震动',
-                  svgPath: AppIcons.vibration,
-                  value: _vibrationLevel,
-                  enabled: isPresetMode,
-                  onChanged: (value) {
-                    setState(() => _vibrationLevel = value);
-                    _sendPresetSignal();
-                  },
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: cardMinHeight),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(26, 16, 26, 18),
+                    child: Column(
+                      children: [
+                        _buildPresetModeHeader(
+                          selected: isPresetMode,
+                          onChanged: (enabled) async {
+                            if (enabled) {
+                              await ref
+                                  .read(signalModeNotifierProvider.notifier)
+                                  .setMode(SignalMode.preset);
+                              _sendPresetSignal();
+                            } else {
+                              await ref
+                                  .read(signalModeNotifierProvider.notifier)
+                                  .setMode(SignalMode.off);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        _buildPresetSection(
+                          title: '摇摆',
+                          svgPath: AppIcons.swing,
+                          value: _swingLevel,
+                          enabled: isPresetMode,
+                          onChanged: (value) {
+                            setState(() => _swingLevel = value);
+                            _sendPresetSignal();
+                          },
+                        ),
+                        const SizedBox(height: 26),
+                        _buildPresetSection(
+                          title: '震动',
+                          svgPath: AppIcons.vibration,
+                          value: _vibrationLevel,
+                          enabled: isPresetMode,
+                          onChanged: (value) {
+                            setState(() => _vibrationLevel = value);
+                            _sendPresetSignal();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -1197,14 +1333,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                     ),
                     SwitchListTile(
                       title: const Text('翻译字幕'),
-                      subtitle: const Text('支持中英日韩'),
+                      subtitle: const Text('支持中日互译'),
                       value: translationEnabled,
                       activeThumbColor: AppColors.primary,
-                      onChanged: (value) {
-                        sheetRef
-                            .read(subtitleTranslationEnabledProvider.notifier)
-                            .state = value;
-                      },
+                      onChanged:
+                          (value) =>
+                              _setSubtitleTranslationEnabled(sheetRef, value),
                     ),
                     if (translationEnabled) ...[
                       const SizedBox(height: 6),

@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +21,8 @@ class MessageListScreen extends ConsumerStatefulWidget {
 }
 
 class _MessageListScreenState extends ConsumerState<MessageListScreen> {
+  static const _designWidth = 393.0;
+
   @override
   void initState() {
     super.initState();
@@ -63,69 +68,41 @@ class _MessageListScreenState extends ConsumerState<MessageListScreen> {
       });
     }
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.homeBackgroundGradient,
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      '系统消息',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
+    return Stack(
+      children: [
+        const _MessageBackdrop(),
+        SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () {
-                      ref
-                          .read(messageNotifierProvider.notifier)
-                          .markAllAsRead();
+                      ref.read(messageNotifierProvider.notifier).markAllAsRead();
                     },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.26),
-                        ),
-                      ),
-                      child: const Text(
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
                         '全部已读',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
                           color: Colors.white,
-                          fontWeight: FontWeight.w500,
+                          letterSpacing: 1.2,
                         ),
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE9E3F3),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                 ),
+              ),
+              Expanded(
                 child: RefreshIndicator(
                   color: AppColors.primary,
+                  edgeOffset: 12,
                   onRefresh:
                       () =>
                           ref
@@ -162,7 +139,7 @@ class _MessageListScreenState extends ConsumerState<MessageListScreen> {
 
                       return ListView.builder(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.only(top: 10, bottom: 100),
+                        padding: const EdgeInsets.fromLTRB(0, 2, 0, 124),
                         itemCount: messages.length,
                         itemBuilder: (context, index) {
                           final message = messages[index];
@@ -191,15 +168,22 @@ class _MessageListScreenState extends ConsumerState<MessageListScreen> {
                         ),
                     error:
                         (error, _) => _buildScrollableFill(
-                          Center(child: Text('加载失败: $error')),
+                          Center(
+                            child: Text(
+                              '加载失败: $error',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
                         ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -209,11 +193,19 @@ class _MessageListScreenState extends ConsumerState<MessageListScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 72,
-            height: 72,
+            width: 78,
+            height: 78,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.72),
               borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withValues(alpha: 0.92),
+                  const Color(0xFFD5D5EE).withValues(alpha: 0.56),
+                ],
+              ),
             ),
             child: const Icon(
               Icons.markunread_mailbox_outlined,
@@ -263,7 +255,7 @@ class _MessageListScreenState extends ConsumerState<MessageListScreen> {
       builder: (context, constraints) {
         return ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 100),
+          padding: const EdgeInsets.only(bottom: 124),
           children: [
             SizedBox(
               height: constraints.maxHeight,
@@ -278,5 +270,111 @@ class _MessageListScreenState extends ConsumerState<MessageListScreen> {
   String _syncErrorMessage(Object? error) {
     final text = '${error ?? ''}'.replaceFirst('Exception: ', '').trim();
     return text.isEmpty ? '系统消息拉取失败，请稍后重试' : text;
+  }
+}
+
+class _MessageAssets {
+  const _MessageAssets._();
+
+  static const background = 'assets/figma/home/home_bg.png';
+}
+
+class _MessageBackdrop extends StatelessWidget {
+  const _MessageBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final contentWidth = math.min(
+          _MessageListScreenState._designWidth,
+          constraints.maxWidth,
+        );
+        final scale = contentWidth / _MessageListScreenState._designWidth;
+        final backgroundHeight = math.max(
+          874 * scale,
+          constraints.maxHeight + 24 * scale,
+        );
+        final overlayHeight = math.max(
+          857 * scale,
+          constraints.maxHeight + 2 * scale,
+        );
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const ColoredBox(color: AppColors.background),
+            Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: contentWidth,
+                height: constraints.maxHeight,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned(
+                      left: -48 * scale,
+                      top: -10 * scale,
+                      width: 490 * scale,
+                      height: backgroundHeight,
+                      child: Image.asset(
+                        _MessageAssets.background,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                        filterQuality: FilterQuality.high,
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      top: -1 * scale,
+                      width: contentWidth,
+                      height: overlayHeight,
+                      child: ClipRect(
+                        child: BackdropFilter(
+                          filter: ui.ImageFilter.blur(
+                            sigmaX: 0.5 * scale,
+                            sigmaY: 0.5 * scale,
+                          ),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  const Color(0xFF28307C).withValues(alpha: 0.36),
+                                  const Color(0xFFE7EAFF).withValues(alpha: 0.36),
+                                ],
+                                stops: const [0.10659, 0.69387],
+                              ),
+                            ),
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.white.withValues(alpha: 0.05),
+                              Colors.white.withValues(alpha: 0.14),
+                            ],
+                            stops: const [0.0, 0.72, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

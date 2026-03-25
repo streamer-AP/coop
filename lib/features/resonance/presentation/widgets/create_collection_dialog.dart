@@ -139,63 +139,69 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
   }
 
   Widget _buildTextField() {
-    return Container(
-      height: 42,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFD9D9DD)),
-      ),
-      child: TextField(
-        controller: _controller,
-        focusNode: _focusNode,
-        autofocus: true,
-        cursorColor: AppColors.primary,
-        textAlignVertical: TextAlignVertical.center,
-        textInputAction: TextInputAction.done,
-        onSubmitted:
-            (_) =>
-                _canConfirm
-                    ? Navigator.of(context).pop(_controller.text.trim())
-                    : null,
-        decoration: InputDecoration(
-          hintText: widget.hintText,
-          hintStyle: const TextStyle(fontSize: 14, color: Color(0xFFAEAEB2)),
-          filled: true,
-          fillColor: Colors.transparent,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          isCollapsed: true,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 12,
+    const inputTextStyle = TextStyle(
+      fontSize: 14,
+      height: 1.2,
+      color: AppColors.textPrimary,
+    );
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 46),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFD9D9DD)),
+        ),
+        child: TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          autofocus: true,
+          maxLines: 1,
+          cursorColor: AppColors.primary,
+          cursorHeight: 18,
+          style: inputTextStyle,
+          textAlignVertical: TextAlignVertical.center,
+          strutStyle: const StrutStyle(
+            fontSize: 14,
+            height: 1.2,
+            forceStrutHeight: true,
           ),
-          suffixIcon:
-              _controller.text.isEmpty
-                  ? null
-                  : GestureDetector(
-                    onTap: _controller.clear,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: Center(
-                        child: AppIcons.asset(
-                          AppIcons.close2,
-                          width: 18,
-                          height: 18,
-                        ),
+          textInputAction: TextInputAction.done,
+          onSubmitted:
+              (_) =>
+                  _canConfirm
+                      ? Navigator.of(context).pop(_controller.text.trim())
+                      : null,
+          decoration: InputDecoration(
+            hintText: widget.hintText,
+            hintStyle: inputTextStyle.copyWith(color: AppColors.textHint),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            suffixIcon:
+                _controller.text.isEmpty
+                    ? null
+                    : IconButton(
+                      onPressed: _controller.clear,
+                      splashRadius: 18,
+                      padding: const EdgeInsets.all(8),
+                      icon: AppIcons.asset(
+                        AppIcons.close2,
+                        width: 18,
+                        height: 18,
                       ),
                     ),
-                  ),
-          suffixIconConstraints: const BoxConstraints(
-            minWidth: 38,
-            minHeight: 38,
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+            ),
           ),
-        ),
-        style: const TextStyle(
-          fontSize: 14,
-          height: 1.2,
-          color: Color(0xFF1C1B1F),
         ),
       ),
     );

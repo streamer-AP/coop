@@ -9,6 +9,7 @@ class AudioEntries extends Table {
   TextColumn get signalFilePath => text().nullable()();
   TextColumn get mediaType => text().withDefault(const Constant('audio'))();
   TextColumn get artist => text().nullable()();
+  TextColumn get album => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }

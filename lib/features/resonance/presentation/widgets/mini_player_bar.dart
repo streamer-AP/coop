@@ -158,19 +158,26 @@ class _MiniPlayerBarState extends ConsumerState<MiniPlayerBar>
     Widget coverImage;
     if (coverPath != null) {
       coverImage = ClipOval(
-        child: Image.file(
-          File(coverPath),
-          width: 52,
-          height: 52,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _placeholderCover(hasEntry),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(color: Color(0xFFF0ECE6)),
+          child: Image.file(
+            File(coverPath),
+            width: 52,
+            height: 52,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => _placeholderCover(hasEntry),
+          ),
         ),
       );
     } else {
       coverImage = _placeholderCover(hasEntry);
     }
 
-    return RotationTransition(turns: _rotationController, child: coverImage);
+    return RotationTransition(
+      turns: _rotationController,
+      child: SizedBox(width: 52, height: 52, child: coverImage),
+    );
   }
 
   Widget _placeholderCover(bool hasEntry) {

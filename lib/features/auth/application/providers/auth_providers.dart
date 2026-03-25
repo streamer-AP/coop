@@ -16,10 +16,7 @@ part 'auth_providers.g.dart';
 
 @Riverpod(keepAlive: true)
 AuthRepository authRepository(Ref ref) {
-  return AuthRepositoryImpl(
-    ref.watch(apiClientProvider),
-    TokenStorage(),
-  );
+  return AuthRepositoryImpl(ref.watch(apiClientProvider), TokenStorage());
 }
 
 @Riverpod(keepAlive: true)
@@ -37,7 +34,7 @@ class AuthNotifier extends _$AuthNotifier {
     if (user != null && user.id.trim().isNotEmpty) {
       await ref
           .read(userStorageNotifierProvider.notifier)
-          .switchUser(user.id.trim());
+          .switchUser(user.id.trim(), force: true);
     }
     state = AsyncData(user);
   }
@@ -90,7 +87,7 @@ class AuthNotifier extends _$AuthNotifier {
     if (user.id.trim().isNotEmpty) {
       await ref
           .read(userStorageNotifierProvider.notifier)
-          .switchUser(user.id.trim());
+          .switchUser(user.id.trim(), force: true);
     }
   }
 

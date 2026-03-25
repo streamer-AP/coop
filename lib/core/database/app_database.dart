@@ -48,7 +48,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -85,6 +85,10 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(waveformKeyframes);
           await m.createTable(favoriteSlots);
         }
+        // v6 → v7: 音频条目新增专辑字段，保留原文件名作为 title
+        if (from < 7) {
+          await m.addColumn(audioEntries, audioEntries.album);
+        }
       },
     );
   }
@@ -93,6 +97,7 @@ class AppDatabase extends _$AppDatabase {
 /// 从 UserStorageService 获取用户专属数据库实例。
 @Riverpod(keepAlive: true)
 AppDatabase appDatabase(Ref ref) {
+  ref.watch(userStorageEpochProvider);
   final userStorage = ref.watch(userStorageNotifierProvider).requireValue;
   return userStorage.db;
 }

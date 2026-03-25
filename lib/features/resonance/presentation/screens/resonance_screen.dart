@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/omao_toast.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/collection_providers.dart';
+import '../../application/providers/import_providers.dart';
 import '../../application/providers/player_providers.dart';
 import '../../application/providers/resonance_providers.dart';
 import '../../application/providers/search_providers.dart';
@@ -132,18 +133,28 @@ class ResonanceScreen extends ConsumerWidget {
                           child: Column(
                             children: [
                               _buildTabBar(),
-                              const Expanded(
-                                child: TabBarView(
-                                  children: [
-                                    Padding(
-                                      padding: EdgeInsets.only(bottom: 80),
-                                      child: _AllEntriesTab(),
-                                    ),
-                                    Padding(
-                                      padding: EdgeInsets.only(bottom: 80),
-                                      child: _CollectionsTab(),
-                                    ),
-                                  ],
+                              Expanded(
+                                child: Builder(
+                                  builder: (context) {
+                                    final tabController =
+                                        DefaultTabController.of(context);
+                                    return AnimatedBuilder(
+                                      animation: tabController,
+                                      builder: (context, _) {
+                                        final currentIndex =
+                                            tabController.index;
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 80,
+                                          ),
+                                          child:
+                                              currentIndex == 0
+                                                  ? const _AllEntriesTab()
+                                                  : const _CollectionsTab(),
+                                        );
+                                      },
+                                    );
+                                  },
                                 ),
                               ),
                             ],
@@ -288,13 +299,24 @@ class _SortButton extends ConsumerWidget {
   }
 }
 
-class _AllEntriesTab extends ConsumerWidget {
+class _AllEntriesTab extends ConsumerStatefulWidget {
   const _AllEntriesTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final entriesAsync = ref.watch(watchEntriesProvider);
+  ConsumerState<_AllEntriesTab> createState() => _AllEntriesTabState();
+}
+
+class _AllEntriesTabState extends ConsumerState<_AllEntriesTab> {
+  final Set<int> _selectedEntryIds = <int>{};
+
+  bool get _selectionMode => _selectedEntryIds.isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
+    final entriesAsync = ref.watch(audioEntriesProvider);
     final sortMode = ref.watch(sortModeNotifierProvider);
+    final recentlyImportedIds = ref.watch(recentlyImportedEntryIdsProvider);
     final searchQuery = ref.watch(searchQueryProvider);
 
     return entriesAsync.when(
@@ -316,34 +338,173 @@ class _AllEntriesTab extends ConsumerWidget {
 
         // Apply sorting
         filtered = _sortEntries(filtered, sortMode);
+        filtered = _pinRecentlyImportedEntries(filtered, recentlyImportedIds);
 
         if (filtered.isEmpty) {
-          return _buildEmptyState();
+          if (!_selectionMode) {
+            return _buildEmptyState();
+          }
+
+          return Column(
+            children: [
+              _buildSelectionToolbar(context),
+              Expanded(child: _buildEmptyState()),
+            ],
+          );
         }
-        return ListView.builder(
-          padding: const EdgeInsets.only(top: 8, bottom: 8),
-          itemCount: filtered.length,
-          itemBuilder: (context, index) {
-            final entry = filtered[index];
-            return AudioEntryTile(
-              entry: entry,
-              onTap:
-                  () => _playEntry(
-                    context,
-                    ref,
-                    entry,
-                    playlistEntries: filtered,
-                    playlistTitle: '全部音频',
-                  ),
-              onMoreTap: () {
-                AudioEntryActionSheet.show(context, entry: entry);
-              },
-            );
-          },
+
+        return Column(
+          children: [
+            if (_selectionMode) _buildSelectionToolbar(context),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.only(top: 8, bottom: 8),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final entry = filtered[index];
+                  final isSelected = _selectedEntryIds.contains(entry.id);
+
+                  return AudioEntryTile(
+                    entry: entry,
+                    selectionMode: _selectionMode,
+                    selected: isSelected,
+                    onLongPress: () => _enterSelection(entry.id),
+                    onTap:
+                        _selectionMode
+                            ? () => _toggleSelection(entry.id)
+                            : () => _playEntry(
+                              context,
+                              ref,
+                              entry,
+                              playlistTitle: '全部音频',
+                            ),
+                    onMoreTap:
+                        _selectionMode
+                            ? null
+                            : () {
+                              AudioEntryActionSheet.show(context, entry: entry);
+                            },
+                  );
+                },
+              ),
+            ),
+          ],
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
+    );
+  }
+
+  void _enterSelection(int entryId) {
+    if (_selectedEntryIds.contains(entryId)) return;
+    setState(() {
+      _selectedEntryIds.add(entryId);
+    });
+  }
+
+  void _toggleSelection(int entryId) {
+    setState(() {
+      if (_selectedEntryIds.contains(entryId)) {
+        _selectedEntryIds.remove(entryId);
+      } else {
+        _selectedEntryIds.add(entryId);
+      }
+    });
+  }
+
+  void _clearSelection() {
+    if (_selectedEntryIds.isEmpty) return;
+    setState(() {
+      _selectedEntryIds.clear();
+    });
+  }
+
+  Future<void> _deleteSelected(BuildContext context) async {
+    final ids = _selectedEntryIds.toList(growable: false);
+    if (ids.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('删除音频'),
+            content: Text('确定要删除选中的 ${ids.length} 个音频吗？此操作不可撤销。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('删除', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    final repo = ref.read(resonanceRepositoryProvider);
+    final playerNotifier = ref.read(playerStateNotifierProvider.notifier);
+
+    try {
+      await playerNotifier.removeEntriesByEntryIds(ids.toSet());
+      await repo.deleteEntriesCompletely(ids);
+      if (!mounted) return;
+      setState(() {
+        _selectedEntryIds.clear();
+      });
+      OmaoToast.show(this.context, '已删除 ${ids.length} 个音频');
+    } catch (error) {
+      if (!mounted) return;
+      OmaoToast.show(this.context, '删除失败: $error', isSuccess: false);
+    }
+  }
+
+  Widget _buildSelectionToolbar(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6A53A7).withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Text(
+            '已选择 ${_selectedEntryIds.length} 项',
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1C1B1F),
+            ),
+          ),
+          const Spacer(),
+          TextButton(onPressed: _clearSelection, child: const Text('取消')),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () => _deleteSelected(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD64545),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              elevation: 0,
+            ),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -372,6 +533,37 @@ class _AllEntriesTab extends ConsumerWidget {
         );
     }
     return sorted;
+  }
+
+  List<AudioEntry> _pinRecentlyImportedEntries(
+    List<AudioEntry> entries,
+    List<int> recentlyImportedIds,
+  ) {
+    if (recentlyImportedIds.isEmpty) {
+      return entries;
+    }
+
+    final recentIndex = {
+      for (var i = 0; i < recentlyImportedIds.length; i++)
+        recentlyImportedIds[i]: i,
+    };
+    final pinned = <AudioEntry>[];
+    final remaining = <AudioEntry>[];
+
+    for (final entry in entries) {
+      if (recentIndex.containsKey(entry.id)) {
+        pinned.add(entry);
+      } else {
+        remaining.add(entry);
+      }
+    }
+
+    if (pinned.isEmpty) {
+      return entries;
+    }
+
+    pinned.sort((a, b) => recentIndex[a.id]!.compareTo(recentIndex[b.id]!));
+    return [...pinned, ...remaining];
   }
 
   Widget _buildEmptyState() {
@@ -404,17 +596,12 @@ Future<void> _playEntry(
   BuildContext context,
   WidgetRef ref,
   AudioEntry entry, {
-  List<AudioEntry>? playlistEntries,
   required String playlistTitle,
 }) async {
   try {
     await ref
         .read(playerStateNotifierProvider.notifier)
-        .playEntryWithTitle(
-          entry,
-          context: playlistEntries,
-          playlistTitle: playlistTitle,
-        );
+        .playAllEntry(entry, playlistTitle: playlistTitle);
   } catch (error) {
     if (!context.mounted) return;
     final message = '$error'.replaceFirst('Exception: ', '').trim();
@@ -432,34 +619,61 @@ class _CollectionsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final collectionsAsync = ref.watch(collectionsProvider);
+    final sortMode = ref.watch(sortModeNotifierProvider);
 
     return collectionsAsync.when(
       data: (collections) {
-        return ListView(
+        final sortedCollections = _sortCollections(collections, sortMode);
+        return ListView.builder(
           padding: const EdgeInsets.only(top: 8, bottom: 8),
-          children: [
-            NewCollectionTile(
-              onTap: () => _showNewCollectionDialog(context, ref),
-            ),
-            ...collections.map(
-              (collection) => CollectionCard(
-                collection: collection,
-                onTap:
-                    () => context.pushNamed(
-                      RouteNames.collectionDetail,
-                      pathParameters: {'id': collection.id.toString()},
-                    ),
-                onMoreTap: () {
-                  CollectionActionSheet.show(context, collection: collection);
-                },
-              ),
-            ),
-          ],
+          itemCount: sortedCollections.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return NewCollectionTile(
+                onTap: () => _showNewCollectionDialog(context, ref),
+              );
+            }
+
+            final collection = sortedCollections[index - 1];
+            return CollectionCard(
+              collection: collection,
+              onTap:
+                  () => context.pushNamed(
+                    RouteNames.collectionDetail,
+                    pathParameters: {'id': collection.id.toString()},
+                  ),
+              onMoreTap: () {
+                CollectionActionSheet.show(context, collection: collection);
+              },
+            );
+          },
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
     );
+  }
+
+  List<AudioCollection> _sortCollections(
+    List<AudioCollection> collections,
+    SortMode mode,
+  ) {
+    final sorted = List<AudioCollection>.of(collections);
+    switch (mode) {
+      case SortMode.alphabeticalAsc:
+        sorted.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
+      case SortMode.alphabeticalDesc:
+        sorted.sort(
+          (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+        );
+      case SortMode.timeAsc:
+        sorted.sort((a, b) => a.id.compareTo(b.id));
+      case SortMode.timeDesc:
+        sorted.sort((a, b) => b.id.compareTo(a.id));
+    }
+    return sorted;
   }
 
   Future<void> _showNewCollectionDialog(
@@ -473,6 +687,7 @@ class _CollectionsTab extends ConsumerWidget {
     final service = ref.read(collectionServiceProvider);
     final uniqueName = await service.uniqueCollectionTitle(name);
     await service.createCollection(AudioCollection(id: 0, title: uniqueName));
+    ref.invalidate(collectionsProvider);
   }
 }
 
