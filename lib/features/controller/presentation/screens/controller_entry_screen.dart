@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/providers/controller_providers.dart';
 import 'controller_screen.dart';
-import 'controller_screen_backup.dart';
 import 'first_connection_screen.dart';
 
 class ControllerEntryScreen extends ConsumerWidget {
@@ -16,9 +15,9 @@ class ControllerEntryScreen extends ConsumerWidget {
     return activeBindingAsync.when(
       data: (binding) {
         if (binding == null) {
-          return const ControllerScreenBackup();
+          return const FirstConnectionScreen();
         }
-        return const ControllerScreenBackup();
+        return const ControllerScreen();
       },
       loading:
           () =>
