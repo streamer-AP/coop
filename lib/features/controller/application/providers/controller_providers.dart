@@ -150,6 +150,11 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
     _updatePlayer();
   }
 
+  void resetIntensities() {
+    state = state.copyWith(swingIntensity: 0, vibrationIntensity: 0);
+    ref.read(waveformPlayerServiceProvider).stop();
+  }
+
   void _updatePlayer() {
     final player = ref.read(waveformPlayerServiceProvider);
     player.update(

@@ -236,16 +236,11 @@ class _ControllerDeviceStatusCardState extends State<ControllerDeviceStatusCard>
       ),
       DeviceConnectionStatus.connecting => _StatusConfig(
         label: '设备连接中',
-        icon: SizedBox(
+        icon: Image.asset(
+          ControllerAssets.connectionNo,
           width: 12,
           height: 12,
-          child: RotationTransition(
-            turns: _rotationController,
-            child: Image.asset(
-              ControllerAssets.connectionLoading,
-              fit: BoxFit.contain,
-            ),
-          ),
+          fit: BoxFit.contain,
         ),
       ),
       DeviceConnectionStatus.disconnected => _StatusConfig(

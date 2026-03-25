@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../../shared/widgets/top_banner_toast.dart';
+import '../../application/providers/controller_connection_flow.dart';
 import '../../controller_assets.dart';
+import '../widgets/controller_device_connect_item.dart';
 
 class FirstConnectionScreen extends ConsumerStatefulWidget {
   const FirstConnectionScreen({super.key});
@@ -26,7 +29,6 @@ class _FirstConnectionScreen extends ConsumerState<FirstConnectionScreen>
   static const _accentColor = ControllerAssets.accent;
 
   late final AnimationController _rotationController;
-  bool _isSearching = false;
 
   @override
   void initState() {
@@ -35,11 +37,48 @@ class _FirstConnectionScreen extends ConsumerState<FirstConnectionScreen>
       vsync: this,
       duration: const Duration(seconds: 4),
     );
+
+    ref.listenManual<ControllerConnectionFlowState>(
+      controllerConnectionFlowProvider,
+      (previous, next) {
+        if (next.isSearching && !_rotationController.isAnimating) {
+          unawaited(_rotationController.repeat());
+        }
+
+        if (!next.isSearching && _rotationController.isAnimating) {
+          _rotationController.stop();
+        }
+
+        if (next.didTimeout && previous?.didTimeout != true && mounted) {
+          TopBannerToast.show(context, message: '未搜索到设备', isError: false);
+          ref
+              .read(controllerConnectionFlowProvider.notifier)
+              .clearTimeoutFlag();
+        }
+
+        final errorMessage = next.errorMessage;
+        if (errorMessage != null &&
+            errorMessage != previous?.errorMessage &&
+            mounted) {
+          TopBannerToast.show(context, message: errorMessage);
+          ref.read(controllerConnectionFlowProvider.notifier).clearError();
+        }
+
+        final infoMessage = next.infoMessage;
+        if (infoMessage != null &&
+            infoMessage != previous?.infoMessage &&
+            mounted) {
+          TopBannerToast.show(context, message: infoMessage, isError: false);
+          ref.read(controllerConnectionFlowProvider.notifier).clearInfo();
+        }
+      },
+    );
   }
 
   @override
   void dispose() {
     _rotationController.dispose();
+    unawaited(ref.read(controllerConnectionFlowProvider.notifier).stopScan());
     super.dispose();
   }
 
@@ -48,20 +87,20 @@ class _FirstConnectionScreen extends ConsumerState<FirstConnectionScreen>
   }
 
   void _handleConnectTap() {
-    if (_isSearching) {
+    final notifier = ref.read(controllerConnectionFlowProvider.notifier);
+    final connectionFlow = ref.read(controllerConnectionFlowProvider);
+    if (connectionFlow.isConnecting) {
       return;
     }
-
-    setState(() {
-      _isSearching = true;
-    });
-    unawaited(_rotationController.repeat());
+    unawaited(notifier.startScan());
   }
 
   void _handleShopTap() {}
 
   @override
   Widget build(BuildContext context) {
+    final connectionFlow = ref.watch(controllerConnectionFlowProvider);
+
     return Scaffold(
       backgroundColor: ControllerAssets.background,
       body: Stack(
@@ -86,8 +125,8 @@ class _FirstConnectionScreen extends ConsumerState<FirstConnectionScreen>
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
                     child:
-                        _isSearching
-                            ? _buildSearchingContent()
+                        connectionFlow.shouldKeepSearchContent
+                            ? _buildSearchingContent(connectionFlow)
                             : _buildInitialContent(),
                   ),
                 ),
@@ -234,13 +273,13 @@ class _FirstConnectionScreen extends ConsumerState<FirstConnectionScreen>
     );
   }
 
-  Widget _buildSearchingContent() {
+  Widget _buildSearchingContent(ControllerConnectionFlowState connectionFlow) {
     return Padding(
       key: const ValueKey('searching-content'),
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         children: [
-          const SizedBox(height: 92),
+          const SizedBox(height: 72),
           SizedBox(
             width: 180,
             height: 180,
@@ -274,12 +313,73 @@ class _FirstConnectionScreen extends ConsumerState<FirstConnectionScreen>
             ),
           ),
           const SizedBox(height: 10),
-          const Text(
-            '请将手机靠近设备并保持蓝牙打开',
+          Text(
+            connectionFlow.isConnecting
+                ? '请保持设备靠近手机并稍候'
+                : connectionFlow.hasMultipleDevices
+                ? '请选择要连接的设备'
+                : '请将手机靠近设备并保持蓝牙打开',
             textAlign: TextAlign.center,
-            style: TextStyle(color: _bodyTextColor, fontSize: 13),
+            style: const TextStyle(color: _bodyTextColor, fontSize: 13),
           ),
-          const Spacer(),
+          const SizedBox(height: 28),
+          if (connectionFlow.hasMultipleDevices)
+            Expanded(
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: connectionFlow.devices.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final device = connectionFlow.devices[index];
+                        return ControllerDeviceConnectItem(
+                          device: device,
+                          isConnecting:
+                              connectionFlow.connectingDeviceId == device.id,
+                          onConnect:
+                              () => ref
+                                  .read(
+                                    controllerConnectionFlowProvider.notifier,
+                                  )
+                                  .connectDevice(device),
+                        );
+                      },
+                    ),
+                  ),
+                  if (connectionFlow.isSearching) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              _accentColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '发现更多设备...',
+                          style: TextStyle(
+                            color: _accentColor.withValues(alpha: 0.88),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ],
+              ),
+            )
+          else
+            const Spacer(),
         ],
       ),
     );

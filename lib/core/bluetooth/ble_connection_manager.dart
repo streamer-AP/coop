@@ -30,6 +30,7 @@ class BleConnectionManager {
   StreamSubscription<List<int>>? _notifySub;
 
   BleDevice? _currentDevice;
+  Map<String, dynamic> _lastDeviceInfo = <String, dynamic>{};
 
   Stream<BleConnectionState> get connectionStateStream =>
       _connectionStateController.stream;
@@ -41,6 +42,9 @@ class BleConnectionManager {
   BleDevice? get connectedDevice => _currentDevice;
 
   bool get isConnected => _connectedDevice != null;
+
+  Map<String, dynamic> get lastDeviceInfo =>
+      Map<String, dynamic>.unmodifiable(_lastDeviceInfo);
 
   /// 扫描附近的 OMAO 设备
   Stream<List<BleDevice>> scanDevices({
@@ -103,6 +107,7 @@ class BleConnectionManager {
 
       _connectedDevice = btDevice;
       _currentDevice = device.copyWith(isConnected: true);
+      _lastDeviceInfo = {'deviceName': device.name};
 
       _connectionSub = btDevice.connectionState.listen((state) {
         if (state == BluetoothConnectionState.disconnected) {
@@ -118,6 +123,7 @@ class BleConnectionManager {
       AppLogger().error('$_tag: connection failed', error: e);
       _connectedDevice = null;
       _currentDevice = null;
+      _lastDeviceInfo = <String, dynamic>{};
       _connectionStateController.add(BleConnectionState.disconnected);
       rethrow;
     }
@@ -260,7 +266,8 @@ class BleConnectionManager {
     }
 
     if (info.isNotEmpty) {
-      _deviceInfoController.add(info);
+      _lastDeviceInfo = {..._lastDeviceInfo, ...info};
+      _deviceInfoController.add(Map<String, dynamic>.from(_lastDeviceInfo));
     }
   }
 
