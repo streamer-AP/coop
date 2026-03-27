@@ -62,20 +62,52 @@ class AppColors {
   static const profileBackgroundGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [
-      Color(0xFF3A2D5C),
-      Color(0xFF8B7AAF),
-      Color(0xFFD5CCE6),
-    ],
+    colors: [Color(0xFF3A2D5C), Color(0xFF8B7AAF), Color(0xFFD5CCE6)],
     stops: [0.0, 0.4, 1.0],
   );
 
   static const purpleButtonGradient = LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
-    colors: [
-      Color(0xFF7B61A0),
-      Color(0xFF9B85C0),
-    ],
+    colors: [Color(0xFF7B61A0), Color(0xFF9B85C0)],
   );
+}
+
+class AppSpacing {
+  AppSpacing._();
+
+  static const xs = 4.0;
+  static const sm = 8.0;
+  static const md = 12.0;
+  static const lg = 16.0;
+  static const xl = 20.0;
+}
+
+class AppRadii {
+  AppRadii._();
+
+  static const sm = 12.0;
+  static const md = 16.0;
+  static const lg = 20.0;
+  static const pill = 999.0;
+}
+
+class AppShadows {
+  AppShadows._();
+
+  static List<BoxShadow> soft({Color color = const Color(0xFF6A53A7)}) => [
+    BoxShadow(
+      color: color.withValues(alpha: 0.05),
+      blurRadius: 12,
+      offset: const Offset(0, 3),
+    ),
+  ];
+
+  static List<BoxShadow> subtle({Color color = Colors.black}) => [
+    BoxShadow(
+      color: color.withValues(alpha: 0.04),
+      blurRadius: 8,
+      offset: const Offset(0, 2),
+    ),
+  ];
 }

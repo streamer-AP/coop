@@ -15,9 +15,9 @@ class OmaoTabBar extends StatelessWidget {
   });
 
   static const _designWidth = 237.0;
-  static const _designHeight = 62.0;
+  static const _designHeight = 58.0;
   static const _designItemWidth = 75.0;
-  static const _designItemHeight = 50.0;
+  static const _designItemHeight = 46.0;
   static const _designBottomOffset = 52.0;
   static const _designSafeGap = 18.0;
   static const _selectedColor = Color(0xFF6A53A7);
@@ -46,22 +46,23 @@ class OmaoTabBar extends StatelessWidget {
       padding: EdgeInsets.only(bottom: bottomOffset),
       child: Center(
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(40 * scale),
+          borderRadius: BorderRadius.circular(34 * scale),
           child: BackdropFilter(
             filter: ui.ImageFilter.blur(
-              sigmaX: 11.538 * scale,
-              sigmaY: 11.538 * scale,
+              sigmaX: 8.5 * scale,
+              sigmaY: 8.5 * scale,
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: const Color(0x99000000),
-                borderRadius: BorderRadius.circular(40 * scale),
+                color: const Color(0x82000000),
+                borderRadius: BorderRadius.circular(34 * scale),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: SizedBox(
                 width: width,
                 height: height,
                 child: Padding(
-                  padding: EdgeInsets.all(6 * scale),
+                  padding: EdgeInsets.all(5 * scale),
                   child: Row(
                     children: List.generate(3, (index) {
                       return _TabItem(
@@ -119,8 +120,11 @@ class _TabItem extends StatelessWidget {
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: selected ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(30 * scale),
+                  color:
+                      selected
+                          ? Colors.white.withValues(alpha: 0.96)
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(26 * scale),
                 ),
               ),
             ),
@@ -134,9 +138,9 @@ class _TabItem extends StatelessWidget {
                     label,
                     style: TextStyle(
                       color: color,
-                      fontSize: 12 * scale,
+                      fontSize: 11.5 * scale,
                       height: 14 / 12,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
                 ],
