@@ -36,6 +36,8 @@ class ApiEndpoints {
 
   // Controller
   static const String waveformSync = '/controller/waveforms/sync';
+  static const String querySwing = '/usrSwingWaveFormConfig/info/default/swing';
+  static const String queryVibration = '/usrSwingWaveFormConfig/info/default/vibration';
 
   // Story
   static const String storyProgress = '/story/progress';

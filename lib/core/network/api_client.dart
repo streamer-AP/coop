@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:omao_app/core/network/interceptors/logging_interceptor.dart';
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -78,6 +79,7 @@ Dio dio(Ref ref) {
     ),
   );
   dio.interceptors.add(AuthInterceptor(TokenStorage()));
+  dio.interceptors.add(LoggingInterceptor());
   return dio;
 }
 

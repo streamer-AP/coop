@@ -16,6 +16,7 @@ class BleSignalSender {
   Timer? _timer;
   BleSignal? _currentSignal;
   Uint8List? _lastPayload;
+  bool _stopAfterCurrentSend = false;
 
   static const sendInterval = Duration(milliseconds: 200);
 
@@ -43,6 +44,7 @@ class BleSignalSender {
 
   void updateSignal(BleSignal signal) {
     _currentSignal = signal;
+    _stopAfterCurrentSend = _isIdleSignal(signal);
     if (_timer == null) {
       start();
     }
@@ -50,10 +52,29 @@ class BleSignalSender {
 
   Future<void> _sendSignal() async {
     if (_currentSignal == null) return;
-    if (!_connectionManager.isConnected) return;
+    if (!_connectionManager.isConnected) {
+      AppLogger().debug('$_tag: skip send, device not connected');
+      return;
+    }
 
-    final payload = _protocol.encodeSignal(_currentSignal!);
+    final signal = _currentSignal!;
+    final payload = _protocol.encodeSignal(signal);
     _lastPayload = payload;
+    AppLogger().debug(
+      '$_tag: sending signal '
+      'swing=${signal.swing} vibration=${signal.vibration} '
+      'durationMs=${signal.durationMs} delayMs=${signal.delayMs} '
+      'payload=${payload.toList()}',
+    );
     await _connectionManager.writePayload(payload);
+
+    if (_stopAfterCurrentSend && _isIdleSignal(signal)) {
+      AppLogger().debug('$_tag: idle signal sent once, stopping sender');
+      stop();
+    }
+  }
+
+  bool _isIdleSignal(BleSignal signal) {
+    return signal.swing == 0 && signal.vibration == 0 && !signal.usesTimedMode;
   }
 }

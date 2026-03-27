@@ -88,6 +88,7 @@ flutter:
     - assets/figma/components/home_menu/
     - assets/figma/components/tab_bar/
     - assets/figma/home/
+    - assets/figma/controller/
     - assets/figma/player/
     - assets/figma/icons/
   fonts:

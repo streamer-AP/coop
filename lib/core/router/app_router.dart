@@ -12,7 +12,7 @@ import '../../features/auth/presentation/screens/setup_password_screen.dart';
 import '../../features/auth/presentation/screens/startup_screen.dart';
 import '../../features/auth/presentation/screens/verification_code_screen.dart';
 import '../../features/controller/domain/models/waveform.dart';
-import '../../features/controller/presentation/screens/controller_screen.dart';
+import '../../features/controller/presentation/screens/controller_entry_screen.dart';
 import '../../features/controller/presentation/screens/waveform_editor_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/message/presentation/screens/message_detail_screen.dart';
@@ -162,7 +162,7 @@ GoRouter appRouter(Ref ref) {
       GoRoute(
         path: '/controller',
         name: RouteNames.controller,
-        builder: (context, state) => const ControllerScreen(),
+        builder: (context, state) => const ControllerEntryScreen(),
       ),
       GoRoute(
         path: '/waveform-editor',
