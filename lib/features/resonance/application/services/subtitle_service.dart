@@ -1,7 +1,25 @@
+import 'dart:convert';
+import 'dart:io';
+
 import '../../domain/models/subtitle.dart';
 
 /// Parses subtitle files in 5 formats and provides position-based cue lookup.
 class SubtitleService {
+  Future<String> readTextFile(String path) async {
+    final bytes = await File(path).readAsBytes();
+    return decodeTextBytes(bytes);
+  }
+
+  String decodeTextBytes(List<int> bytes) {
+    if (bytes.isEmpty) return '';
+
+    try {
+      return _normalizeDecodedText(utf8.decode(bytes));
+    } on FormatException {
+      return _normalizeDecodedText(utf8.decode(bytes, allowMalformed: true));
+    }
+  }
+
   /// Parse a subtitle file content based on its format.
   ParsedSubtitle parse(SubtitleRef ref, String content) {
     final cues = switch (ref.format) {
@@ -59,7 +77,10 @@ class SubtitleService {
 
       final start = _parseSrtTime(match, 1);
       final end = _parseSrtTime(match, 5);
-      final text = lines.sublist(2).join('\n').replaceAll(RegExp(r'<[^>]+>'), '');
+      final text = lines
+          .sublist(2)
+          .join('\n')
+          .replaceAll(RegExp(r'<[^>]+>'), '');
 
       cues.add(SubtitleCue(start: start, end: end, text: text));
     }
@@ -108,14 +129,13 @@ class SubtitleService {
     }
 
     for (int i = 0; i < timestamps.length; i++) {
-      final end = i + 1 < timestamps.length
-          ? timestamps[i + 1].$1
-          : timestamps[i].$1 + const Duration(seconds: 5);
-      cues.add(SubtitleCue(
-        start: timestamps[i].$1,
-        end: end,
-        text: timestamps[i].$2,
-      ));
+      final end =
+          i + 1 < timestamps.length
+              ? timestamps[i + 1].$1
+              : timestamps[i].$1 + const Duration(seconds: 5);
+      cues.add(
+        SubtitleCue(start: timestamps[i].$1, end: end, text: timestamps[i].$2),
+      );
     }
 
     return cues;
@@ -135,11 +155,13 @@ class SubtitleService {
       final endFrame = int.parse(match.group(2)!);
       final text = match.group(3)!.replaceAll('|', '\n');
 
-      cues.add(SubtitleCue(
-        start: Duration(milliseconds: (startFrame / fps * 1000).round()),
-        end: Duration(milliseconds: (endFrame / fps * 1000).round()),
-        text: text,
-      ));
+      cues.add(
+        SubtitleCue(
+          start: Duration(milliseconds: (startFrame / fps * 1000).round()),
+          end: Duration(milliseconds: (endFrame / fps * 1000).round()),
+          text: text,
+        ),
+      );
     }
 
     return cues;
@@ -175,5 +197,9 @@ class SubtitleService {
     }
 
     return cues;
+  }
+
+  String _normalizeDecodedText(String content) {
+    return content.replaceFirst('\uFEFF', '').replaceAll('\u0000', '');
   }
 }

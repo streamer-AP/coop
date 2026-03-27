@@ -13,8 +13,8 @@ class AppColors {
   static const listBackground = Color(0xFFF5F5F5);
 
   // Gradient colors
-  static const gradientStart = Color(0xB3634E83); // rgba(99,78,131,0.7)
-  static const gradientEnd = Color(0xB3EAEAEA); // rgba(234,234,234,0.7)
+  static const gradientStart = Color(0xFF786B9E); // Figma 选歌页顶部
+  static const gradientEnd = Color(0xFFB8A8D0); // Figma 选歌页底部
 
   // Tab bar
   static const tabBarBg = Color(0xFF2C2C2E);
@@ -45,15 +45,6 @@ class AppColors {
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [gradientStart, gradientEnd],
-  );
-
-  static const miniPlayerGradient = LinearGradient(
-    begin: Alignment.centerLeft,
-    end: Alignment.centerRight,
-    colors: [
-      Color(0xCC634E83),
-      Color(0xAA8B6FAF),
-    ],
   );
 
   static const homeBackgroundGradient = LinearGradient(

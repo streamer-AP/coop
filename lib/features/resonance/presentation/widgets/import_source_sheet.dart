@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/providers/import_providers.dart';
+import '../../../../core/theme/app_icons.dart';
 import 'import_instruction_sheet.dart';
 
 /// Bottom sheet for choosing import source: files or zip archive.
@@ -42,11 +43,7 @@ class ImportSourceSheet extends ConsumerWidget {
                       Navigator.of(context).pop();
                       await ImportInstructionSheet.show(context);
                     },
-                    child: const Icon(
-                      Icons.help_outline,
-                      color: Color(0xFF79747E),
-                      size: 22,
-                    ),
+                    child: AppIcons.icon(AppIcons.search01, size: 22, color: const Color(0xFF79747E)),
                   ),
                 ],
               ),
@@ -54,7 +51,7 @@ class ImportSourceSheet extends ConsumerWidget {
             const Divider(height: 1),
             const SizedBox(height: 8),
             _SourceOption(
-              icon: Icons.folder_outlined,
+              svgPath: AppIcons.file,
               label: '文件',
               onTap: () {
                 Navigator.of(context).pop();
@@ -64,7 +61,7 @@ class ImportSourceSheet extends ConsumerWidget {
               },
             ),
             _SourceOption(
-              icon: Icons.archive_outlined,
+              svgPath: AppIcons.archive,
               label: '压缩包',
               onTap: () {
                 Navigator.of(context).pop();
@@ -82,12 +79,12 @@ class ImportSourceSheet extends ConsumerWidget {
 
 class _SourceOption extends StatelessWidget {
   const _SourceOption({
-    required this.icon,
+    required this.svgPath,
     required this.label,
     required this.onTap,
   });
 
-  final IconData icon;
+  final String svgPath;
   final String label;
   final VoidCallback onTap;
 
@@ -105,7 +102,7 @@ class _SourceOption extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                Icon(icon, color: const Color(0xFF49454F), size: 24),
+                AppIcons.icon(svgPath, size: 24, color: const Color(0xFF49454F)),
                 const SizedBox(width: 12),
                 Text(
                   label,

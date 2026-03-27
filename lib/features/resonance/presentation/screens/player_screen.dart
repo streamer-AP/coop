@@ -2,17 +2,26 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/bluetooth/ble_connection_manager.dart';
 import '../../../../core/bluetooth/ble_signal_arbitrator.dart';
 import '../../../../core/bluetooth/models/ble_signal.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
+import '../../../../shared/widgets/top_banner_toast.dart';
+import '../../../controller/application/providers/controller_providers.dart';
 import '../../application/providers/player_providers.dart';
 import '../../application/providers/signal_providers.dart';
 import '../../application/providers/subtitle_providers.dart';
 import '../../domain/models/player_state.dart';
+import '../../domain/models/subtitle.dart';
 import '../widgets/player_controls.dart';
+import '../widgets/script_view.dart';
 import '../widgets/seek_bar.dart';
 import '../widgets/subtitle_cover_import_sheet.dart';
 import '../widgets/subtitle_view.dart';
@@ -26,12 +35,30 @@ class PlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen>
-    with SingleTickerProviderStateMixin {
-  bool _showSubtitle = true;
-  bool _showControlPanel = false;
+    with TickerProviderStateMixin {
+  static String get _collapsedTitleFontFamily =>
+      defaultTargetPlatform == TargetPlatform.iOS
+          ? 'PingFang SC'
+          : 'SourceHanSansCN';
+
+  /// 0=cover/disc, 1=subtitle, 2=script
+  int _displayMode = 0;
   double _swingLevel = 0;
   double _vibrationLevel = 0;
+  double? _devicePanelHeight;
+  bool _isDraggingDevicePanel = false;
   late final AnimationController _discRotationController;
+  late final AnimationController _tonearmController;
+  late final ProviderSubscription<PlayerState> _playerStateSubscription;
+  late final ProviderSubscription<AsyncValue<ParsedSubtitle?>>
+  _translatedSubtitleSubscription;
+  String? _lastTranslationErrorMessage;
+
+  // The exported arm asset already matches the playing posture. Rotate it a
+  // little further left when paused so it visibly lifts away from the disc.
+  // Tonearm angles: positive = needle swings right (onto disc)
+  static const _tonearmRestAngle = -0.12;
+  static const _tonearmPlayAngle = 0.22;
 
   @override
   void initState() {
@@ -40,115 +67,274 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       vsync: this,
       duration: const Duration(seconds: 14),
     );
+    _tonearmController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    final initialPlayerState = ref.read(playerStateNotifierProvider);
+    if (initialPlayerState.currentEntry != null &&
+        initialPlayerState.isPlaying) {
+      _tonearmController.value = 1.0;
+      _discRotationController.repeat();
+    }
+    _playerStateSubscription = ref.listenManual<PlayerState>(
+      playerStateNotifierProvider,
+      (_, next) => _syncPlaybackAnimations(next),
+    );
+    _translatedSubtitleSubscription = ref
+        .listenManual<AsyncValue<ParsedSubtitle?>>(translatedSubtitleProvider, (
+          _,
+          next,
+        ) {
+          final error = next.error;
+          if (error == null) {
+            _lastTranslationErrorMessage = null;
+            return;
+          }
+
+          final message = '$error'.replaceFirst('Exception: ', '').trim();
+          if (message.isEmpty || message == _lastTranslationErrorMessage) {
+            return;
+          }
+          _lastTranslationErrorMessage = message;
+
+          if (!mounted) {
+            return;
+          }
+          TopBannerToast.show(context, message: message);
+        });
   }
 
   @override
   void dispose() {
+    _translatedSubtitleSubscription.close();
+    _playerStateSubscription.close();
     _discRotationController.dispose();
+    _tonearmController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final playerState = ref.watch(playerStateNotifierProvider);
-    final currentEntry = playerState.currentEntry;
+    final currentEntry = ref.watch(
+      playerStateNotifierProvider.select((state) => state.currentEntry),
+    );
+    final playlistTitle = ref.watch(
+      playerStateNotifierProvider.select((state) => state.playlistTitle),
+    );
     final hasEntry = currentEntry != null;
-    final hasSubtitle = ref.watch(currentSubtitleNotifierProvider) != null;
     final signalMode = ref.watch(signalModeNotifierProvider);
-    final shouldRotate = hasEntry && playerState.isPlaying;
-
-    if (shouldRotate && !_discRotationController.isAnimating) {
-      _discRotationController.repeat();
-    } else if (!shouldRotate && _discRotationController.isAnimating) {
-      _discRotationController.stop();
-    }
+    final connectionState =
+        ref.watch(connectionStateProvider).valueOrNull ??
+        BleConnectionState.disconnected;
+    final connectedDevice =
+        ref.watch(bleConnectionManagerProvider).connectedDevice;
+    final isDeviceConnected =
+        connectionState == BleConnectionState.connected &&
+        connectedDevice != null;
+    final showSubtitleStage = hasEntry && _displayMode == 1;
+    final showScriptStage = hasEntry && _displayMode == 2;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final collapsedPanelHeight = _collapsedPanelHeight(bottomInset);
+    final previewPanelHeight = _previewPanelHeight(bottomInset);
+    final expandedPanelHeight = _expandedPanelHeight(bottomInset);
+    final devicePanelHeight = _resolvedDevicePanelHeight(
+      collapsedPanelHeight: collapsedPanelHeight,
+      expandedPanelHeight: expandedPanelHeight,
+    );
+    final panelProgress = _devicePanelProgress(
+      panelHeight: devicePanelHeight,
+      collapsedHeight: collapsedPanelHeight,
+      expandedHeight: expandedPanelHeight,
+    );
+    final showPanelScrim = panelProgress > 0.18;
+    final contentBottomPadding = collapsedPanelHeight + 12;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          _buildBackground(currentEntry?.coverPath),
+          _buildBackground(),
           SafeArea(
             bottom: false,
-            child: Column(
-              children: [
-                _buildTopBar(
-                  title: playerState.playlistTitle,
-                  hasSubtitle: hasSubtitle,
-                  hasEntry: hasEntry,
-                ),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: Column(
-                    children: [
-                      SizedBox(
-                        height: 310,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child:
-                              _showSubtitle && hasSubtitle
-                                  ? _buildSubtitleStage()
-                                  : _buildDiscStage(
-                                    coverPath: currentEntry?.coverPath,
-                                    hasEntry: hasEntry,
-                                  ),
+            child: Padding(
+              padding: EdgeInsets.only(bottom: contentBottomPadding),
+              child: Column(
+                children: [
+                  // Top bar — only back button
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).pop(),
+                          child: AppIcons.asset(
+                            AppIcons.arrowLeft,
+                            width: 40,
+                            height: 40,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      _buildSongMeta(
-                        title: currentEntry?.title ?? '无播放',
-                        artist:
-                            (currentEntry?.artist?.trim().isNotEmpty ?? false)
-                                ? currentEntry!.artist!
-                                : 'Unknown Artist',
-                      ),
-                      const SizedBox(height: 24),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 37),
-                        child: SeekBar(),
-                      ),
-                      const SizedBox(height: 14),
-                      PlayerControls(onPlaylistTap: _showPlaylist),
-                      const Spacer(),
-                    ],
+                        const Spacer(),
+                      ],
+                    ),
                   ),
-                ),
-                _buildDeviceDock(hasEntry),
-              ],
-            ),
-          ),
-          if (_showControlPanel) ...[
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _closeControlPanel,
-                child: Container(color: Colors.black.withValues(alpha: 0.5)),
+                  // Song title + author (or playlist title on cover page)
+                  _buildSongMeta(
+                    title:
+                        _displayMode == 0
+                            ? playlistTitle
+                            : (currentEntry?.title ?? '无播放'),
+                    artist:
+                        _displayMode == 0
+                            ? (currentEntry?.title ?? '')
+                            : (currentEntry?.artist?.trim().isNotEmpty ?? false)
+                            ? currentEntry!.artist!
+                            : 'Unknown Artist',
+                  ),
+                  const SizedBox(height: 8),
+                  // Main content area
+                  Expanded(
+                    child:
+                        showSubtitleStage
+                            ? _buildSubtitleStage()
+                            : showScriptStage
+                            ? const ScriptView()
+                            : Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
+                              child: _buildDiscStage(
+                                coverPath: currentEntry?.coverPath,
+                                onTap: hasEntry ? _cycleDisplayMode : null,
+                              ),
+                            ),
+                  ),
+                  // More + Translate buttons (below lyrics)
+                  if (hasEntry)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(35, 4, 35, 8),
+                      child: Consumer(
+                        builder: (context, cRef, _) {
+                          final translationEnabled = cRef.watch(
+                            subtitleTranslationEnabledProvider,
+                          );
+                          return Row(
+                            children: [
+                              _SmallIconButton(
+                                icon: Icons.more_horiz,
+                                onTap: _showSubtitleOptions,
+                              ),
+                              const SizedBox(width: 12),
+                              GestureDetector(
+                                onTap:
+                                    () => _setSubtitleTranslationEnabled(
+                                      cRef,
+                                      !translationEnabled,
+                                    ),
+                                child: Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color:
+                                          translationEnabled
+                                              ? const Color(0xFF6A53A7)
+                                              : const Color(
+                                                0xFF797979,
+                                              ).withValues(alpha: 0.7),
+                                      width: 1.5,
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                    color:
+                                        translationEnabled
+                                            ? const Color(
+                                              0xFF6A53A7,
+                                            ).withValues(alpha: 0.1)
+                                            : null,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '译',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color:
+                                            translationEnabled
+                                                ? const Color(0xFF6A53A7)
+                                                : const Color(
+                                                  0xFF797979,
+                                                ).withValues(alpha: 0.7),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              // Display mode toggle
+                              _SmallIconButton(
+                                icon:
+                                    _displayMode == 0
+                                        ? Icons.lyrics_outlined
+                                        : _displayMode == 1
+                                        ? Icons.description_outlined
+                                        : Icons.album_outlined,
+                                onTap: _cycleDisplayMode,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  // Seek bar
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 37),
+                    child: SeekBar(),
+                  ),
+                  const SizedBox(height: 8),
+                  // Player controls
+                  PlayerControls(onPlaylistTap: _showPlaylist),
+                  const SizedBox(height: 8),
+                ],
               ),
             ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: _buildControlPanel(signalMode),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: !showPanelScrim,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 220),
+                opacity: showPanelScrim ? panelProgress * 0.52 : 0,
+                child: GestureDetector(
+                  onTap: _closeControlPanel,
+                  child: Container(color: Colors.black),
+                ),
+              ),
             ),
-          ],
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: _buildDevicePanel(
+              hasEntry: hasEntry,
+              signalMode: signalMode,
+              panelHeight: devicePanelHeight,
+              collapsedHeight: collapsedPanelHeight,
+              previewHeight: previewPanelHeight,
+              expandedHeight: expandedPanelHeight,
+              isDeviceConnected: isDeviceConnected,
+              deviceName: connectedDevice?.name,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildBackground(String? coverPath) {
+  Widget _buildBackground() {
     return SizedBox.expand(
       child: Stack(
         fit: StackFit.expand,
         children: [
           const ColoredBox(color: Color(0xFFEAEAEA)),
-          if (coverPath != null)
-            ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-              child: Image.file(
-                File(coverPath),
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.expand(),
-              ),
-            ),
           Align(
             alignment: Alignment.topCenter,
             child: Container(
@@ -157,320 +343,269 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xB3634E83),
-                    Color(0xB3EAEAEA),
-                  ],
+                  colors: [Color(0xB3634E83), Color(0xB3EAEAEA)],
                   stops: [0.0, 0.79328],
                 ),
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBar({
-    required String title,
-    required bool hasSubtitle,
-    required bool hasEntry,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-      child: Row(
-        children: [
-          _GlassCircleButton(
-            icon: Icons.chevron_left_rounded,
-            onTap: () => Navigator.of(context).pop(),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
+          // Radial light glow overlay
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 400,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 0.18,
+                child: Image.asset(
+                  'assets/figma/player/radial_light.png',
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                ),
               ),
             ),
           ),
-          const SizedBox(width: 14),
-          if (hasSubtitle)
-            _GlassCircleButton(
-              icon:
-                  _showSubtitle
-                      ? Icons.album_outlined
-                      : Icons.subtitles_rounded,
-              onTap: () => setState(() => _showSubtitle = !_showSubtitle),
-            )
-          else
-            const SizedBox(width: 40),
-          const SizedBox(width: 8),
-          _GlassCircleButton(
-            icon: Icons.more_horiz_rounded,
-            onTap: hasEntry ? _showSubtitleOptions : null,
+          // Noise texture overlay
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 0.12,
+                child: Image.asset(
+                  'assets/figma/player/noise_texture.png',
+                  fit: BoxFit.cover,
+                  colorBlendMode: BlendMode.overlay,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          // Iridescent light overlay
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 400,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 0.15,
+                child: Image.asset(
+                  'assets/figma/player/iridescent_light.png',
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topLeft,
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDiscStage({required String? coverPath, required bool hasEntry}) {
+  Widget _buildDiscStage({String? coverPath, VoidCallback? onTap}) {
+    // 有封面时显示圆角矩形大封面，无封面时显示唱片台
+    if (coverPath != null) {
+      return _buildCoverStage(coverPath: coverPath, onTap: onTap);
+    }
+    return _buildVinylStage(onTap: onTap);
+  }
+
+  /// 有封面 — 圆角矩形封面图
+  Widget _buildCoverStage({required String coverPath, VoidCallback? onTap}) {
     return Center(
-      child: SizedBox(
-        width: 330,
-        height: 330,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            Positioned(left: 6, top: 44, child: _buildTonearm()),
-            Positioned(
-              top: 0,
-              child: Container(
-                width: 293,
-                height: 293,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const RadialGradient(
-                    colors: [Color(0xFFF4F4F4), Color(0xFFD6D6D6)],
-                    stops: [0.0, 1.0],
-                  ),
-                  border: Border.all(
-                    color: const Color(0xFF7E6AAE).withValues(alpha: 0.32),
-                    width: 8,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 24,
-                      offset: const Offset(0, 16),
-                    ),
-                  ],
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: 260,
+          height: 260,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 32,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const ColoredBox(color: Color(0xFFF0ECE6)),
+                Image.file(
+                  File(coverPath),
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, __, ___) => _buildVinylStage(onTap: null),
                 ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    for (final diameter in const [275.0, 239.0, 214.0, 191.0])
-                      Container(
-                        width: diameter,
-                        height: diameter,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(
-                              0xFF7F7F7F,
-                            ).withValues(alpha: 0.15),
-                          ),
-                        ),
-                      ),
-                    Container(
-                      width: 146,
-                      height: 146,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const RadialGradient(
-                          colors: [Color(0xFF3A3A3A), Color(0xFF161616)],
-                        ),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          width: 1.2,
-                        ),
-                      ),
-                      child: ClipOval(
-                        child: RotationTransition(
-                          turns: _discRotationController,
-                          child:
-                              coverPath != null
-                                  ? Image.file(
-                                    File(coverPath),
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (_, __, ___) =>
-                                            _buildDiscFallback(hasEntry),
-                                  )
-                                  : _buildDiscFallback(hasEntry),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const RadialGradient(
-                          colors: [Color(0xFF9E9E9E), Color(0xFF5F5F5F)],
-                        ),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.18),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color(0xFFBEBEBE),
-                      ),
-                    ),
-                  ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 无封面 — 唱片台（disc + tonearm）
+  Widget _buildVinylStage({VoidCallback? onTap}) {
+    return Center(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: 280,
+          height: 300,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                top: 20,
+                right: 5,
+                child: RotationTransition(
+                  turns: _discRotationController,
+                  child: Image.asset(
+                    'assets/figma/player/disc.png',
+                    width: 250,
+                    height: 250,
+                  ),
                 ),
               ),
-            ),
-          ],
+              Positioned(
+                left: 5,
+                top: 120,
+                child: IgnorePointer(child: _buildTonearm()),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildTonearm() {
-    return Transform.rotate(
-      angle: -0.58,
-      alignment: Alignment.topCenter,
-      child: SizedBox(
-        width: 90,
-        height: 172,
-        child: Stack(
-          alignment: Alignment.topCenter,
-          children: [
-            Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const RadialGradient(
-                  colors: [Color(0xFFE6E6E6), Color(0xFFBDBDBD)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              top: 20,
-              child: Container(
-                width: 10,
-                height: 108,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(40),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFFD9D9D9), Color(0xFF8C8C8C)],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 116,
-              child: Container(
-                width: 34,
-                height: 42,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFFF5F5F5), Color(0xFFCFCFCF)],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 147,
-              child: Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFECECEC),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDiscFallback(bool hasEntry) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF7A7A7A), Color(0xFFB9B9B9)],
-        ),
-      ),
-      child: Icon(
-        Icons.music_note_rounded,
-        size: 42,
-        color:
-            hasEntry
-                ? Colors.white.withValues(alpha: 0.88)
-                : Colors.white.withValues(alpha: 0.45),
+    return AnimatedBuilder(
+      animation: _tonearmController,
+      builder: (context, child) {
+        final angle =
+            lerpDouble(
+              _tonearmRestAngle,
+              _tonearmPlayAngle,
+              Curves.easeInOut.transform(_tonearmController.value),
+            )!;
+        return Transform.rotate(
+          angle: angle,
+          alignment: Alignment.bottomCenter,
+          child: child,
+        );
+      },
+      child: Image.asset(
+        'assets/figma/player/tonearm.png',
+        width: 74,
+        height: 184,
       ),
     );
   }
 
   Widget _buildSubtitleStage() {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-        ),
-        const Positioned.fill(child: SubtitleView()),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: Column(
-              children: [
-                Container(
-                  height: 60,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        AppColors.background.withValues(alpha: 0.96),
-                        AppColors.background.withValues(alpha: 0.0),
-                      ],
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  height: 72,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        AppColors.background.withValues(alpha: 0.0),
-                        AppColors.background.withValues(alpha: 0.98),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+    return const SubtitleView();
+  }
+
+  void _syncPlaybackAnimations(PlayerState playerState) {
+    final shouldRotate =
+        playerState.currentEntry != null && playerState.isPlaying;
+
+    if (shouldRotate) {
+      if (!_discRotationController.isAnimating) {
+        _discRotationController.repeat();
+      }
+      if (_tonearmController.value < 1.0 &&
+          _tonearmController.status != AnimationStatus.forward) {
+        _tonearmController.forward();
+      }
+      return;
+    }
+
+    if (_discRotationController.isAnimating) {
+      _discRotationController.stop();
+    }
+    if (_tonearmController.value > 0.0 &&
+        _tonearmController.status != AnimationStatus.reverse) {
+      _tonearmController.reverse();
+    }
+  }
+
+  void _cycleDisplayMode() {
+    setState(() => _displayMode = (_displayMode + 1) % 3);
+  }
+
+  void _setSubtitleTranslationEnabled(WidgetRef ref, bool enabled) {
+    if (!enabled) {
+      ref.read(subtitleTranslationEnabledProvider.notifier).state = false;
+      return;
+    }
+
+    final currentSubtitle = ref.read(currentSubtitleNotifierProvider);
+    if (currentSubtitle != null) {
+      final detectedLanguage = _detectSubtitleLanguage(currentSubtitle);
+      final translationLanguageNotifier = ref.read(
+        subtitleTranslationLanguageProvider.notifier,
+      );
+      if (detectedLanguage != null &&
+          translationLanguageNotifier.state == detectedLanguage) {
+        final nextLanguage =
+            detectedLanguage == SubtitleTranslationLanguage.zh
+                ? SubtitleTranslationLanguage.ja
+                : SubtitleTranslationLanguage.zh;
+        translationLanguageNotifier.state = nextLanguage;
+        if (mounted) {
+          TopBannerToast.show(
+            context,
+            message: '已切换为翻译成${nextLanguage.label}',
+            isError: false,
+          );
+        }
+      }
+    }
+
+    ref.read(subtitleTranslationEnabledProvider.notifier).state = true;
+  }
+
+  SubtitleTranslationLanguage? _detectSubtitleLanguage(
+    ParsedSubtitle subtitle,
+  ) {
+    final sample = subtitle.cues
+        .take(12)
+        .map((cue) => cue.text.trim())
+        .where((text) => text.isNotEmpty)
+        .join('\n');
+    if (sample.isEmpty) {
+      return null;
+    }
+
+    for (final rune in sample.runes) {
+      final isKana =
+          (rune >= 0x3040 && rune <= 0x309F) ||
+          (rune >= 0x30A0 && rune <= 0x30FF) ||
+          (rune >= 0x31F0 && rune <= 0x31FF);
+      if (isKana) {
+        return SubtitleTranslationLanguage.ja;
+      }
+    }
+
+    final hasCjk = sample.runes.any(
+      (rune) =>
+          (rune >= 0x4E00 && rune <= 0x9FFF) ||
+          (rune >= 0x3400 && rune <= 0x4DBF) ||
+          (rune >= 0xF900 && rune <= 0xFAFF),
     );
+    if (hasCjk) {
+      return SubtitleTranslationLanguage.zh;
+    }
+
+    return null;
   }
 
   Widget _buildSongMeta({required String title, required String artist}) {
@@ -484,255 +619,384 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 24,
+              fontSize: 18,
               fontWeight: FontWeight.w500,
               color: Colors.black,
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 2),
           Text(
             artist,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, color: Color(0xFF797979)),
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.white.withValues(alpha: 0.7),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDeviceDock(bool hasEntry) {
+  Widget _buildDevicePanel({
+    required bool hasEntry,
+    required SignalMode signalMode,
+    required double panelHeight,
+    required double collapsedHeight,
+    required double previewHeight,
+    required double expandedHeight,
+    required bool isDeviceConnected,
+    required String? deviceName,
+  }) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final showPreview = panelHeight >= previewHeight - 8;
+    final showExpanded = panelHeight > previewHeight + 36;
+    final actionEnabled = hasEntry;
+    final actionLabel =
+        isDeviceConnected
+            ? '打开控制'
+            : actionEnabled
+            ? '连接设备'
+            : '暂无设备';
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(0, 12, 0, math.max(12, bottomInset)),
+    return AnimatedContainer(
+      duration:
+          _isDraggingDevicePanel
+              ? Duration.zero
+              : const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      height: panelHeight,
+      width: double.infinity,
       decoration: const BoxDecoration(
         color: Color(0xFFF5F5F5),
         borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 6,
-            decoration: BoxDecoration(
-              color: const Color(0xFFDBD4EE),
-              borderRadius: BorderRadius.circular(6),
-            ),
-          ),
-          const SizedBox(height: 14),
-          GestureDetector(
-            onTap: hasEntry ? _openControlPanel : null,
-            child: Container(
-              width: 320,
-              height: 52,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(35),
-                gradient:
-                    hasEntry
-                        ? const LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: [
-                            Color(0xFFECE5FF),
-                            Color(0xFFFBF9FF),
-                            Colors.white,
-                          ],
-                          stops: [0.0, 0.53, 0.98],
-                        )
-                        : const LinearGradient(
-                          colors: [Color(0xFFE3E3E3), Color(0xFFD8D8D8)],
-                        ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(
-                      0xFFB8AEDA,
-                    ).withValues(alpha: hasEntry ? 0.18 : 0.05),
-                    blurRadius: 18,
-                    offset: const Offset(0, 10),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap:
+                  () => _snapDevicePanel(
+                    showExpanded
+                        ? _DevicePanelSnap.preview
+                        : showPreview
+                        ? _DevicePanelSnap.expanded
+                        : _DevicePanelSnap.preview,
+                    bottomInset: bottomInset,
                   ),
-                ],
+              onVerticalDragUpdate:
+                  (details) => _handleDevicePanelDragUpdate(
+                    details,
+                    bottomInset: bottomInset,
+                  ),
+              onVerticalDragEnd:
+                  (details) => _handleDevicePanelDragEnd(
+                    details,
+                    bottomInset: bottomInset,
+                  ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDBD4EE),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeOutCubic,
+                      child:
+                          showExpanded
+                              ? Padding(
+                                key: const ValueKey('expanded-header'),
+                                padding: const EdgeInsets.only(top: 14),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      deviceName?.trim().isNotEmpty == true
+                                          ? deviceName!
+                                          : '控制面板',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFF1C1B1F),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Text(
+                                      isDeviceConnected ? '设备已连接' : '未连接设备',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color:
+                                            isDeviceConnected
+                                                ? const Color(0xFF6A53A7)
+                                                : const Color(0xFF979797),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: _closeControlPanel,
+                                      icon: const Icon(
+                                        Icons.expand_more_rounded,
+                                        color: Color(0xFF8A8A8A),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                              : showPreview
+                              ? Padding(
+                                key: const ValueKey('preview-button'),
+                                padding: const EdgeInsets.only(top: 21),
+                                child: _buildDevicePanelButton(
+                                  label: actionLabel,
+                                  enabled: actionEnabled,
+                                  onTap:
+                                      actionEnabled
+                                          ? () {
+                                            if (isDeviceConnected) {
+                                              _openControlPanel();
+                                              return;
+                                            }
+                                            context.pushNamed(
+                                              RouteNames.controller,
+                                            );
+                                          }
+                                          : null,
+                                ),
+                              )
+                              : Padding(
+                                key: const ValueKey('collapsed-title'),
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'OMAO WITH YOU',
+                                  style: TextStyle(
+                                    fontFamily: _collapsedTitleFontFamily,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(
+                                      0xFF6A53A7,
+                                    ).withValues(alpha: 0.20),
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                              ),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Icon(
-                      Icons.tune_rounded,
-                      size: 16,
-                      color:
-                          hasEntry
-                              ? const Color(0xFF6A53A7)
-                              : const Color(0xFFAFAFAF),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    hasEntry ? '打开控制' : '选择音频后可控制',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color:
-                          hasEntry
-                              ? const Color(0xFF6A53A7)
-                              : const Color(0xFF9E9E9E),
-                    ),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color:
-                        hasEntry
-                            ? const Color(0xFF6A53A7)
-                            : const Color(0xFF9E9E9E),
-                  ),
-                ],
-              ),
             ),
-          ),
-        ],
+            if (showExpanded)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                  child: _buildControlPanelContent(signalMode),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildControlPanel(SignalMode signalMode) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-    final panelHeight =
-        math.min(MediaQuery.of(context).size.height * 0.66, 541).toDouble();
+  Widget _buildDevicePanelButton({
+    required String label,
+    required bool enabled,
+    required VoidCallback? onTap,
+  }) {
+    final contentColor =
+        enabled ? const Color(0xFF6A53A7) : const Color(0xFF9E9E9E);
+    final iconBackground =
+        enabled ? const Color(0xFFECE5FF) : const Color(0xFFE8E8E8);
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(35),
+          gradient:
+              enabled
+                  ? const LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Color(0xFFECE5FF),
+                      Color(0xFFFBF9FF),
+                      Colors.white,
+                    ],
+                    stops: [0.0, 0.53, 0.98],
+                  )
+                  : const LinearGradient(
+                    colors: [Color(0xFFE3E3E3), Color(0xFFD8D8D8)],
+                  ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(
+                0xFFB8AEDA,
+              ).withValues(alpha: enabled ? 0.18 : 0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: iconBackground,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Center(
+                child: AppIcons.icon(
+                  AppIcons.deviceLink,
+                  size: 18,
+                  color: contentColor,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: contentColor,
+                ),
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Transform.translate(
+                  offset: const Offset(6, 0),
+                  child: AppIcons.icon(
+                    AppIcons.arrowRight,
+                    size: 16,
+                    color: contentColor.withValues(alpha: enabled ? 0.55 : 0.7),
+                  ),
+                ),
+                AppIcons.icon(
+                  AppIcons.arrowRight,
+                  size: 16,
+                  color: contentColor.withValues(alpha: enabled ? 0.85 : 0.9),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControlPanelContent(SignalMode signalMode) {
     final isResonanceMode = signalMode == SignalMode.resonance;
     final isPresetMode = signalMode == SignalMode.preset;
 
-    return Container(
-      height: panelHeight + bottomInset,
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(20, 14, 20, 12 + bottomInset),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 40,
-            height: 6,
-            decoration: BoxDecoration(
-              color: const Color(0xFFDBD4EE),
-              borderRadius: BorderRadius.circular(6),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Text(
-                '收起控制',
-                style: TextStyle(fontSize: 16, color: Colors.black),
-              ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(
-                  Icons.expand_more_rounded,
-                  color: Color(0xFF8A8A8A),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const fixedHeaderHeight = 68.0;
+        final cardMinHeight = math.max(
+          0.0,
+          constraints.maxHeight - fixedHeaderHeight,
+        );
+
+        return SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Column(
+              children: [
+                _buildSignalToggleCard(
+                  label: '同步共鸣',
+                  selected: isResonanceMode,
+                  onChanged: (enabled) async {
+                    if (enabled) {
+                      await ref
+                          .read(signalModeNotifierProvider.notifier)
+                          .setMode(SignalMode.resonance);
+                      ref
+                          .read(bleSignalArbitratorProvider)
+                          .releaseSource(SignalSource.preset);
+                    } else {
+                      await ref
+                          .read(signalModeNotifierProvider.notifier)
+                          .setMode(SignalMode.off);
+                    }
+                  },
                 ),
-                onPressed: _closeControlPanel,
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          _buildSignalToggleCard(
-            label: '同步共鸣',
-            selected: isResonanceMode,
-            onChanged: (enabled) async {
-              if (enabled) {
-                await ref
-                    .read(signalModeNotifierProvider.notifier)
-                    .setMode(SignalMode.resonance);
-                ref
-                    .read(bleSignalArbitratorProvider)
-                    .releaseSource(SignalSource.preset);
-              } else {
-                await ref
-                    .read(signalModeNotifierProvider.notifier)
-                    .setMode(SignalMode.off);
-              }
-            },
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              padding: const EdgeInsets.fromLTRB(26, 16, 26, 18),
-              child: Column(
-                children: [
-                  _buildPresetModeHeader(
-                    selected: isPresetMode,
-                    onChanged: (enabled) async {
-                      if (enabled) {
-                        await ref
-                            .read(signalModeNotifierProvider.notifier)
-                            .setMode(SignalMode.preset);
-                        _sendPresetSignal();
-                      } else {
-                        await ref
-                            .read(signalModeNotifierProvider.notifier)
-                            .setMode(SignalMode.off);
-                      }
-                    },
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: cardMinHeight),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(26, 16, 26, 18),
+                    child: Column(
+                      children: [
+                        _buildPresetModeHeader(
+                          selected: isPresetMode,
+                          onChanged: (enabled) async {
+                            if (enabled) {
+                              await ref
+                                  .read(signalModeNotifierProvider.notifier)
+                                  .setMode(SignalMode.preset);
+                              _sendPresetSignal();
+                            } else {
+                              await ref
+                                  .read(signalModeNotifierProvider.notifier)
+                                  .setMode(SignalMode.off);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        _buildPresetSection(
+                          title: '摇摆',
+                          svgPath: AppIcons.swing,
+                          value: _swingLevel,
+                          enabled: isPresetMode,
+                          onChanged: (value) {
+                            setState(() => _swingLevel = value);
+                            _sendPresetSignal();
+                          },
+                        ),
+                        const SizedBox(height: 26),
+                        _buildPresetSection(
+                          title: '震动',
+                          svgPath: AppIcons.vibration,
+                          value: _vibrationLevel,
+                          enabled: isPresetMode,
+                          onChanged: (value) {
+                            setState(() => _vibrationLevel = value);
+                            _sendPresetSignal();
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  _buildPresetSection(
-                    title: '摇摆',
-                    icon: Icons.sync_alt_rounded,
-                    value: _swingLevel,
-                    enabled: isPresetMode,
-                    onChanged: (value) {
-                      setState(() => _swingLevel = value);
-                      _sendPresetSignal();
-                    },
-                  ),
-                  const SizedBox(height: 26),
-                  _buildPresetModeHeader(
-                    selected: isPresetMode,
-                    onChanged: (enabled) async {
-                      if (enabled) {
-                        await ref
-                            .read(signalModeNotifierProvider.notifier)
-                            .setMode(SignalMode.preset);
-                        _sendPresetSignal();
-                      } else {
-                        await ref
-                            .read(signalModeNotifierProvider.notifier)
-                            .setMode(SignalMode.off);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  _buildPresetSection(
-                    title: '震动',
-                    icon: Icons.vibration_rounded,
-                    value: _vibrationLevel,
-                    enabled: isPresetMode,
-                    onChanged: (value) {
-                      setState(() => _vibrationLevel = value);
-                      _sendPresetSignal();
-                    },
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -769,7 +1033,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }) {
     return Row(
       children: [
-        const Text('预设名1', style: TextStyle(fontSize: 16, color: Colors.black)),
+        const Text('使用预设', style: TextStyle(fontSize: 16, color: Colors.black)),
         const Spacer(),
         Switch.adaptive(
           value: selected,
@@ -783,7 +1047,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   Widget _buildPresetSection({
     required String title,
-    required IconData icon,
+    required String svgPath,
     required double value,
     required bool enabled,
     required ValueChanged<double> onChanged,
@@ -803,7 +1067,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                     color: Color(0xFF6A53A7),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(icon, size: 18, color: Colors.white),
+                  child: Center(
+                    child: AppIcons.icon(
+                      svgPath,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -875,11 +1145,123 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 
   void _openControlPanel() {
-    setState(() => _showControlPanel = true);
+    _snapDevicePanel(
+      _DevicePanelSnap.expanded,
+      bottomInset: MediaQuery.of(context).padding.bottom,
+    );
   }
 
   void _closeControlPanel() {
-    setState(() => _showControlPanel = false);
+    _snapDevicePanel(
+      _DevicePanelSnap.preview,
+      bottomInset: MediaQuery.of(context).padding.bottom,
+    );
+  }
+
+  double _collapsedPanelHeight(double bottomInset) => 63 + bottomInset;
+
+  double _previewPanelHeight(double bottomInset) => 130 + bottomInset;
+
+  double _expandedPanelHeight(double bottomInset) =>
+      math.min(MediaQuery.of(context).size.height * 0.66, 541).toDouble() +
+      bottomInset;
+
+  double _resolvedDevicePanelHeight({
+    required double collapsedPanelHeight,
+    required double expandedPanelHeight,
+  }) {
+    final current = _devicePanelHeight ?? collapsedPanelHeight;
+    return current.clamp(collapsedPanelHeight, expandedPanelHeight).toDouble();
+  }
+
+  double _devicePanelProgress({
+    required double panelHeight,
+    required double collapsedHeight,
+    required double expandedHeight,
+  }) {
+    if (expandedHeight <= collapsedHeight) return 0;
+    return ((panelHeight - collapsedHeight) /
+            (expandedHeight - collapsedHeight))
+        .clamp(0.0, 1.0);
+  }
+
+  void _snapDevicePanel(_DevicePanelSnap snap, {required double bottomInset}) {
+    final target = switch (snap) {
+      _DevicePanelSnap.collapsed => _collapsedPanelHeight(bottomInset),
+      _DevicePanelSnap.preview => _previewPanelHeight(bottomInset),
+      _DevicePanelSnap.expanded => _expandedPanelHeight(bottomInset),
+    };
+
+    setState(() {
+      _isDraggingDevicePanel = false;
+      _devicePanelHeight = target;
+    });
+  }
+
+  void _handleDevicePanelDragUpdate(
+    DragUpdateDetails details, {
+    required double bottomInset,
+  }) {
+    final minHeight = _collapsedPanelHeight(bottomInset);
+    final maxHeight = _expandedPanelHeight(bottomInset);
+    final current = _resolvedDevicePanelHeight(
+      collapsedPanelHeight: minHeight,
+      expandedPanelHeight: maxHeight,
+    );
+
+    setState(() {
+      _isDraggingDevicePanel = true;
+      _devicePanelHeight = (current - details.delta.dy).clamp(
+        minHeight,
+        maxHeight,
+      );
+    });
+  }
+
+  void _handleDevicePanelDragEnd(
+    DragEndDetails details, {
+    required double bottomInset,
+  }) {
+    final collapsedHeight = _collapsedPanelHeight(bottomInset);
+    final previewHeight = _previewPanelHeight(bottomInset);
+    final expandedHeight = _expandedPanelHeight(bottomInset);
+    final current = _resolvedDevicePanelHeight(
+      collapsedPanelHeight: collapsedHeight,
+      expandedPanelHeight: expandedHeight,
+    );
+    final velocity = details.primaryVelocity ?? 0;
+
+    if (velocity <= -650) {
+      if (current < previewHeight - 8) {
+        _snapDevicePanel(_DevicePanelSnap.preview, bottomInset: bottomInset);
+      } else {
+        _snapDevicePanel(_DevicePanelSnap.expanded, bottomInset: bottomInset);
+      }
+      return;
+    }
+
+    if (velocity >= 650) {
+      if (current > previewHeight + 32) {
+        _snapDevicePanel(_DevicePanelSnap.preview, bottomInset: bottomInset);
+      } else {
+        _snapDevicePanel(_DevicePanelSnap.collapsed, bottomInset: bottomInset);
+      }
+      return;
+    }
+
+    final candidates = <_DevicePanelSnap, double>{
+      _DevicePanelSnap.collapsed: collapsedHeight,
+      _DevicePanelSnap.preview: previewHeight,
+      _DevicePanelSnap.expanded: expandedHeight,
+    };
+
+    final nearest = candidates.entries.reduce(
+      (best, candidate) =>
+          (candidate.value - current).abs() < (best.value - current).abs()
+              ? candidate
+              : best,
+    );
+    _snapDevicePanel(nearest.key, bottomInset: bottomInset);
   }
 
   void _sendPresetSignal() {
@@ -961,14 +1343,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                     ),
                     SwitchListTile(
                       title: const Text('翻译字幕'),
-                      subtitle: const Text('支持中英日韩'),
+                      subtitle: const Text('支持中日互译'),
                       value: translationEnabled,
                       activeThumbColor: AppColors.primary,
-                      onChanged: (value) {
-                        sheetRef
-                            .read(subtitleTranslationEnabledProvider.notifier)
-                            .state = value;
-                      },
+                      onChanged:
+                          (value) =>
+                              _setSubtitleTranslationEnabled(sheetRef, value),
                     ),
                     if (translationEnabled) ...[
                       const SizedBox(height: 6),
@@ -1006,7 +1386,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                       const SizedBox(height: 10),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.download_outlined),
+                        leading: AppIcons.icon(
+                          AppIcons.importIcon,
+                          size: 24,
+                          color: const Color(0xFF49454F),
+                        ),
                         title: const Text('导入字幕/台本'),
                         subtitle: const Text('会覆盖当前条目的字幕或台本'),
                         onTap: () {
@@ -1038,36 +1422,36 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 }
 
-class _GlassCircleButton extends StatelessWidget {
-  const _GlassCircleButton({required this.icon, required this.onTap});
+class _SmallIconButton extends StatelessWidget {
+  const _SmallIconButton({this.icon, required this.onTap});
 
-  final IconData icon;
-  final VoidCallback? onTap;
+  final IconData? icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ClipOval(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Material(
-          color: Colors.white.withValues(alpha: 0.16),
-          child: InkWell(
-            onTap: onTap,
-            child: SizedBox(
-              width: 40,
-              height: 40,
-              child: Icon(
-                icon,
-                size: 24,
-                color:
-                    onTap != null
-                        ? Colors.white.withValues(alpha: 0.84)
-                        : Colors.white.withValues(alpha: 0.35),
-              ),
-            ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: const Color(0xFF797979).withValues(alpha: 0.7),
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Center(
+          child: Icon(
+            icon,
+            size: 16,
+            color: const Color(0xFF797979).withValues(alpha: 0.7),
           ),
         ),
       ),
     );
   }
 }
+
+enum _DevicePanelSnap { collapsed, preview, expanded }

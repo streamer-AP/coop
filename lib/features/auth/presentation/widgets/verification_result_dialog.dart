@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
 
 class VerificationResultDialog extends StatelessWidget {
   const VerificationResultDialog._({
-    required this.icon,
+    required this.svgPath,
     required this.iconColor,
     required this.title,
     this.subtitle,
   });
 
-  final IconData icon;
+  final String svgPath;
   final Color iconColor;
   final String title;
   final String? subtitle;
@@ -20,7 +21,7 @@ class VerificationResultDialog extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (_) => const VerificationResultDialog._(
-        icon: Icons.check_circle,
+        svgPath: AppIcons.success,
         iconColor: AppColors.success,
         title: '年龄认证通过，欢迎体验',
       ),
@@ -32,7 +33,7 @@ class VerificationResultDialog extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (_) => const VerificationResultDialog._(
-        icon: Icons.cancel,
+        svgPath: AppIcons.fail,
         iconColor: AppColors.error,
         title: '实名不匹配or信息有误',
       ),
@@ -44,7 +45,7 @@ class VerificationResultDialog extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (_) => const VerificationResultDialog._(
-        icon: Icons.cancel,
+        svgPath: AppIcons.fail,
         iconColor: AppColors.error,
         title: '年龄验证不通过',
         subtitle: '很抱歉，根据相关法律法规要求，此功能仅面对成年用户开放。',
@@ -75,7 +76,7 @@ class VerificationResultDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: iconColor),
+            AppIcons.icon(svgPath, size: 48, color: iconColor),
             const SizedBox(height: 16),
             Text(
               title,

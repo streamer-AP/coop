@@ -1,5 +1,6 @@
 package com.example.omao_app
 
+import android.os.Build
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -16,6 +17,11 @@ object MediaExtractionHost {
     private const val defaultBufferSize = 1024 * 1024
 
     private var channel: MethodChannel? = null
+
+    private data class ExtractionTarget(
+        val muxerOutputFormat: Int,
+        val extension: String,
+    )
 
     fun attach(messenger: BinaryMessenger) {
         channel = MethodChannel(messenger, channelName).apply {
@@ -50,12 +56,6 @@ object MediaExtractionHost {
             var muxerStarted = false
 
             try {
-                val outputFile = File(outputPath)
-                outputFile.parentFile?.mkdirs()
-                if (outputFile.exists()) {
-                    outputFile.delete()
-                }
-
                 val mediaExtractor = MediaExtractor().apply {
                     setDataSource(inputPath)
                 }
@@ -69,7 +69,19 @@ object MediaExtractionHost {
 
                 mediaExtractor.selectTrack(audioTrackIndex)
                 val inputFormat = mediaExtractor.getTrackFormat(audioTrackIndex)
-                muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+                val mimeType = inputFormat.getString(MediaFormat.KEY_MIME)
+                    ?.lowercase()
+                    ?.trim()
+                    .orEmpty()
+                val extractionTarget = resolveExtractionTarget(mimeType)
+                val actualOutputPath = buildOutputPath(outputPath, extractionTarget.extension)
+                val outputFile = File(actualOutputPath)
+                outputFile.parentFile?.mkdirs()
+                if (outputFile.exists()) {
+                    outputFile.delete()
+                }
+
+                muxer = MediaMuxer(actualOutputPath, extractionTarget.muxerOutputFormat)
                 val outputTrackIndex = muxer.addTrack(inputFormat)
 
                 val maxInputSize = if (inputFormat.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
@@ -98,7 +110,9 @@ object MediaExtractionHost {
                     buffer.clear()
                 }
 
-                result.success(outputPath)
+                result.success(actualOutputPath)
+            } catch (error: UnsupportedAudioCodecException) {
+                result.error("unsupported_audio_codec", error.message, error.mimeType)
             } catch (error: Exception) {
                 result.error("extract_audio_failed", error.message, null)
             } finally {
@@ -121,4 +135,92 @@ object MediaExtractionHost {
         }
         return -1
     }
+
+    private fun resolveExtractionTarget(mimeType: String): ExtractionTarget {
+        return when {
+            mimeType == "audio/mp4a-latm" || mimeType == "audio/aac" ->
+                ExtractionTarget(
+                    muxerOutputFormat = MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4,
+                    extension = ".m4a",
+                )
+
+            mimeType == "audio/vorbis" ->
+                ExtractionTarget(
+                    muxerOutputFormat = MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM,
+                    extension = ".webm",
+                )
+
+            mimeType == "audio/opus" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ->
+                ExtractionTarget(
+                    muxerOutputFormat = MediaMuxer.OutputFormat.MUXER_OUTPUT_OGG,
+                    extension = ".ogg",
+                )
+
+            mimeType == "audio/opus" ->
+                ExtractionTarget(
+                    muxerOutputFormat = MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM,
+                    extension = ".webm",
+                )
+
+            mimeType == "audio/amr-wb" ||
+                mimeType == "audio/3gpp" ||
+                mimeType == "audio/amr" ||
+                mimeType == "audio/amr-nb" -> {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                    throw UnsupportedAudioCodecException(
+                        mimeType = mimeType,
+                        message = "当前设备系统版本过低，暂不支持导出 AMR 音轨",
+                    )
+                }
+                ExtractionTarget(
+                    muxerOutputFormat = MediaMuxer.OutputFormat.MUXER_OUTPUT_3GPP,
+                    extension = ".3gp",
+                )
+            }
+
+            mimeType.isBlank() -> throw UnsupportedAudioCodecException(
+                mimeType = mimeType,
+                message = "无法识别视频中的音频编码，暂时无法提取",
+            )
+
+            else -> throw UnsupportedAudioCodecException(
+                mimeType = mimeType,
+                message = "暂不支持提取该音频编码：${describeMimeType(mimeType)}",
+            )
+        }
+    }
+
+    private fun buildOutputPath(suggestedOutputPath: String, extension: String): String {
+        val normalizedExtension = if (extension.startsWith(".")) extension else ".$extension"
+        val suggestedFile = File(suggestedOutputPath)
+        val parent = suggestedFile.parentFile ?: File(".")
+        val suggestedName = suggestedFile.name
+        val dotIndex = suggestedName.lastIndexOf('.')
+        val baseName = if (dotIndex > 0) suggestedName.substring(0, dotIndex) else suggestedName
+
+        var candidate = File(parent, "$baseName$normalizedExtension")
+        var counter = 1
+        while (candidate.exists()) {
+            candidate = File(parent, "$baseName($counter)$normalizedExtension")
+            counter++
+        }
+        return candidate.absolutePath
+    }
+
+    private fun describeMimeType(mimeType: String): String {
+        return when (mimeType) {
+            "audio/flac" -> "FLAC"
+            "audio/mpeg" -> "MP3"
+            "audio/opus" -> "Opus"
+            "audio/vorbis" -> "Vorbis"
+            "audio/mp4a-latm", "audio/aac" -> "AAC"
+            "audio/amr", "audio/amr-nb", "audio/amr-wb", "audio/3gpp" -> "AMR"
+            else -> mimeType
+        }
+    }
+
+    private class UnsupportedAudioCodecException(
+        val mimeType: String,
+        override val message: String,
+    ) : IllegalArgumentException(message)
 }

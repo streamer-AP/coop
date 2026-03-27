@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 
 import '../../../core/database/app_database.dart' as db;
@@ -24,6 +26,7 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
       signalFilePath: row.signalFilePath,
       mediaType: row.mediaType,
       artist: row.artist,
+      album: row.album,
       createdAt: row.createdAt,
     );
   }
@@ -38,6 +41,7 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
       signalFilePath: Value(entry.signalFilePath),
       mediaType: Value(entry.mediaType),
       artist: Value(entry.artist),
+      album: Value(entry.album),
       createdAt:
           entry.createdAt != null
               ? Value(entry.createdAt!)
@@ -48,6 +52,7 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
   AudioCollection _mapCollection(
     db.AudioCollection row, {
     int entryCount = 0,
+    int totalDurationMs = 0,
     List<int> entryIds = const [],
   }) {
     return AudioCollection(
@@ -57,6 +62,7 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
       description: row.description,
       entryIds: entryIds,
       entryCount: entryCount,
+      totalDurationMs: totalDurationMs,
     );
   }
 
@@ -118,6 +124,70 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
   }
 
   @override
+  Future<void> deleteEntryCompletely(int id) async {
+    // Gather file paths before deleting DB records
+    final entry = await getEntry(id);
+    final subtitles = await getSubtitlesForEntry(id);
+    final signalPath = await getSignalFilePathForEntry(id);
+    final scriptPath = await getScriptFilePathForEntry(id);
+
+    // Delete DB records (order matters: children first)
+    await _dao.deleteSubtitlesForEntry(id);
+    await _dao.deleteSignalFilesForEntry(id);
+    await _dao.deleteScriptFilesForEntry(id);
+    await _dao.deleteEntryFromAllCollections(id);
+    await _dao.deletePlaylistItemsForEntry(id);
+    await _dao.deleteEntry(id);
+
+    // Delete files from disk
+    Future<void> deleteFile(String? path) async {
+      if (path == null) return;
+      final file = File(path);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
+
+    if (entry != null) {
+      await deleteFile(entry.filePath);
+      await deleteFile(entry.coverPath);
+    }
+    for (final sub in subtitles) {
+      await deleteFile(sub.filePath);
+    }
+    await deleteFile(signalPath);
+    await deleteFile(scriptPath);
+  }
+
+  @override
+  Future<void> deleteEntriesCompletely(List<int> ids) async {
+    if (ids.isEmpty) return;
+
+    final entries = await _dao.getEntriesByIds(ids);
+    final subtitles = await _dao.getSubtitlesForEntries(ids);
+    final signalFiles = await _dao.getSignalFilesForEntries(ids);
+    final scriptFiles = await _dao.getScriptFilesForEntries(ids);
+
+    await _dao.deleteEntriesCompletely(ids);
+
+    final paths = <String>{
+      for (final entry in entries) entry.filePath,
+      for (final entry in entries)
+        if (entry.coverPath != null) entry.coverPath!,
+      for (final subtitle in subtitles) subtitle.filePath,
+      for (final signalFile in signalFiles) signalFile.filePath,
+      for (final scriptFile in scriptFiles) scriptFile.filePath,
+    };
+
+    for (final path in paths) {
+      final file = File(path);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
+  }
+
+  @override
   Future<void> deleteEntries(List<int> ids) {
     return _dao.deleteEntries(ids);
   }
@@ -128,16 +198,33 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
   Future<List<AudioCollection>> getAllCollections() async {
     final rows = await _dao.getAllCollections();
     final counts = await _dao.getCollectionEntryCounts();
+    final durations = await _dao.getCollectionTotalDurations();
     return rows
-        .map((row) => _mapCollection(row, entryCount: counts[row.id] ?? 0))
+        .map(
+          (row) => _mapCollection(
+            row,
+            entryCount: counts[row.id] ?? 0,
+            totalDurationMs: durations[row.id] ?? 0,
+          ),
+        )
         .toList();
   }
 
   @override
   Stream<List<AudioCollection>> watchCollections() {
-    return _dao.watchAllCollections().map(
-      (rows) => rows.map((row) => _mapCollection(row)).toList(),
-    );
+    return _dao.watchAllCollections().asyncMap((rows) async {
+      final counts = await _dao.getCollectionEntryCounts();
+      final durations = await _dao.getCollectionTotalDurations();
+      return rows
+          .map(
+            (row) => _mapCollection(
+              row,
+              entryCount: counts[row.id] ?? 0,
+              totalDurationMs: durations[row.id] ?? 0,
+            ),
+          )
+          .toList();
+    });
   }
 
   @override
@@ -178,6 +265,33 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
   @override
   Future<void> deleteCollection(int id) async {
     await _dao.deleteCollection(id);
+  }
+
+  @override
+  Future<List<String>> getAllCollectionTitles() async {
+    return _dao.getAllCollectionTitles();
+  }
+
+  @override
+  Future<Set<int>> getCollectionIdsContainingAllEntries(
+    List<int> entryIds,
+  ) async {
+    if (entryIds.isEmpty) return {};
+    // For a single entry, just get its collection IDs
+    if (entryIds.length == 1) {
+      return _dao.getCollectionIdsForEntry(entryIds.first);
+    }
+    // For multiple entries, find collections that contain ALL entries
+    final allCids = await _dao.getCollectionIdsForEntries(entryIds);
+    final result = <int>{};
+    for (final cid in allCids) {
+      final entries = await _dao.getEntriesForCollection(cid);
+      final entryIdSet = entries.map((e) => e.id).toSet();
+      if (entryIds.every(entryIdSet.contains)) {
+        result.add(cid);
+      }
+    }
+    return result;
   }
 
   // ── CrossRef ──────────────────────────────────────────────────────────
@@ -241,6 +355,14 @@ class ResonanceRepositoryImpl implements ResonanceRepository {
   @override
   Future<void> deleteSubtitlesForEntry(int entryId) async {
     await _dao.deleteSubtitlesForEntry(entryId);
+  }
+
+  @override
+  Future<void> deleteSubtitlesForEntryLanguage(
+    int entryId,
+    String language,
+  ) async {
+    await _dao.deleteSubtitlesForEntryLanguage(entryId, language);
   }
 
   // ── SignalFiles ───────────────────────────────────────────────────────

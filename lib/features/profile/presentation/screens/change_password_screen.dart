@@ -31,17 +31,13 @@ class ChangePasswordScreen extends ConsumerWidget {
             children: [
               _OptionCard(
                 title: '验证码修改',
-                onTap: () =>
-                    context.pushNamed(RouteNames.changePasswordCode),
+                onTap: () => context.pushNamed(RouteNames.changePasswordCode),
               ),
               const SizedBox(height: 16),
               _OptionCard(
                 title: '原密码修改',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const _OriginalPasswordScreen(),
-                  ),
-                ),
+                onTap:
+                    () => context.pushNamed(RouteNames.originalPasswordChange),
               ),
             ],
           ),
@@ -52,10 +48,7 @@ class ChangePasswordScreen extends ConsumerWidget {
 }
 
 class _OptionCard extends StatelessWidget {
-  const _OptionCard({
-    required this.title,
-    required this.onTap,
-  });
+  const _OptionCard({required this.title, required this.onTap});
 
   final String title;
   final VoidCallback onTap;
@@ -93,16 +86,16 @@ class _OptionCard extends StatelessWidget {
   }
 }
 
-class _OriginalPasswordScreen extends ConsumerStatefulWidget {
-  const _OriginalPasswordScreen();
+class OriginalPasswordScreen extends ConsumerStatefulWidget {
+  const OriginalPasswordScreen({super.key});
 
   @override
-  ConsumerState<_OriginalPasswordScreen> createState() =>
+  ConsumerState<OriginalPasswordScreen> createState() =>
       _OriginalPasswordScreenState();
 }
 
 class _OriginalPasswordScreenState
-    extends ConsumerState<_OriginalPasswordScreen> {
+    extends ConsumerState<OriginalPasswordScreen> {
   final _oldPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -137,15 +130,24 @@ class _OriginalPasswordScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('输入原密码', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+              const Text(
+                '输入原密码',
+                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              ),
               const SizedBox(height: 8),
               _buildPasswordField(_oldPasswordController),
               const SizedBox(height: 24),
-              const Text('输入新密码', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+              const Text(
+                '输入新密码',
+                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              ),
               const SizedBox(height: 8),
               _buildPasswordField(_newPasswordController),
               const SizedBox(height: 24),
-              const Text('再次输入新密码', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+              const Text(
+                '再次输入新密码',
+                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              ),
               const SizedBox(height: 8),
               _buildPasswordField(_confirmPasswordController),
               if (_errorText != null)
@@ -194,15 +196,16 @@ class _OriginalPasswordScreenState
       controller: controller,
       obscureText: true,
       decoration: InputDecoration(
-        suffixIcon: controller.text.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.cancel, size: 20),
-                onPressed: () {
-                  controller.clear();
-                  setState(() {});
-                },
-              )
-            : null,
+        suffixIcon:
+            controller.text.isNotEmpty
+                ? IconButton(
+                  icon: const Icon(Icons.cancel, size: 20),
+                  onPressed: () {
+                    controller.clear();
+                    setState(() {});
+                  },
+                )
+                : null,
         border: const UnderlineInputBorder(),
         enabledBorder: const UnderlineInputBorder(
           borderSide: BorderSide(color: Color(0xFFE0E0E0)),
@@ -222,18 +225,20 @@ class _OriginalPasswordScreenState
       return;
     }
     try {
-      await ref.read(profileRepositoryProvider).changePassword(
+      await ref
+          .read(profileRepositoryProvider)
+          .changePassword(
             oldPassword: _oldPasswordController.text,
             newPassword: _newPasswordController.text,
           );
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('密码修改成功')),
-        );
-        Navigator.of(context).pop();
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('密码修改成功')));
+      Navigator.of(context).pop();
     } catch (e) {
-      setState(() => _errorText = '原密码输入错误');
+      final message = '$e'.replaceFirst('Exception: ', '').trim();
+      setState(() => _errorText = message.isEmpty ? '修改失败，请重试' : message);
     }
   }
 }

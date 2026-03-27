@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../../core/storage/user_storage_service.dart';
 import '../../domain/models/audio_entry.dart';
 import '../../domain/models/player_state.dart';
 import '../../domain/models/playlist.dart';
@@ -14,6 +15,7 @@ part 'player_providers.g.dart';
 
 @Riverpod(keepAlive: true)
 AudioPlayerService audioPlayerService(Ref ref) {
+  ref.watch(userStorageEpochProvider);
   final service = AudioPlayerService();
   ref.onDispose(() => service.dispose());
   return service;
@@ -21,6 +23,7 @@ AudioPlayerService audioPlayerService(Ref ref) {
 
 @Riverpod(keepAlive: true)
 PlaylistService playlistService(Ref ref) {
+  ref.watch(userStorageEpochProvider);
   final service = PlaylistService();
   ref.onDispose(() => service.dispose());
   return service;
@@ -35,9 +38,21 @@ Stream<Playlist> playlistState(Ref ref) {
 @Riverpod(keepAlive: true)
 class PlayerStateNotifier extends _$PlayerStateNotifier {
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+  bool _suppressAutoAdvanceOnNextCompletion = false;
+
+  void _cancelSubscriptions() {
+    for (final sub in _subscriptions) {
+      unawaited(sub.cancel());
+    }
+    _subscriptions.clear();
+  }
 
   @override
   PlayerState build() {
+    ref.watch(userStorageEpochProvider);
+    _cancelSubscriptions();
+    _suppressAutoAdvanceOnNextCompletion = false;
+
     final audioPlayer = ref.read(audioPlayerServiceProvider);
     final playlistSvc = ref.read(playlistServiceProvider);
     audioPlayer.setSkipHandlers(
@@ -67,6 +82,11 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
 
     _subscriptions.add(
       playlistSvc.playlistStream.listen((playlist) {
+        unawaited(
+          audioPlayer.setSingleTrackLooping(
+            playlist.repeatMode == RepeatMode.single,
+          ),
+        );
         final currentEntry = playlist.currentItem?.entry;
         state = state.copyWith(currentEntry: currentEntry);
       }),
@@ -74,45 +94,95 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
 
     _subscriptions.add(
       audioPlayer.completionStream.listen((_) {
-        _onTrackComplete();
+        unawaited(_onTrackComplete());
+      }),
+    );
+
+    _subscriptions.add(
+      audioPlayer.playbackErrorStream.listen((error) {
+        _suppressAutoAdvanceOnNextCompletion = true;
+        unawaited(_handlePlaybackError(error));
       }),
     );
 
     ref.onDispose(() {
-      for (final sub in _subscriptions) {
-        sub.cancel();
-      }
-      _subscriptions.clear();
+      _cancelSubscriptions();
     });
 
     return const PlayerState();
   }
 
   Future<void> playEntry(AudioEntry entry, {List<AudioEntry>? context}) async {
-    await playEntryWithTitle(
-      entry,
-      context: context,
-      playlistTitle: context != null ? '合集播放' : '全部音频',
-    );
+    if (context != null) {
+      await playCollectionEntry(entry, context: context, playlistTitle: '合集播放');
+      return;
+    }
+
+    await playAllEntry(entry, playlistTitle: '全部音频');
   }
 
-  Future<void> playEntryWithTitle(
+  Future<void> playAllEntry(
     AudioEntry entry, {
-    List<AudioEntry>? context,
     required String playlistTitle,
   }) async {
     final audioPlayer = ref.read(audioPlayerServiceProvider);
     final playlistSvc = ref.read(playlistServiceProvider);
 
-    await audioPlayer.initialize();
-
-    if (context != null) {
-      playlistSvc.playEntryFromCollection(entry, context);
-    } else {
+    // If this entry is already the currently loaded one, just continue playing
+    // without reloading (avoids restarting from the beginning).
+    if (state.currentEntry?.id == entry.id) {
+      // Still update the playlist so position/context is correct,
+      // but don't reload the audio source.
       playlistSvc.playEntryFromAll(entry);
+      state = state.copyWith(playlistTitle: playlistTitle);
+      await audioPlayer.setSingleTrackLooping(
+        playlistSvc.currentPlaylist.repeatMode == RepeatMode.single,
+      );
+      if (!state.isPlaying) {
+        await audioPlayer.play();
+      }
+      return;
     }
 
+    await audioPlayer.initialize();
+
+    playlistSvc.playEntryFromAll(entry);
+
     state = state.copyWith(playlistTitle: playlistTitle);
+    await audioPlayer.setSingleTrackLooping(
+      playlistSvc.currentPlaylist.repeatMode == RepeatMode.single,
+    );
+
+    await _loadEntry(entry, autoplay: true);
+  }
+
+  Future<void> playCollectionEntry(
+    AudioEntry entry, {
+    required List<AudioEntry> context,
+    required String playlistTitle,
+  }) async {
+    final audioPlayer = ref.read(audioPlayerServiceProvider);
+    final playlistSvc = ref.read(playlistServiceProvider);
+
+    if (state.currentEntry?.id == entry.id) {
+      playlistSvc.playEntryFromCollection(entry, context);
+      state = state.copyWith(playlistTitle: playlistTitle);
+      await audioPlayer.setSingleTrackLooping(
+        playlistSvc.currentPlaylist.repeatMode == RepeatMode.single,
+      );
+      if (!state.isPlaying) {
+        await audioPlayer.play();
+      }
+      return;
+    }
+
+    await audioPlayer.initialize();
+    playlistSvc.playEntryFromCollection(entry, context);
+
+    state = state.copyWith(playlistTitle: playlistTitle);
+    await audioPlayer.setSingleTrackLooping(
+      playlistSvc.currentPlaylist.repeatMode == RepeatMode.single,
+    );
 
     await _loadEntry(entry, autoplay: true);
   }
@@ -131,7 +201,6 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
 
   Future<void> next() async {
     final playlistSvc = ref.read(playlistServiceProvider);
-
     if (playlistSvc.next()) {
       final entry = playlistSvc.currentPlaylist.currentItem?.entry;
       if (entry != null) {
@@ -152,7 +221,13 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
   }
 
   RepeatMode cycleRepeatMode() {
-    return ref.read(playlistServiceProvider).cycleRepeatMode();
+    final mode = ref.read(playlistServiceProvider).cycleRepeatMode();
+    unawaited(
+      ref
+          .read(audioPlayerServiceProvider)
+          .setSingleTrackLooping(mode == RepeatMode.single),
+    );
+    return mode;
   }
 
   void addToCurrentPlaylist(AudioEntry entry) {
@@ -161,9 +236,19 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
 
   Future<void> playPlaylistItem(String uid) async {
     final playlistSvc = ref.read(playlistServiceProvider);
+    final audioPlayer = ref.read(audioPlayerServiceProvider);
+    final currentUid = playlistSvc.currentPlaylist.currentItem?.uid;
+    final isSameCurrent = currentUid == uid;
 
     final changed = playlistSvc.playItem(uid);
     if (!changed) return;
+
+    if (isSameCurrent) {
+      if (!state.isPlaying) {
+        await audioPlayer.play();
+      }
+      return;
+    }
 
     final entry = playlistSvc.currentPlaylist.currentItem?.entry;
     if (entry == null) return;
@@ -217,46 +302,104 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
     );
   }
 
-  /// Refresh the current entry's metadata from the database.
-  /// Call this after importing a cover or other metadata change.
-  Future<void> refreshCurrentEntry() async {
-    final current = state.currentEntry;
-    if (current == null) return;
+  Future<void> removeEntriesByEntryIds(Set<int> entryIds) async {
+    if (entryIds.isEmpty) return;
 
-    final repo = ref.read(resonanceRepositoryProvider);
-    final updated = await repo.getEntry(current.id);
-    if (updated == null) return;
-
-    state = state.copyWith(currentEntry: updated);
-
-    // Also update the in-memory playlist so next/previous keeps the change.
     final playlistSvc = ref.read(playlistServiceProvider);
-    playlistSvc.updateEntry(updated);
+    final audioPlayer = ref.read(audioPlayerServiceProvider);
+    final previous = playlistSvc.currentPlaylist;
+    final wasCurrentRemoved =
+        previous.currentItem != null &&
+        entryIds.contains(previous.currentItem!.entry.id);
+    final wasPlaying = state.isPlaying;
+    final changed = playlistSvc.removeEntriesByEntryIds(entryIds);
+
+    if (!changed) return;
+
+    final nextPlaylist = playlistSvc.currentPlaylist;
+    if (nextPlaylist.isEmpty) {
+      await audioPlayer.stop();
+      state = state.copyWith(
+        isPlaying: false,
+        position: Duration.zero,
+        duration: Duration.zero,
+        currentEntry: null,
+        playlistTitle: '全部音频',
+      );
+      return;
+    }
+
+    if (wasCurrentRemoved) {
+      final nextEntry = nextPlaylist.currentItem?.entry;
+      if (nextEntry != null) {
+        await _loadEntry(nextEntry, autoplay: wasPlaying);
+      }
+    }
   }
 
   void setSignalMode(SignalMode mode) {
     state = state.copyWith(signalMode: mode);
   }
 
-  void _onTrackComplete() {
+  /// Refresh the current entry's metadata.
+  /// When [updatedEntry] is provided, update in-memory state directly.
+  /// Otherwise reload the current entry from the repository.
+  Future<void> refreshCurrentEntry([AudioEntry? updatedEntry]) async {
+    final resolvedEntry = updatedEntry ?? state.currentEntry;
+    if (resolvedEntry == null) return;
+
+    AudioEntry? nextEntry = updatedEntry;
+    if (nextEntry == null) {
+      final repo = ref.read(resonanceRepositoryProvider);
+      nextEntry = await repo.getEntry(resolvedEntry.id);
+    }
+    if (nextEntry == null) return;
+
+    if (state.currentEntry?.id == nextEntry.id) {
+      state = state.copyWith(currentEntry: nextEntry);
+      ref.read(audioPlayerServiceProvider).updateMediaItem(nextEntry);
+    }
+    ref.read(playlistServiceProvider).updateEntry(nextEntry);
+  }
+
+  Future<void> _onTrackComplete() async {
+    if (_suppressAutoAdvanceOnNextCompletion) {
+      _suppressAutoAdvanceOnNextCompletion = false;
+      return;
+    }
+
     final playlistSvc = ref.read(playlistServiceProvider);
     final playlist = playlistSvc.currentPlaylist;
+    final audioPlayer = ref.read(audioPlayerServiceProvider);
 
     if (playlist.repeatMode == RepeatMode.single) {
-      ref.read(audioPlayerServiceProvider).seekTo(Duration.zero);
-      ref.read(audioPlayerServiceProvider).play();
+      return;
+    } else if (playlist.length <= 1) {
+      await audioPlayer.pause();
+      state = state.copyWith(isPlaying: false, position: Duration.zero);
     } else {
-      next();
+      await next();
     }
   }
 
   Future<void> _loadEntry(AudioEntry entry, {required bool autoplay}) async {
+    _suppressAutoAdvanceOnNextCompletion = false;
     final audioPlayer = ref.read(audioPlayerServiceProvider);
     await audioPlayer.setSource(entry);
+    await audioPlayer.setSingleTrackLooping(
+      ref.read(playlistServiceProvider).currentPlaylist.repeatMode ==
+          RepeatMode.single,
+    );
     if (autoplay) {
       await audioPlayer.play();
     } else {
       await audioPlayer.pause();
     }
+  }
+
+  Future<void> _handlePlaybackError(Object error) async {
+    final audioPlayer = ref.read(audioPlayerServiceProvider);
+    await audioPlayer.stop();
+    state = state.copyWith(isPlaying: false, position: Duration.zero);
   }
 }

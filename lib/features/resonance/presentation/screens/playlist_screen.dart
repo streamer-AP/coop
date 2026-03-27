@@ -2,6 +2,8 @@ import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/omao_toast.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/player_providers.dart';
 import '../../domain/models/playlist.dart';
 import '../widgets/audio_wave_animation.dart';
@@ -22,8 +24,10 @@ class PlaylistScreen extends ConsumerWidget {
       } catch (error) {
         if (!context.mounted) return;
         final message = '$error'.replaceFirst('Exception: ', '').trim();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message.isEmpty ? '当前音频无法播放' : message)),
+        OmaoToast.show(
+          context,
+          message.isEmpty ? '当前音频无法播放' : message,
+          isSuccess: false,
         );
       }
     }
@@ -111,11 +115,11 @@ class PlaylistScreen extends ConsumerWidget {
               ref.read(playerStateNotifierProvider.notifier).cycleRepeatMode();
             },
           ),
-          const Expanded(
+          Expanded(
             child: Text(
-              '当前播放',
+              '当前播放 (${playlist.length})',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF797979),
@@ -124,7 +128,7 @@ class PlaylistScreen extends ConsumerWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline_rounded),
+            icon: AppIcons.icon(AppIcons.delete, size: 24),
             color: const Color(0xFF797979),
             onPressed: () => _showClearDialog(context, ref),
           ),
@@ -133,11 +137,23 @@ class PlaylistScreen extends ConsumerWidget {
     );
   }
 
-  Icon _repeatModeIcon(RepeatMode mode) {
+  Widget _repeatModeIcon(RepeatMode mode) {
     return switch (mode) {
-      RepeatMode.sequential => const Icon(Icons.repeat_rounded),
-      RepeatMode.single => const Icon(Icons.repeat_one_rounded),
-      RepeatMode.shuffle => const Icon(Icons.shuffle_rounded),
+      RepeatMode.sequential => AppIcons.icon(
+        AppIcons.refresh2,
+        size: 24,
+        color: AppColors.primary,
+      ),
+      RepeatMode.single => AppIcons.icon(
+        AppIcons.refresh1,
+        size: 24,
+        color: AppColors.primary,
+      ),
+      RepeatMode.shuffle => AppIcons.icon(
+        AppIcons.shuffle,
+        size: 24,
+        color: AppColors.primary,
+      ),
     };
   }
 
@@ -285,10 +301,10 @@ class _PlaylistItem extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: const Icon(
-                  Icons.close_rounded,
+                icon: AppIcons.icon(
+                  AppIcons.close2,
                   size: 18,
-                  color: Color(0xFFC0C0C0),
+                  color: const Color(0xFFC0C0C0),
                 ),
                 onPressed: onRemove,
                 padding: EdgeInsets.zero,

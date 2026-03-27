@@ -15,6 +15,7 @@ class AudioEntry with _$AudioEntry {
     @Default('audio') String mediaType,
     @Default([]) List<String> subtitleRefs,
     String? artist,
+    String? album,
     DateTime? createdAt,
   }) = _AudioEntry;
 

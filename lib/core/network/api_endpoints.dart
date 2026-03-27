@@ -11,6 +11,9 @@ class ApiEndpoints {
   static const String setupPassword = '/auth/setPassword';
   static const String resetPassword = '/auth/resetPassword';
   static const String changePassword = '/auth/changePassword';
+  static const String updatePwd = '/auth/updatePwd';
+  static const String forgotPwd = '/auth/forgotPwd';
+  static const String forgotPwdSendCode = '/auth/forgot-pwd/send-code';
   static const String sendLoginCode = '/auth/sendLoginCode';
   static const String sendRegisterCode = '/auth/sendRegisterCode';
   static const String logout = '/auth/logout';
@@ -25,6 +28,7 @@ class ApiEndpoints {
 
   // Device
   static const String userDevices = '/userDevices';
+  static const String redeemCode = '/userDevices'; // POST 绑定兑换码
 
   // Resonance
   static const String audioEntries = '/resonance/entries';
@@ -40,7 +44,7 @@ class ApiEndpoints {
 
   // Profile
   static const String profile = '/user/profile';
-  static const String updateNickname = '/user/nickname';
+  static const String updateNickname = '/userAccounts/updateUserName';
   static const String updateAvatar = '/user/avatar';
   static const String changePhone = '/user/change-phone';
   static const String feedback = '/user/feedback';

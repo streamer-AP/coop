@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../application/models/import_preview.dart';
 import '../../application/providers/import_providers.dart';
 import '../../domain/models/import_result.dart';
@@ -78,7 +79,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       child: Row(
         children: [
           _buildCircleButton(
-            icon: Icons.chevron_left_rounded,
+            iconWidget: AppIcons.icon(AppIcons.arrowLeft, size: 24),
             onPressed: () => context.pop(),
           ),
           const Expanded(
@@ -93,7 +94,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
             ),
           ),
           _buildCircleButton(
-            icon: Icons.help_outline_rounded,
+            iconWidget: AppIcons.icon(AppIcons.search01, size: 24),
             onPressed: () => ImportInstructionSheet.show(context),
           ),
         ],
@@ -102,7 +103,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   }
 
   Widget _buildCircleButton({
-    required IconData icon,
+    required Widget iconWidget,
     required VoidCallback onPressed,
   }) {
     return Container(
@@ -114,7 +115,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       ),
       child: IconButton(
         onPressed: onPressed,
-        icon: Icon(icon, color: AppColors.secondary),
+        icon: iconWidget,
       ),
     );
   }
@@ -222,14 +223,14 @@ class _ImportSourceView extends StatelessWidget {
           ),
           const SizedBox(height: 22),
           _SourceCard(
-            icon: Icons.audio_file_outlined,
+            iconWidget: const Icon(Icons.audio_file_outlined, color: AppColors.primary),
             title: '文件导入',
             subtitle: '从同一级目录选择音频、视频和关联资源',
             onTap: busy ? null : onPickFiles,
           ),
           const SizedBox(height: 14),
           _SourceCard(
-            icon: Icons.archive_outlined,
+            iconWidget: AppIcons.icon(AppIcons.archive, size: 24, color: AppColors.primary),
             title: '压缩包导入',
             subtitle: '先预览 ZIP 内容，再选择要导入的文件',
             onTap: busy ? null : onPickZip,
@@ -478,13 +479,9 @@ class _ImportResultView extends StatelessWidget {
                   color: const Color(0xFFEDE7FF),
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: Icon(
-                  result.hasFailures
-                      ? Icons.info_outline
-                      : Icons.check_circle_outline,
-                  color: AppColors.primary,
-                  size: 28,
-                ),
+                child: result.hasFailures
+                    ? AppIcons.icon(AppIcons.infoCircle, size: 28, color: AppColors.primary)
+                    : AppIcons.icon(AppIcons.circleCheck, size: 28, color: AppColors.primary),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -606,13 +603,13 @@ class _ImportResultView extends StatelessWidget {
 
 class _SourceCard extends StatelessWidget {
   const _SourceCard({
-    required this.icon,
+    required this.iconWidget,
     required this.title,
     required this.subtitle,
     required this.onTap,
   });
 
-  final IconData icon;
+  final Widget iconWidget;
   final String title;
   final String subtitle;
   final VoidCallback? onTap;
@@ -636,7 +633,7 @@ class _SourceCard extends StatelessWidget {
                   color: const Color(0xFFF1EBFA),
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: Icon(icon, color: AppColors.primary),
+                child: iconWidget,
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -663,10 +660,7 @@ class _SourceCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.textHint,
-              ),
+              AppIcons.icon(AppIcons.arrowRight, size: 24, color: AppColors.textHint),
             ],
           ),
         ),

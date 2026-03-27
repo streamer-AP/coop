@@ -29,6 +29,11 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
   Future<AudioEntry?> getEntry(int id) =>
       (select(audioEntries)..where((t) => t.id.equals(id))).getSingleOrNull();
 
+  Future<List<AudioEntry>> getEntriesByIds(List<int> ids) {
+    if (ids.isEmpty) return Future.value(const []);
+    return (select(audioEntries)..where((t) => t.id.isIn(ids))).get();
+  }
+
   Future<int> insertEntry(AudioEntriesCompanion entry) =>
       into(audioEntries).insert(entry);
 
@@ -71,6 +76,24 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
     return counts;
   }
 
+  /// Returns total duration (ms) per collection from joined entries.
+  Future<Map<int, int>> getCollectionTotalDurations() async {
+    final query = select(entryCollectionCrossRef).join([
+      innerJoin(
+        audioEntries,
+        audioEntries.id.equalsExp(entryCollectionCrossRef.entryId),
+      ),
+    ]);
+    final rows = await query.get();
+    final durations = <int, int>{};
+    for (final row in rows) {
+      final cid = row.readTable(entryCollectionCrossRef).collectionId;
+      final entry = row.readTable(audioEntries);
+      durations[cid] = (durations[cid] ?? 0) + entry.durationMs;
+    }
+    return durations;
+  }
+
   Stream<List<AudioCollection>> watchAllCollections() =>
       select(audioCollections).watch();
 
@@ -84,8 +107,12 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
   Future<bool> updateCollection(AudioCollectionsCompanion collection) =>
       update(audioCollections).replace(collection);
 
-  Future<int> deleteCollection(int id) =>
-      (delete(audioCollections)..where((t) => t.id.equals(id))).go();
+  Future<int> deleteCollection(int id) async {
+    // Delete cross-refs first to avoid foreign key constraint
+    await (delete(entryCollectionCrossRef)
+      ..where((t) => t.collectionId.equals(id))).go();
+    return (delete(audioCollections)..where((t) => t.id.equals(id))).go();
+  }
 
   // ── EntryCollectionCrossRef ───────────────────────────────────────────
 
@@ -182,10 +209,61 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
     return result?.read(entryCollectionCrossRef.sortOrder.max()) ?? -1;
   }
 
+  // ── Cleanup ──────────────────────────────────────────────────────────
+
+  /// Remove all cross-refs linking an entry to any collection.
+  Future<int> deleteEntryFromAllCollections(int entryId) =>
+      (delete(entryCollectionCrossRef)
+        ..where((t) => t.entryId.equals(entryId))).go();
+
+  Future<int> deleteEntriesFromAllCollections(List<int> entryIds) {
+    if (entryIds.isEmpty) return Future.value(0);
+    return (delete(entryCollectionCrossRef)
+      ..where((t) => t.entryId.isIn(entryIds))).go();
+  }
+
+  /// Remove all playlist item records for an entry.
+  Future<int> deletePlaylistItemsForEntry(int entryId) =>
+      (delete(playlistItems)..where((t) => t.entryId.equals(entryId))).go();
+
+  Future<int> deletePlaylistItemsForEntries(List<int> entryIds) {
+    if (entryIds.isEmpty) return Future.value(0);
+    return (delete(playlistItems)..where((t) => t.entryId.isIn(entryIds))).go();
+  }
+
+  // ── Collection titles ───────────────────────────────────────────────
+
+  Future<List<String>> getAllCollectionTitles() async {
+    final rows = await select(audioCollections).get();
+    return rows.map((r) => r.title).toList();
+  }
+
+  /// Get collection IDs that contain a given entry.
+  Future<Set<int>> getCollectionIdsForEntry(int entryId) async {
+    final rows =
+        await (select(entryCollectionCrossRef)
+          ..where((t) => t.entryId.equals(entryId))).get();
+    return rows.map((r) => r.collectionId).toSet();
+  }
+
+  /// Get collection IDs that contain any of the given entries.
+  Future<Set<int>> getCollectionIdsForEntries(List<int> entryIds) async {
+    if (entryIds.isEmpty) return {};
+    final rows =
+        await (select(entryCollectionCrossRef)
+          ..where((t) => t.entryId.isIn(entryIds))).get();
+    return rows.map((r) => r.collectionId).toSet();
+  }
+
   // ── Subtitles ─────────────────────────────────────────────────────────
 
   Future<List<Subtitle>> getSubtitlesForEntry(int entryId) =>
       (select(subtitles)..where((t) => t.entryId.equals(entryId))).get();
+
+  Future<List<Subtitle>> getSubtitlesForEntries(List<int> entryIds) {
+    if (entryIds.isEmpty) return Future.value(const []);
+    return (select(subtitles)..where((t) => t.entryId.isIn(entryIds))).get();
+  }
 
   Future<int> insertSubtitle(SubtitlesCompanion subtitle) =>
       into(subtitles).insert(subtitle);
@@ -193,11 +271,21 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
   Future<int> deleteSubtitlesForEntry(int entryId) =>
       (delete(subtitles)..where((t) => t.entryId.equals(entryId))).go();
 
+  Future<int> deleteSubtitlesForEntryLanguage(int entryId, String language) =>
+      (delete(subtitles)..where(
+        (t) => t.entryId.equals(entryId) & t.language.equals(language),
+      )).go();
+
   // ── SignalFiles ───────────────────────────────────────────────────────
 
   Future<SignalFile?> getSignalFileForEntry(int entryId) =>
       (select(signalFiles)
         ..where((t) => t.entryId.equals(entryId))).getSingleOrNull();
+
+  Future<List<SignalFile>> getSignalFilesForEntries(List<int> entryIds) {
+    if (entryIds.isEmpty) return Future.value(const []);
+    return (select(signalFiles)..where((t) => t.entryId.isIn(entryIds))).get();
+  }
 
   Future<int> insertSignalFile(SignalFilesCompanion signalFile) =>
       into(signalFiles).insert(signalFile);
@@ -211,9 +299,41 @@ class ResonanceDao extends DatabaseAccessor<AppDatabase>
       (select(scriptFiles)
         ..where((t) => t.entryId.equals(entryId))).getSingleOrNull();
 
+  Future<List<ScriptFile>> getScriptFilesForEntries(List<int> entryIds) {
+    if (entryIds.isEmpty) return Future.value(const []);
+    return (select(scriptFiles)..where((t) => t.entryId.isIn(entryIds))).get();
+  }
+
   Future<int> insertScriptFile(ScriptFilesCompanion scriptFile) =>
       into(scriptFiles).insert(scriptFile);
 
   Future<int> deleteScriptFilesForEntry(int entryId) =>
       (delete(scriptFiles)..where((t) => t.entryId.equals(entryId))).go();
+
+  Future<int> deleteSubtitlesForEntries(List<int> entryIds) {
+    if (entryIds.isEmpty) return Future.value(0);
+    return (delete(subtitles)..where((t) => t.entryId.isIn(entryIds))).go();
+  }
+
+  Future<int> deleteSignalFilesForEntries(List<int> entryIds) {
+    if (entryIds.isEmpty) return Future.value(0);
+    return (delete(signalFiles)..where((t) => t.entryId.isIn(entryIds))).go();
+  }
+
+  Future<int> deleteScriptFilesForEntries(List<int> entryIds) {
+    if (entryIds.isEmpty) return Future.value(0);
+    return (delete(scriptFiles)..where((t) => t.entryId.isIn(entryIds))).go();
+  }
+
+  Future<void> deleteEntriesCompletely(List<int> entryIds) async {
+    if (entryIds.isEmpty) return;
+    await transaction(() async {
+      await deleteSubtitlesForEntries(entryIds);
+      await deleteSignalFilesForEntries(entryIds);
+      await deleteScriptFilesForEntries(entryIds);
+      await deleteEntriesFromAllCollections(entryIds);
+      await deletePlaylistItemsForEntries(entryIds);
+      await deleteEntries(entryIds);
+    });
+  }
 }

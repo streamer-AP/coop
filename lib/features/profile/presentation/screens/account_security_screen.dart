@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../../auth/application/providers/auth_providers.dart';
 import '../../application/providers/profile_providers.dart';
 import '../widgets/profile_menu_item.dart';
@@ -26,7 +27,7 @@ class AccountSecurityScreen extends ConsumerWidget {
           backgroundColor: Colors.transparent,
           title: const Text('账号与安全'),
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, size: 20),
+            icon: AppIcons.icon(AppIcons.arrowLeft, size: 20),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ),
@@ -35,6 +36,7 @@ class AccountSecurityScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             ProfileMenuItem(
               icon: Icons.smartphone,
+              svgPath: AppIcons.phoneCall,
               title: '手机号',
               trailing: Text(
                 maskedPhone,
@@ -47,6 +49,7 @@ class AccountSecurityScreen extends ConsumerWidget {
             ),
             ProfileMenuItem(
               icon: Icons.lock_outline,
+              svgPath: AppIcons.lock,
               title: '修改密码',
               onTap: () => context.pushNamed(RouteNames.changePassword),
               showDivider: false,
@@ -54,6 +57,7 @@ class AccountSecurityScreen extends ConsumerWidget {
             const Divider(height: 24, thickness: 1, color: Color(0xFFE8E8E8)),
             ProfileMenuItem(
               icon: Icons.exit_to_app,
+              svgPath: AppIcons.logout,
               title: '退出登录',
               onTap: () => _showLogoutDialog(context, ref),
             ),

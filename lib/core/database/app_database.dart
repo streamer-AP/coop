@@ -1,12 +1,8 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../storage/user_storage_service.dart';
 import 'tables/resonance_tables.dart';
 import 'tables/controller_tables.dart';
 import 'tables/story_tables.dart';
@@ -52,7 +48,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -63,12 +59,6 @@ class AppDatabase extends _$AppDatabase {
       onUpgrade: (m, from, to) async {
         // v1 → v2: 统一波形表，新增常用槽位和使用日志
         if (from < 2) {
-          // TODO: implement migration —
-          //   1. 创建新的 Waveforms 表并迁移 WaveformPresets + CustomWaveforms 数据
-          //   2. 迁移 WaveformKeyframes 的外键引用
-          //   3. 创建 FavoriteSlots 表
-          //   4. 创建 UsageLogs 表
-          //   5. 删除旧的 WaveformPresets 和 CustomWaveforms 表
           await m.createTable(favoriteSlots);
           await m.createTable(usageLogs);
         }
@@ -84,37 +74,30 @@ class AppDatabase extends _$AppDatabase {
         if (from >= 3 && from < 5) {
           await m.addColumn(messages, messages.serverId);
         }
-        // v5 → v6: 波形表新增 channel/signalIntervalMs/signalDelayMs；
-        //          关键帧表 swingValue+vibrationValue → value；
-        //          常用槽位表新增 channel
+        // v5 → v6: 控制器波形切分为单通道模型，并把蓝牙时序配置提升到波形主表
         if (from < 6) {
-          await m.deleteTable('waveform_keyframes');
-          await m.deleteTable('favorite_slots');
-          await m.deleteTable('waveforms');
+          await customStatement('PRAGMA foreign_keys = OFF');
+          await customStatement('DROP TABLE IF EXISTS favorite_slots');
+          await customStatement('DROP TABLE IF EXISTS waveform_keyframes');
+          await customStatement('DROP TABLE IF EXISTS waveforms');
+          await customStatement('PRAGMA foreign_keys = ON');
           await m.createTable(waveforms);
           await m.createTable(waveformKeyframes);
           await m.createTable(favoriteSlots);
+        }
+        // v6 → v7: 音频条目新增专辑字段，保留原文件名作为 title
+        if (from < 7) {
+          await m.addColumn(audioEntries, audioEntries.album);
         }
       },
     );
   }
 }
 
+/// 从 UserStorageService 获取用户专属数据库实例。
 @Riverpod(keepAlive: true)
 AppDatabase appDatabase(Ref ref) {
-  return AppDatabase(_openConnection());
-}
-
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, 'omao.db'));
-    return NativeDatabase.createInBackground(
-      file,
-      setup: (db) {
-        db.execute('PRAGMA journal_mode=WAL');
-        db.execute('PRAGMA busy_timeout=5000');
-      },
-    );
-  });
+  ref.watch(userStorageEpochProvider);
+  final userStorage = ref.watch(userStorageNotifierProvider).requireValue;
+  return userStorage.db;
 }

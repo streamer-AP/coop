@@ -37,7 +37,7 @@ Future<List<domain.FavoriteSlot>> favoriteSlots(Ref ref) {
 @riverpod
 Future<List<domain.FavoriteSlot>> favoriteSlotsByChannel(
   Ref ref,
-  String channel,
+  WaveformChannel channel,
 ) {
   return ref
       .watch(controllerRepositoryProvider)
