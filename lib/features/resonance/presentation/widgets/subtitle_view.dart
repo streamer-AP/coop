@@ -52,6 +52,13 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
     final translationEnabled = ref.watch(subtitleTranslationEnabledProvider);
     final translatedSubtitleAsync = ref.watch(translatedSubtitleProvider);
     final translatedSubtitle = translatedSubtitleAsync.valueOrNull;
+    final translatedCueTextByTime =
+        translatedSubtitle == null
+            ? const <String, String>{}
+            : {
+                for (final cue in translatedSubtitle.cues)
+                  _cueTimeKey(cue.start, cue.end): cue.text.trim(),
+              };
     final activeCueIndex = ref.watch(activeCueNotifierProvider);
     final followMode = ref.watch(followModeNotifierProvider);
     final followEnabled = ref.watch(subtitleFollowEnabledProvider);
@@ -161,11 +168,10 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
                   padding: EdgeInsets.symmetric(vertical: _listVerticalPadding),
                   itemBuilder: (context, index) {
                     final cue = subtitle.cues[index];
-                    final translatedText =
-                        translatedSubtitle != null &&
-                                index < translatedSubtitle.cues.length
-                            ? translatedSubtitle.cues[index].text.trim()
-                            : null;
+                    final translatedText = translatedCueTextByTime[_cueTimeKey(
+                      cue.start,
+                      cue.end,
+                    )];
                     final isActive = index == activeCueIndex;
                     final isSeekTarget =
                         _userScrolledAway && index == _seekTargetIndex;
@@ -339,5 +345,9 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
     final m = d.inMinutes.toString().padLeft(2, '0');
     final s = (d.inSeconds % 60).toString().padLeft(2, '0');
     return '$m:$s';
+  }
+
+  String _cueTimeKey(Duration start, Duration end) {
+    return '${start.inMilliseconds}:${end.inMilliseconds}';
   }
 }

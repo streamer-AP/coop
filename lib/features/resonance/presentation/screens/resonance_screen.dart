@@ -347,7 +347,7 @@ class _AllEntriesTabState extends ConsumerState<_AllEntriesTab> {
 
           return Column(
             children: [
-              _buildSelectionToolbar(context),
+              _buildSelectionToolbar(context, visibleEntries: filtered),
               Expanded(child: _buildEmptyState()),
             ],
           );
@@ -355,10 +355,14 @@ class _AllEntriesTabState extends ConsumerState<_AllEntriesTab> {
 
         return Column(
           children: [
-            if (_selectionMode) _buildSelectionToolbar(context),
+            if (_selectionMode)
+              _buildSelectionToolbar(context, visibleEntries: filtered),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.only(top: 8, bottom: 8),
+                padding: EdgeInsets.only(
+                  top: _selectionMode ? 6 : 8,
+                  bottom: 8,
+                ),
                 itemCount: filtered.length,
                 itemBuilder: (context, index) {
                   final entry = filtered[index];
@@ -420,6 +424,19 @@ class _AllEntriesTabState extends ConsumerState<_AllEntriesTab> {
     });
   }
 
+  void _toggleSelectAll(List<AudioEntry> visibleEntries) {
+    final visibleIds = visibleEntries.map((entry) => entry.id).toSet();
+    final allSelected =
+        visibleIds.isNotEmpty && visibleIds.every(_selectedEntryIds.contains);
+    setState(() {
+      if (allSelected) {
+        _selectedEntryIds.removeAll(visibleIds);
+      } else {
+        _selectedEntryIds.addAll(visibleIds);
+      }
+    });
+  }
+
   Future<void> _deleteSelected(BuildContext context) async {
     final ids = _selectedEntryIds.toList(growable: false);
     if (ids.isEmpty) return;
@@ -462,46 +479,90 @@ class _AllEntriesTabState extends ConsumerState<_AllEntriesTab> {
     }
   }
 
-  Widget _buildSelectionToolbar(BuildContext context) {
+  Widget _buildSelectionToolbar(
+    BuildContext context, {
+    required List<AudioEntry> visibleEntries,
+  }) {
+    final visibleIds = visibleEntries.map((entry) => entry.id).toSet();
+    final allSelected =
+        visibleIds.isNotEmpty && visibleIds.every(_selectedEntryIds.contains);
+
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withValues(alpha: 0.86),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.08),
+        ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6A53A7).withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF6A53A7).withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: AppIcons.icon(
+                AppIcons.circleCheck,
+                size: 14,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           Text(
-            '已选择 ${_selectedEntryIds.length} 项',
+            '已选 ${_selectedEntryIds.length} 项',
             style: const TextStyle(
-              fontSize: 15,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
               color: Color(0xFF1C1B1F),
             ),
           ),
           const Spacer(),
-          TextButton(onPressed: _clearSelection, child: const Text('取消')),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: () => _deleteSelected(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFD64545),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+          _SelectionToolbarAction(
+            label: allSelected ? '取消全选' : '全选',
+            icon: allSelected
+                ? Icons.remove_done_outlined
+                : Icons.done_all_rounded,
+            onTap: visibleEntries.isEmpty
+                ? null
+                : () => _toggleSelectAll(visibleEntries),
+          ),
+          const SizedBox(width: 4),
+          _SelectionToolbarAction(
+            label: '删除',
+            icon: Icons.delete_outline_rounded,
+            foregroundColor: const Color(0xFFD64545),
+            onTap: () => _deleteSelected(context),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: _clearSelection,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.72),
+                borderRadius: BorderRadius.circular(8),
               ),
-              elevation: 0,
+              child: const Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: Color(0xFF6A6472),
+              ),
             ),
-            child: const Text('删除'),
           ),
         ],
       ),
@@ -587,6 +648,55 @@ class _AllEntriesTabState extends ConsumerState<_AllEntriesTab> {
             style: TextStyle(fontSize: 14, color: Color(0xFF79747E)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SelectionToolbarAction extends StatelessWidget {
+  const _SelectionToolbarAction({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.foregroundColor = const Color(0xFF6A53A7),
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    final color = enabled
+        ? foregroundColor
+        : foregroundColor.withValues(alpha: 0.35);
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: foregroundColor.withValues(alpha: enabled ? 0.06 : 0.03),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

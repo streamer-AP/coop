@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -35,6 +36,11 @@ class PlayerScreen extends ConsumerStatefulWidget {
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen>
     with TickerProviderStateMixin {
+  static String get _collapsedTitleFontFamily =>
+      defaultTargetPlatform == TargetPlatform.iOS
+          ? 'PingFang SC'
+          : 'SourceHanSansCN';
+
   /// 0=cover/disc, 1=subtitle, 2=script
   int _displayMode = 0;
   double _swingLevel = 0;
@@ -110,8 +116,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   @override
   Widget build(BuildContext context) {
-    final playerState = ref.watch(playerStateNotifierProvider);
-    final currentEntry = playerState.currentEntry;
+    final currentEntry = ref.watch(
+      playerStateNotifierProvider.select((state) => state.currentEntry),
+    );
+    final playlistTitle = ref.watch(
+      playerStateNotifierProvider.select((state) => state.playlistTitle),
+    );
     final hasEntry = currentEntry != null;
     final signalMode = ref.watch(signalModeNotifierProvider);
     final connectionState =
@@ -172,7 +182,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   _buildSongMeta(
                     title:
                         _displayMode == 0
-                            ? playerState.playlistTitle
+                            ? playlistTitle
                             : (currentEntry?.title ?? '无播放'),
                     artist:
                         _displayMode == 0
@@ -770,7 +780,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                                 child: Text(
                                   'OMAO WITH YOU',
                                   style: TextStyle(
-                                    fontFamily: 'SongtiSC',
+                                    fontFamily: _collapsedTitleFontFamily,
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
                                     color: const Color(

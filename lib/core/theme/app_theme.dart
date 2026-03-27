@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import 'app_colors.dart';
 
 class AppTheme {
   AppTheme._();
 
-  static const _appChineseFontFamily = 'SourceHanSansCN';
+  static String get _appChineseFontFamily =>
+      defaultTargetPlatform == TargetPlatform.iOS
+          ? 'PingFang SC'
+          : 'SourceHanSansCN';
+
   static const _chineseFontFallback = [
+    'PingFang HK',
+    'PingFang TC',
+    'SourceHanSansCN',
     'Source Han Sans SC',
     'Source Han Sans CN',
     'Noto Sans CJK SC',
@@ -34,23 +42,23 @@ class AppTheme {
         fontFamily: _appChineseFontFamily,
         fontFamilyFallback: _chineseFontFallback,
       ),
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
         titleTextStyle: TextStyle(
-          color: Color(0xFF1C1B1F),
+          color: const Color(0xFF1C1B1F),
           fontSize: 18,
           fontWeight: FontWeight.w600,
           fontFamily: _appChineseFontFamily,
           fontFamilyFallback: _chineseFontFallback,
         ),
-        iconTheme: IconThemeData(color: Color(0xFF1C1B1F)),
+        iconTheme: const IconThemeData(color: Color(0xFF1C1B1F)),
       ),
-      tabBarTheme: const TabBarThemeData(
+      tabBarTheme: TabBarThemeData(
         labelColor: AppColors.primary,
-        unselectedLabelColor: Color(0xFF79747E),
+        unselectedLabelColor: const Color(0xFF79747E),
         indicatorColor: AppColors.primary,
         indicatorSize: TabBarIndicatorSize.label,
         dividerHeight: 0,

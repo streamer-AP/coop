@@ -48,10 +48,13 @@ SubtitleTranslationService subtitleTranslationService(Ref ref) {
 
 @riverpod
 class CurrentSubtitleNotifier extends _$CurrentSubtitleNotifier {
+  int _loadGeneration = 0;
+
   @override
   ParsedSubtitle? build() {
     // Only watch currentEntry, NOT the full player state (which includes position).
     // Watching position would cause this to rebuild on every tick → flicker.
+    final generation = ++_loadGeneration;
     final currentEntry = ref.watch(
       playerStateNotifierProvider.select((s) => s.currentEntry),
     );
@@ -60,15 +63,18 @@ class CurrentSubtitleNotifier extends _$CurrentSubtitleNotifier {
 
     ref.watch(entryResourceRefreshTickProvider(currentEntry.id));
 
-    _loadSubtitle(currentEntry.id);
+    _loadSubtitle(currentEntry.id, generation);
     return state; // Preserve previous state while loading, avoid null flash
   }
 
-  Future<void> _loadSubtitle(int entryId) async {
+  Future<void> _loadSubtitle(int entryId, int generation) async {
     final repo = ref.read(resonanceRepositoryProvider);
     final subtitleSvc = ref.read(subtitleServiceProvider);
 
     final subtitleRefs = await repo.getSubtitlesForEntry(entryId);
+    if (_isStaleLoad(entryId, generation)) {
+      return;
+    }
     if (subtitleRefs.isEmpty) {
       state = null;
       return;
@@ -77,10 +83,21 @@ class CurrentSubtitleNotifier extends _$CurrentSubtitleNotifier {
     final subtitleRef = _pickPrimarySubtitleRef(subtitleRefs);
     try {
       final content = await subtitleSvc.readTextFile(subtitleRef.filePath);
+      if (_isStaleLoad(entryId, generation)) {
+        return;
+      }
       state = subtitleSvc.parse(subtitleRef, content);
     } catch (_) {
+      if (_isStaleLoad(entryId, generation)) {
+        return;
+      }
       state = null;
     }
+  }
+
+  bool _isStaleLoad(int entryId, int generation) {
+    return generation != _loadGeneration ||
+        ref.read(playerStateNotifierProvider).currentEntry?.id != entryId;
   }
 }
 

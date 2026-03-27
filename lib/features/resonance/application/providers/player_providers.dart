@@ -135,6 +135,12 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
       // but don't reload the audio source.
       playlistSvc.playEntryFromAll(entry);
       state = state.copyWith(playlistTitle: playlistTitle);
+      await audioPlayer.setSingleTrackLooping(
+        playlistSvc.currentPlaylist.repeatMode == RepeatMode.single,
+      );
+      if (!state.isPlaying) {
+        await audioPlayer.play();
+      }
       return;
     }
 
@@ -164,6 +170,9 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
       await audioPlayer.setSingleTrackLooping(
         playlistSvc.currentPlaylist.repeatMode == RepeatMode.single,
       );
+      if (!state.isPlaying) {
+        await audioPlayer.play();
+      }
       return;
     }
 
@@ -227,9 +236,19 @@ class PlayerStateNotifier extends _$PlayerStateNotifier {
 
   Future<void> playPlaylistItem(String uid) async {
     final playlistSvc = ref.read(playlistServiceProvider);
+    final audioPlayer = ref.read(audioPlayerServiceProvider);
+    final currentUid = playlistSvc.currentPlaylist.currentItem?.uid;
+    final isSameCurrent = currentUid == uid;
 
     final changed = playlistSvc.playItem(uid);
     if (!changed) return;
+
+    if (isSameCurrent) {
+      if (!state.isPlaying) {
+        await audioPlayer.play();
+      }
+      return;
+    }
 
     final entry = playlistSvc.currentPlaylist.currentItem?.entry;
     if (entry == null) return;

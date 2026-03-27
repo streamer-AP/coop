@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -31,7 +32,10 @@ class AuthPalette {
 class AuthFonts {
   AuthFonts._();
 
-  static const chinese = 'PingFang SC';
+  static String get chinese =>
+      defaultTargetPlatform == TargetPlatform.iOS
+          ? 'PingFang SC'
+          : 'SourceHanSansCN';
   static const english = 'Alegreya Sans';
 
   static const _chineseFallback = [
@@ -636,7 +640,7 @@ class AuthAgreementRow extends StatelessWidget {
             spacing: 2,
             runSpacing: 2,
             children: [
-              const Text(
+              Text(
                 '我已阅读并同意',
                 style: TextStyle(
                   fontSize: 12,
@@ -655,7 +659,7 @@ class AuthAgreementRow extends StatelessWidget {
                   ),
                 ),
               ),
-              const Text(
+              Text(
                 '和',
                 style: TextStyle(
                   fontSize: 12,
