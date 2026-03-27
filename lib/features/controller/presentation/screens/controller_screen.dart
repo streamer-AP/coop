@@ -11,6 +11,7 @@ import '../../application/providers/controller_ui_providers.dart'
 import '../../controller_assets.dart';
 import '../../domain/models/favorite_slot.dart';
 import '../../domain/models/waveform.dart';
+import 'edit_waveforms_main_screen.dart';
 import '../widgets/controller_device_connect_item.dart';
 import '../widgets/controller_device_status_card.dart';
 import '../widgets/controller_setting_card.dart';
@@ -101,7 +102,13 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                     batteryLevel: connectionFlow.batteryLevel,
                     connectionStatus: connectionFlow.connectionStatus,
                     onConnectionTap: () => _handleConnectionTap(connectionFlow),
-                    onEditTap: () {},
+                    onEditTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const EditWaveformsMainScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 Expanded(

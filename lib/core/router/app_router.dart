@@ -11,7 +11,9 @@ import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/setup_password_screen.dart';
 import '../../features/auth/presentation/screens/startup_screen.dart';
 import '../../features/controller/domain/models/waveform.dart';
+import '../../features/controller/presentation/screens/edit_waveforms_main_screen.dart';
 import '../../features/controller/presentation/screens/controller_entry_screen.dart';
+import '../../features/controller/presentation/screens/new_waveform_screen.dart';
 import '../../features/controller/presentation/screens/waveform_editor_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/message/presentation/screens/message_detail_screen.dart';
@@ -119,6 +121,24 @@ GoRouter appRouter(Ref ref) {
         path: '/controller',
         name: RouteNames.controller,
         builder: (context, state) => const ControllerEntryScreen(),
+      ),
+      GoRoute(
+        path: '/edit-waveforms',
+        name: RouteNames.editWaveformsMain,
+        builder: (context, state) => const EditWaveformsMainScreen(),
+      ),
+      GoRoute(
+        path: '/new-waveform',
+        name: RouteNames.newWaveform,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final initialName = extra?['initialName'] as String? ?? '';
+          final channel = extra?['channel'] as String? ?? 'swing';
+          return NewWaveformScreen(
+            initialName: initialName,
+            channel: channel,
+          );
+        },
       ),
       GoRoute(
         path: '/waveform-editor',

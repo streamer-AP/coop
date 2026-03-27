@@ -51,4 +51,7 @@ class ControllerAssets {
   static const vibratingTag = 'assets/figma/controller/icon_vibrating_tag.png';
   static const vibratingItemTag =
       'assets/figma/controller/icon_vibrating_item_tag.png';
+  static const waveformBg = 'assets/figma/controller/icon_new_waveform_bg.png';
+  static const waveformSlider = 'assets/figma/controller/icon_controller_slider.png';
+  
 }
