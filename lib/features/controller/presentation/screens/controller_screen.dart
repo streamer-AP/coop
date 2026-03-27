@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/logging/app_logger.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/api_endpoints.dart';
 import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../application/providers/controller_connection_flow.dart';
 import '../../application/providers/controller_providers.dart';
@@ -35,7 +38,7 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
 
     ref.listenManual<ControllerConnectionFlowState>(
       controllerConnectionFlowProvider,
-      (previous, next) {
+          (previous, next) {
         final errorMessage = next.errorMessage;
         if (errorMessage != null &&
             errorMessage != previous?.errorMessage &&
@@ -65,6 +68,28 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
         }
       },
     );
+
+    unawaited(_requestDefaultWaveformConfigs());
+  }
+
+  Future<void> _requestDefaultWaveformConfigs() async {
+    final apiClient = ref.read(apiClientProvider);
+
+    try {
+      await Future.wait([
+        apiClient.get(ApiEndpoints.querySwing),
+        apiClient.get(ApiEndpoints.queryVibration),
+      ]);
+    } catch (error, stackTrace) {
+      AppLogger().warning(
+        'ControllerScreen: preload default waveform configs failed',
+      );
+      AppLogger().error(
+        'ControllerScreen: preload default waveform configs error',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   @override
@@ -108,20 +133,20 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                   child: favoriteSlotsAsync.when(
                     data:
                         (slots) => waveformsAsync.when(
-                          data:
-                              (waveforms) => _buildControlContent(
-                                slots,
-                                waveforms,
-                                uiState,
-                              ),
-                          loading:
-                              () => const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                          error:
-                              (error, _) =>
-                                  Center(child: Text('波形加载失败：$error')),
-                        ),
+                      data:
+                          (waveforms) => _buildControlContent(
+                        slots,
+                        waveforms,
+                        uiState,
+                      ),
+                      loading:
+                          () => const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                      error:
+                          (error, _) =>
+                          Center(child: Text('波形加载失败：$error')),
+                    ),
                     loading:
                         () => const Center(child: CircularProgressIndicator()),
                     error: (error, _) => Center(child: Text('配置加载失败：$error')),
@@ -136,10 +161,10 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   }
 
   Widget _buildControlContent(
-    List<FavoriteSlot> slots,
-    List<Waveform> waveforms,
-    ControllerUiState uiState,
-  ) {
+      List<FavoriteSlot> slots,
+      List<Waveform> waveforms,
+      ControllerUiState uiState,
+      ) {
     final swingPages = _buildWaveformPages('swing', slots, waveforms);
     final vibrationPages = _buildWaveformPages('vibration', slots, waveforms);
     final swingSelection = _resolveSelection(
@@ -169,16 +194,16 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                 strengthIndex: _strengthIndexFromValue(uiState.swingIntensity),
                 onWaveformSelected:
                     (pageIndex, itemIndex) => _selectWaveform(
-                      channel: 'swing',
-                      pageIndex: pageIndex,
-                      itemIndex: itemIndex,
-                      slots: slots,
-                      waveforms: waveforms,
-                    ),
+                  channel: 'swing',
+                  pageIndex: pageIndex,
+                  itemIndex: itemIndex,
+                  slots: slots,
+                  waveforms: waveforms,
+                ),
                 onStrengthChanged:
                     (index) => ref
-                        .read(controllerStateNotifierProvider.notifier)
-                        .setSwingIntensity(_strengthValues[index]),
+                    .read(controllerStateNotifierProvider.notifier)
+                    .setSwingIntensity(_strengthValues[index]),
                 onSettingsTap: () {},
               ),
               const SizedBox(height: 18),
@@ -194,16 +219,16 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                 ),
                 onWaveformSelected:
                     (pageIndex, itemIndex) => _selectWaveform(
-                      channel: 'vibration',
-                      pageIndex: pageIndex,
-                      itemIndex: itemIndex,
-                      slots: slots,
-                      waveforms: waveforms,
-                    ),
+                  channel: 'vibration',
+                  pageIndex: pageIndex,
+                  itemIndex: itemIndex,
+                  slots: slots,
+                  waveforms: waveforms,
+                ),
                 onStrengthChanged:
                     (index) => ref
-                        .read(controllerStateNotifierProvider.notifier)
-                        .setVibrationIntensity(_strengthValues[index]),
+                    .read(controllerStateNotifierProvider.notifier)
+                    .setVibrationIntensity(_strengthValues[index]),
                 onSettingsTap: () {},
               ),
             ],
@@ -263,8 +288,8 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   }
 
   Future<void> _handleConnectionTap(
-    ControllerConnectionFlowState connectionFlow,
-  ) async {
+      ControllerConnectionFlowState connectionFlow,
+      ) async {
     final notifier = ref.read(controllerConnectionFlowProvider.notifier);
 
     if (connectionFlow.isConnected) {
@@ -313,6 +338,9 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
       itemIndex: itemIndex,
       slots: slots,
     );
+    AppLogger().debug(
+        'channel=$channel, pageIndex=$pageIndex, itemIndex=$itemIndex, slots=${slots[0].toString()}, waveforms=${waveforms[0].keyframes}'
+    );
     if (selectedSlot == null) {
       return;
     }
@@ -331,18 +359,18 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   }
 
   List<List<ControllerWaveformItemData>> _buildWaveformPages(
-    String channel,
-    List<FavoriteSlot> slots,
-    List<Waveform> waveforms,
-  ) {
+      String channel,
+      List<FavoriteSlot> slots,
+      List<Waveform> waveforms,
+      ) {
     return List.generate(3, (pageIndex) {
       final pageSlots =
-          slots
-              .where(
-                (slot) => slot.channel == channel && slot.page == pageIndex,
-              )
-              .toList()
-            ..sort((a, b) => a.index.compareTo(b.index));
+      slots
+          .where(
+            (slot) => slot.channel == channel && slot.page == pageIndex,
+      )
+          .toList()
+        ..sort((a, b) => a.index.compareTo(b.index));
 
       return pageSlots.map((slot) {
         final waveform = _findWaveform(slot.waveformId, waveforms);
@@ -495,11 +523,11 @@ class _ControllerDeviceSheet extends ConsumerWidget {
                     return ControllerDeviceConnectItem(
                       device: device,
                       isConnecting:
-                          connectionFlow.connectingDeviceId == device.id,
+                      connectionFlow.connectingDeviceId == device.id,
                       onConnect:
                           () => ref
-                              .read(controllerConnectionFlowProvider.notifier)
-                              .connectDevice(device),
+                          .read(controllerConnectionFlowProvider.notifier)
+                          .connectDevice(device),
                     );
                   },
                 ),

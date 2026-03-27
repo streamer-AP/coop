@@ -55,7 +55,6 @@ class BleConnectionManager {
   Map<String, dynamic> get lastDeviceInfo =>
       Map<String, dynamic>.unmodifiable(_lastDeviceInfo);
 
-
   // /// 扫描附近的 OMAO 设备
   // Stream<List<BleDevice>> scanDevices({
   //   Duration timeout = const Duration(seconds: 10),
@@ -272,15 +271,36 @@ class BleConnectionManager {
 
   /// 写入原始蓝牙负载
   Future<void> writePayload(Uint8List payload) async {
-    if (_connectedDevice == null || _writeCharacteristic == null) return;
+    if (_connectedDevice == null || _writeCharacteristic == null) {
+      AppLogger().warning(
+        '$_tag: skip write payload=${payload.toList()} '
+        'connected=${_connectedDevice != null} '
+        'hasWriteCharacteristic=${_writeCharacteristic != null}',
+      );
+      return;
+    }
 
     try {
-      await _writeCharacteristic!.write(
-        payload.toList(),
-        withoutResponse: true,
+      final writeCharacteristic = _writeCharacteristic!;
+      final withoutResponse =
+          writeCharacteristic.properties.writeWithoutResponse;
+      AppLogger().debug(
+        '$_tag: write payload=${payload.toList()} '
+        'char=${writeCharacteristic.uuid.str} '
+        'withoutResponse=$withoutResponse '
+        'write=${writeCharacteristic.properties.write} '
+        'writeWithoutResponse=${writeCharacteristic.properties.writeWithoutResponse}',
       );
-    } catch (e) {
-      AppLogger().error('$_tag: write failed', error: e);
+      await writeCharacteristic.write(
+        payload.toList(),
+        withoutResponse: withoutResponse,
+      );
+    } catch (e, stackTrace) {
+      AppLogger().error(
+        '$_tag: write failed',
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -320,25 +340,39 @@ class BleConnectionManager {
 
   Future<void> _discoverAndSetupServices(BluetoothDevice device) async {
     final services = await device.discoverServices();
+    _writeCharacteristic = null;
+    _notifyCharacteristic = null;
 
     for (final service in services) {
       for (final char in service.characteristics) {
-        final uuid = char.uuid.str.toUpperCase();
+        final uuid = char.uuid.str128.toUpperCase();
 
-        if (uuid.startsWith('0000F320')) {
+        if (_matchesUuid(uuid, BleDeviceProtocol.writeCharacteristicUuid)) {
           _writeCharacteristic = char;
         }
-        if (uuid.startsWith('0000F220')) {
+        if (_matchesUuid(uuid, BleDeviceProtocol.notifyCharacteristicUuid)) {
           _notifyCharacteristic = char;
         }
       }
     }
 
     if (_notifyCharacteristic != null) {
-      await _notifyCharacteristic!.setNotifyValue(true);
-      _notifySub = _notifyCharacteristic!.lastValueStream.listen(
-        _onCharacteristicNotified,
-      );
+      try {
+        await _notifyCharacteristic!.setNotifyValue(true);
+        _notifySub = _notifyCharacteristic!.lastValueStream.listen(
+          _onCharacteristicNotified,
+        );
+      } catch (e, stackTrace) {
+        AppLogger().warning(
+          '$_tag: notify setup failed, continue without notify',
+        );
+        AppLogger().error(
+          '$_tag: notify setup failed',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        _notifyCharacteristic = null;
+      }
     }
 
     _readDeviceInfo(services);
@@ -347,23 +381,36 @@ class BleConnectionManager {
   void _readDeviceInfo(List<BluetoothService> services) {
     for (final service in services) {
       for (final char in service.characteristics) {
-        final uuid = char.uuid.str.toUpperCase();
+        final uuid = char.uuid.str128.toUpperCase();
 
-        if (uuid.startsWith('00002A19') || // battery
-            uuid.startsWith('00002A00') || // device name
-            uuid.startsWith('0000F221') || // vibration type
-            uuid.startsWith('0000F241') || // remaining time
-            uuid.startsWith('0000F260')) {
-          // control source
+        if (_matchesUuid(uuid, BleDeviceProtocol.batteryCharacteristicUuid) ||
+            _matchesUuid(
+              uuid,
+              BleDeviceProtocol.deviceNameCharacteristicUuid,
+            ) ||
+            _matchesUuid(
+              uuid,
+              BleDeviceProtocol.vibrationTypeCharacteristicUuid,
+            ) ||
+            _matchesUuid(
+              uuid,
+              BleDeviceProtocol.remainingTimeCharacteristicUuid,
+            ) ||
+            _matchesUuid(
+              uuid,
+              BleDeviceProtocol.controlSourceCharacteristicUuid,
+            )) {
           if (char.properties.read) {
-            char.read()
+            char
+                .read()
                 .then((value) {
                   _handleCharacteristicValue(uuid, value);
                 })
                 .catchError((_) {});
           }
           if (char.properties.notify) {
-            char.setNotifyValue(true)
+            char
+                .setNotifyValue(true)
                 .then((_) {
                   char.lastValueStream.listen((value) {
                     _handleCharacteristicValue(uuid, value);
@@ -374,6 +421,10 @@ class BleConnectionManager {
         }
       }
     }
+  }
+
+  bool _matchesUuid(String actualUuid, String expectedUuid) {
+    return actualUuid.toUpperCase() == expectedUuid.toUpperCase();
   }
 
   void _handleCharacteristicValue(String uuid, List<int> value) {
@@ -402,7 +453,10 @@ class BleConnectionManager {
   }
 
   void _onCharacteristicNotified(List<int> value) {
-    _handleCharacteristicValue('0000F220', value);
+    _handleCharacteristicValue(
+      BleDeviceProtocol.notifyCharacteristicUuid.toUpperCase(),
+      value,
+    );
   }
 
   void _onDisconnected() {

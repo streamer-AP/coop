@@ -53,11 +53,11 @@ class BleDeviceProtocol {
   static const targetManufacturerId = 511;
 
   /// 编码为定时长模式帧（5 字节）
-  /// [swing(1B), vibration(1B), durationMs(2B, little-endian), delayMs(1B)]
+  /// [swing(1B), vibration(1B), durationMs高字节(1B), durationMs低字节(1B), delayMs(1B)]
   Uint8List encodeTimedSignal({
     required int swing,
     required int vibration,
-    int durationMs = 0xFFFF,
+    int durationMs = 200,
     int delayMs = 0,
   }) {
     final safeSwing = _clampLevel(swing);
@@ -68,33 +68,26 @@ class BleDeviceProtocol {
     return Uint8List.fromList([
       safeSwing,
       safeVibration,
-      safeDuration & 0xFF,
       (safeDuration >> 8) & 0xFF,
+      safeDuration & 0xFF,
       safeDelay,
     ]);
   }
 
-  /// 编码为简单控制帧（仅强度，持续不停止）
+  /// 编码控制帧（默认对齐原生旧实现，持续 200ms）
   Uint8List encodeSignal(BleSignal signal) {
-    if (signal.usesTimedMode) {
-      return encodeTimedSignal(
-        swing: signal.swing,
-        vibration: signal.vibration,
-        durationMs: signal.durationMs ?? 0xFFFF,
-        delayMs: signal.delayMs ?? 0,
-      );
-    }
-
-    return Uint8List.fromList([
-      _clampLevel(signal.swing),
-      _clampLevel(signal.vibration),
-    ]);
+    return encodeTimedSignal(
+      swing: signal.swing,
+      vibration: signal.vibration,
+      durationMs: signal.durationMs ?? 200,
+      delayMs: signal.delayMs ?? 0,
+    );
   }
 
   /// 解码设备上报数据
   BleSignal decode(Uint8List data) {
     if (data.length >= 5) {
-      final durationMs = data[2] | (data[3] << 8);
+      final durationMs = (data[2] << 8) | data[3];
       return BleSignal(
         swing: _clampLevel(data[0]),
         vibration: _clampLevel(data[1]),
