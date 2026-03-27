@@ -92,7 +92,12 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
           if (allWaveforms.isEmpty) return;
 
           final swingSlots =
-              slots.where((s) => s.channel == 'swing' && s.page == 0).toList()
+              slots
+                  .where(
+                    (s) =>
+                        s.channel == WaveformChannel.swing && s.page == 0,
+                  )
+                  .toList()
                 ..sort((a, b) => a.index.compareTo(b.index));
           if (swingSlots.isNotEmpty) {
             final firstWaveform =
@@ -106,7 +111,10 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
 
           final vibSlots =
               slots
-                  .where((s) => s.channel == 'vibration' && s.page == 0)
+                  .where(
+                    (s) =>
+                        s.channel == WaveformChannel.vibration && s.page == 0,
+                  )
                   .toList()
                 ..sort((a, b) => a.index.compareTo(b.index));
           if (vibSlots.isNotEmpty) {
