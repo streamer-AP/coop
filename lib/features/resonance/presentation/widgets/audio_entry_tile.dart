@@ -50,33 +50,27 @@ class AudioEntryTile extends ConsumerWidget {
         effectiveSelected
             ? BoxDecoration(
               color: Colors.white.withValues(alpha: 0.88),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(AppRadii.md),
               border: Border.all(
                 color: AppColors.primary.withValues(alpha: 0.16),
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+              boxShadow: AppShadows.soft(),
             )
             : null;
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppRadii.md),
       onLongPress: onLongPress,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 76),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        constraints: const BoxConstraints(minHeight: 70),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration:
             selectionDecoration ??
             (isCurrent
                 ? BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.primary.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
                 )
                 : null),
         child: Row(
@@ -101,17 +95,17 @@ class AudioEntryTile extends ConsumerWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w500,
                       color: textColor,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1),
                   Text(
                     entry.artist ?? '',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: subColor),
+                    style: TextStyle(fontSize: 12, color: subColor),
                   ),
                 ],
               ),
@@ -135,13 +129,7 @@ class AudioEntryTile extends ConsumerWidget {
                               ? AppColors.primary
                               : const Color(0xFFD2CBDD),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 4,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
+                    boxShadow: AppShadows.subtle(),
                   ),
                   child: Center(
                     child: AppIcons.icon(

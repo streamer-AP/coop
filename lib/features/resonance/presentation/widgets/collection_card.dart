@@ -22,10 +22,11 @@ class CollectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadii.md),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 56),
+          constraints: const BoxConstraints(minHeight: 52),
           child: Row(
             children: [
               CollectionArtwork(coverPath: collection.coverPath),
@@ -40,17 +41,17 @@ class CollectionCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     CollectionCountText(
                       count: collection.entryCount,
                       textStyle: const TextStyle(
-                        fontSize: 14,
+                        fontSize: 12,
                         color: Color(0xFF797979),
-                        height: 22 / 14,
+                        height: 18 / 12,
                       ),
                     ),
                   ],
@@ -88,8 +89,9 @@ class NewCollectionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadii.md),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: Row(
           children: [
             const CollectionArtwork(isCreateTile: true),
@@ -97,9 +99,9 @@ class NewCollectionTile extends StatelessWidget {
             Text(
               label,
               style: const TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 color: Color(0xFF797979),
-                height: 22 / 16,
+                height: 20 / 15,
               ),
             ),
           ],
@@ -146,7 +148,7 @@ class CollectionArtwork extends StatelessWidget {
   final bool isCreateTile;
 
   static const _size = 56.0;
-  static const _radius = 6.0;
+  static const _radius = 8.0;
 
   @override
   Widget build(BuildContext context) {

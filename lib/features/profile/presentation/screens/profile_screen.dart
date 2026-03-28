@@ -102,7 +102,7 @@ class ProfileScreen extends ConsumerWidget {
                             icon: Icons.privacy_tip_outlined,
                             svgPath: AppIcons.fileEye,
                             title: '隐私政策',
-                            onTap: () => context.pushNamed(RouteNames.privacyPolicy),
+                            onTap: () => context.pushNamed(RouteNames.editWaveformsMain),
                           ),
                           ProfileMenuItem(
                             icon: Icons.system_update_outlined,

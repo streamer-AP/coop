@@ -15,7 +15,7 @@ class NewWaveformScreen extends ConsumerStatefulWidget {
   });
 
   final String initialName;
-  final String channel;
+  final WaveformChannel channel;
 
   @override
   ConsumerState<NewWaveformScreen> createState() => _NewWaveformScreenState();

@@ -177,7 +177,7 @@ GoRouter appRouter(Ref ref) {
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           final initialName = extra?['initialName'] as String? ?? '';
-          final channel = extra?['channel'] as String? ?? 'swing';
+          final channel = extra?['channel'] as WaveformChannel? ?? WaveformChannel.swing;
           return NewWaveformScreen(
             initialName: initialName,
             channel: channel,

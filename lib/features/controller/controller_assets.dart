@@ -10,6 +10,7 @@ class ControllerAssets {
   static const sliderDot = Color(0x66FFFFFF);
   static const deviceLogoBackground = Color(0xFFF1F1F5);
   static const connectItemButtonBackground = Color(0xFFF3EFFD);
+  static const editBgBackground = Color(0xFFF5F5F5);
 
   static const blueConnectionBackground =
       'assets/figma/controller/icon_blue_con_bg.png';

@@ -34,6 +34,8 @@ class AppTheme {
       fontFamily: _appChineseFontFamily,
       colorScheme: colorScheme.copyWith(primary: AppColors.primary),
       scaffoldBackgroundColor: AppColors.background,
+      splashColor: AppColors.primary.withValues(alpha: 0.08),
+      highlightColor: Colors.transparent,
       textTheme: ThemeData.light().textTheme.apply(
         fontFamily: _appChineseFontFamily,
         fontFamilyFallback: _chineseFontFallback,
@@ -79,6 +81,13 @@ class AppTheme {
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+      ),
+      cardTheme: CardThemeData(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadii.lg),
         ),
       ),
     );

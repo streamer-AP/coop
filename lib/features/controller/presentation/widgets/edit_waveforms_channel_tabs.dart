@@ -15,9 +15,8 @@ class EditWaveformsChannelTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.28),
+        color: Colors.white.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -25,12 +24,11 @@ class EditWaveformsChannelTabs extends StatelessWidget {
           Expanded(
             child: _ChannelTabButton(
               label: '摇摆波形',
-              iconAsset: ControllerAssets.swingItemTag,
+              iconAsset: ControllerAssets.swingTag,
               selected: selectedIndex == 0,
               onTap: () => onChanged(0),
             ),
           ),
-          const SizedBox(width: 4),
           Expanded(
             child: _ChannelTabButton(
               label: '震动波形',
@@ -67,24 +65,23 @@ class _ChannelTabButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: SizedBox(
-          height: 48,
+          height: 40,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset(
                 iconAsset,
-                width: 18,
-                height: 18,
+                width: 22,
+                height: 22,
                 fit: BoxFit.contain,
                 color: Colors.white,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               Text(
                 label,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
