@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../shared/widgets/omao_toast.dart';
 import '../../../../core/theme/app_icons.dart';
+import '../../../../shared/widgets/omao_toast.dart';
 import '../../application/providers/collection_providers.dart';
 import '../../application/providers/import_providers.dart';
 import '../../application/providers/player_providers.dart';
@@ -360,8 +360,8 @@ class _AllEntriesTabState extends ConsumerState<_AllEntriesTab> {
             Expanded(
               child: ListView.builder(
                 padding: EdgeInsets.only(
-                  top: _selectionMode ? 6 : 8,
-                  bottom: 8,
+                  top: _selectionMode ? 4 : 6,
+                  bottom: 6,
                 ),
                 itemCount: filtered.length,
                 itemBuilder: (context, index) {
@@ -488,21 +488,13 @@ class _AllEntriesTabState extends ConsumerState<_AllEntriesTab> {
         visibleIds.isNotEmpty && visibleIds.every(_selectedEntryIds.contains);
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+      margin: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.08),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6A53A7).withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        boxShadow: AppShadows.soft(),
       ),
       child: Row(
         children: [
@@ -525,7 +517,7 @@ class _AllEntriesTabState extends ConsumerState<_AllEntriesTab> {
           Text(
             '已选 ${_selectedEntryIds.length} 项',
             style: const TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: Color(0xFF1C1B1F),
             ),
@@ -533,12 +525,14 @@ class _AllEntriesTabState extends ConsumerState<_AllEntriesTab> {
           const Spacer(),
           _SelectionToolbarAction(
             label: allSelected ? '取消全选' : '全选',
-            icon: allSelected
-                ? Icons.remove_done_outlined
-                : Icons.done_all_rounded,
-            onTap: visibleEntries.isEmpty
-                ? null
-                : () => _toggleSelectAll(visibleEntries),
+            icon:
+                allSelected
+                    ? Icons.remove_done_outlined
+                    : Icons.done_all_rounded,
+            onTap:
+                visibleEntries.isEmpty
+                    ? null
+                    : () => _toggleSelectAll(visibleEntries),
           ),
           const SizedBox(width: 4),
           _SelectionToolbarAction(
@@ -669,15 +663,14 @@ class _SelectionToolbarAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onTap != null;
-    final color = enabled
-        ? foregroundColor
-        : foregroundColor.withValues(alpha: 0.35);
+    final color =
+        enabled ? foregroundColor : foregroundColor.withValues(alpha: 0.35);
 
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(
           color: foregroundColor.withValues(alpha: enabled ? 0.06 : 0.03),
           borderRadius: BorderRadius.circular(999),
@@ -690,7 +683,7 @@ class _SelectionToolbarAction extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w500,
                 color: color,
               ),
@@ -735,7 +728,7 @@ class _CollectionsTab extends ConsumerWidget {
       data: (collections) {
         final sortedCollections = _sortCollections(collections, sortMode);
         return ListView.builder(
-          padding: const EdgeInsets.only(top: 8, bottom: 8),
+          padding: const EdgeInsets.only(top: 6, bottom: 6),
           itemCount: sortedCollections.length + 1,
           itemBuilder: (context, index) {
             if (index == 0) {

@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/player_providers.dart';
 
@@ -77,35 +78,39 @@ class _MiniPlayerBarState extends ConsumerState<MiniPlayerBar>
               }
               : null,
       child: Container(
-        height: 72,
-        margin: const EdgeInsets.symmetric(horizontal: 20),
+        height: 68,
+        margin: const EdgeInsets.symmetric(horizontal: 24),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.circular(AppRadii.pill),
           child: Stack(
             children: [
               // 背景层 — 左#605591→右#C5B8FF
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: hasEntry ? null : const Color(0xB3C0C0C0),
+                    color: hasEntry ? null : const Color(0xAFC5C5C8),
                     gradient:
                         hasEntry
                             ? const LinearGradient(
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
-                              colors: [Color(0xFF605591), Color(0xFFC5B8FF)],
+                              colors: [Color(0xE05B5288), Color(0xD9B9AEF1)],
                             )
                             : null,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.16),
+                    ),
+                    boxShadow: AppShadows.soft(),
                   ),
                 ),
               ),
               // 内容层
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
+                padding: const EdgeInsets.fromLTRB(10, 0, 12, 0),
                 child: Row(
                   children: [
                     _buildCover(currentEntry?.coverPath, hasEntry),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -116,13 +121,13 @@ class _MiniPlayerBarState extends ConsumerState<MiniPlayerBar>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 16,
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              letterSpacing: -0.32,
+                              letterSpacing: -0.2,
                               color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 1),
                           Text(
                             hasEntry
                                 ? (currentEntry.artist ?? 'Unknown Artist')
@@ -130,11 +135,11 @@ class _MiniPlayerBarState extends ConsumerState<MiniPlayerBar>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 14,
-                              letterSpacing: -0.32,
+                              fontSize: 12,
+                              letterSpacing: -0.1,
                               color:
                                   hasEntry
-                                      ? Colors.white.withValues(alpha: 0.30)
+                                      ? Colors.white.withValues(alpha: 0.58)
                                       : Colors.white.withValues(alpha: 0.7),
                             ),
                           ),
@@ -142,7 +147,7 @@ class _MiniPlayerBarState extends ConsumerState<MiniPlayerBar>
                       ),
                     ),
                     _buildPlayButton(ref, hasEntry, isPlaying, progress),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 4),
                     _buildPlaylistButton(hasEntry),
                   ],
                 ),
@@ -182,11 +187,18 @@ class _MiniPlayerBarState extends ConsumerState<MiniPlayerBar>
 
   Widget _placeholderCover(bool hasEntry) {
     return ClipOval(
-      child: Image.asset(
-        'assets/figma/player/default_cover.png',
-        width: 52,
-        height: 52,
-        fit: BoxFit.cover,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: hasEntry ? null : const Color(0xFFD5D5D7),
+        ),
+        child: Image.asset(
+          'assets/figma/player/default_cover.png',
+          width: 52,
+          height: 52,
+          fit: BoxFit.cover,
+          color: hasEntry ? null : Colors.grey.shade500,
+          colorBlendMode: hasEntry ? null : BlendMode.modulate,
+        ),
       ),
     );
   }
@@ -207,19 +219,19 @@ class _MiniPlayerBarState extends ConsumerState<MiniPlayerBar>
         isPlaying ? notifier.pause() : notifier.play();
       },
       child: SizedBox(
-        width: 36,
-        height: 36,
+        width: 34,
+        height: 34,
         child: CustomPaint(
           painter: _ProgressRingPainter(
             progress: progress,
-            trackColor: Colors.white.withValues(alpha: 0.25),
+            trackColor: Colors.white.withValues(alpha: 0.22),
             progressColor: Colors.white,
-            strokeWidth: 2.0,
+            strokeWidth: 1.8,
           ),
           child: Center(
             child: AppIcons.icon(
               isPlaying ? AppIcons.pause : AppIcons.play,
-              size: 20,
+              size: 18,
               color: Colors.white,
             ),
           ),
@@ -236,21 +248,21 @@ class _MiniPlayerBarState extends ConsumerState<MiniPlayerBar>
     return GestureDetector(
       onTap: widget.onPlaylistTap,
       child: SizedBox(
-        width: 36,
-        height: 36,
+        width: 34,
+        height: 34,
         child: Center(
           child: Container(
-            width: 34,
-            height: 34,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.15),
+              color: Colors.white.withValues(alpha: 0.14),
             ),
             child: Center(
               child: AppIcons.icon(
                 AppIcons.playlist,
-                size: 19,
-                color: Colors.white.withValues(alpha: 0.85),
+                size: 17,
+                color: Colors.white.withValues(alpha: 0.82),
               ),
             ),
           ),
@@ -266,15 +278,15 @@ class _MiniPlayerBarState extends ConsumerState<MiniPlayerBar>
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
-        width: 38,
-        height: 38,
+        width: 34,
+        height: 34,
         child: DecoratedBox(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.24),
+            color: Colors.white.withValues(alpha: 0.18),
           ),
           child: Center(
-            child: AppIcons.icon(icon, size: 20, color: Colors.white),
+            child: AppIcons.icon(icon, size: 18, color: Colors.white),
           ),
         ),
       ),

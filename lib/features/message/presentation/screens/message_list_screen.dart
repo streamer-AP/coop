@@ -78,21 +78,23 @@ class _MessageListScreenState extends ConsumerState<MessageListScreen> {
               Align(
                 alignment: Alignment.centerRight,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () {
-                      ref.read(messageNotifierProvider.notifier).markAllAsRead();
+                      ref
+                          .read(messageNotifierProvider.notifier)
+                          .markAllAsRead();
                     },
                     child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
+                      padding: EdgeInsets.symmetric(vertical: 6),
                       child: Text(
                         '全部已读',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w400,
                           color: Colors.white,
-                          letterSpacing: 1.2,
+                          letterSpacing: 0.8,
                         ),
                       ),
                     ),
@@ -139,7 +141,7 @@ class _MessageListScreenState extends ConsumerState<MessageListScreen> {
 
                       return ListView.builder(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(0, 2, 0, 124),
+                        padding: const EdgeInsets.fromLTRB(0, 0, 0, 124),
                         itemCount: messages.length,
                         itemBuilder: (context, index) {
                           final message = messages[index];
@@ -341,8 +343,12 @@ class _MessageBackdrop extends StatelessWidget {
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  const Color(0xFF28307C).withValues(alpha: 0.36),
-                                  const Color(0xFFE7EAFF).withValues(alpha: 0.36),
+                                  const Color(
+                                    0xFF28307C,
+                                  ).withValues(alpha: 0.36),
+                                  const Color(
+                                    0xFFE7EAFF,
+                                  ).withValues(alpha: 0.36),
                                 ],
                                 stops: const [0.10659, 0.69387],
                               ),
