@@ -141,15 +141,18 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                       ),
                       loading:
                           () => const Center(
-                        child: CircularProgressIndicator(),
+                        // child: CircularProgressIndicator(),
                       ),
                       error:
-                          (error, _) =>
-                          Center(child: Text('波形加载失败：$error')),
+                          // (error, _) => Center(child: Text('波形加载失败：$error')),
+                          (error, _) => const Center(),
                     ),
                     loading:
-                        () => const Center(child: CircularProgressIndicator()),
-                    error: (error, _) => Center(child: Text('配置加载失败：$error')),
+                        () => const Center(),
+                    error: (error, _) {
+                      AppLogger().debug('error=$error');
+                      return const Center();
+                      },
                   ),
                 ),
               ],
@@ -445,18 +448,32 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   }
 }
 
-class _ControllerDeviceSheet extends ConsumerWidget {
+class _ControllerDeviceSheet extends ConsumerStatefulWidget {
   const _ControllerDeviceSheet();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ControllerDeviceSheet> createState() =>
+      _ControllerDeviceSheetState();
+}
+
+class _ControllerDeviceSheetState extends ConsumerState<_ControllerDeviceSheet> {
+  bool _closeRequested = false;
+
+  @override
+  Widget build(BuildContext context) {
     final connectionFlow = ref.watch(controllerConnectionFlowProvider);
 
-    if (connectionFlow.isConnected) {
+    if (connectionFlow.isConnected && !_closeRequested) {
+      _closeRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
+        if (!mounted) {
+          return;
         }
+        final route = ModalRoute.of(context);
+        if (route?.isCurrent != true) {
+          return;
+        }
+        Navigator.of(context).pop();
       });
     }
 

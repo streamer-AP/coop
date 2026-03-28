@@ -121,10 +121,10 @@ class HomePage extends ConsumerWidget {
     WidgetRef ref,
     String routeName,
   ) async {
-    final passed = await VerificationGuard.check(context, ref);
-    if (passed && context.mounted) {
+    // final passed = await VerificationGuard.check(context, ref);
+    // if (passed && context.mounted) {
       context.pushNamed(routeName);
-    }
+    // }
   }
 }
 

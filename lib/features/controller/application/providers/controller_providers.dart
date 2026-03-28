@@ -57,6 +57,8 @@ Stream<BleConnectionState> connectionState(Ref ref) {
 
 @riverpod
 WaveformPlayerService waveformPlayerService(Ref ref) {
+  ref.keepAlive();
+
   final arbitrator = ref.watch(bleSignalArbitratorProvider);
   final service = WaveformPlayerService(arbitrator);
   ref.onDispose(service.dispose);
@@ -67,6 +69,7 @@ WaveformPlayerService waveformPlayerService(Ref ref) {
 class ControllerStateNotifier extends _$ControllerStateNotifier {
   @override
   ControllerUiState build() {
+    ref.keepAlive();
     ref.watch(waveformPlayerServiceProvider);
 
     ref.listen(connectionStateProvider, (prev, next) {
@@ -77,59 +80,86 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
       });
     });
 
-    _autoSelectDefault();
+    ref.listen<AsyncValue<List<domain.FavoriteSlot>>>(
+      favoriteSlotsProvider,
+      (_, __) => _syncDefaultSelections(),
+    );
+    ref.listen<AsyncValue<List<Waveform>>>(
+      waveformsProvider,
+      (_, __) => _syncDefaultSelections(),
+    );
+
+    Future.microtask(_syncDefaultSelections);
 
     return const ControllerUiState();
   }
 
-  void _autoSelectDefault() {
-    Future.microtask(() {
-      if (state.selectedSwingWaveform != null) return;
-      final slotsAsync = ref.read(favoriteSlotsProvider);
-      final waveformsAsync = ref.read(waveformsProvider);
-      slotsAsync.whenData((slots) {
-        waveformsAsync.whenData((allWaveforms) {
-          if (allWaveforms.isEmpty) return;
+  void _syncDefaultSelections() {
+    final slots = ref.read(favoriteSlotsProvider).valueOrNull;
+    final allWaveforms = ref.read(waveformsProvider).valueOrNull;
+    if (slots == null || allWaveforms == null || allWaveforms.isEmpty) {
+      return;
+    }
 
-          final swingSlots =
-              slots
-                  .where(
-                    (s) =>
-                        s.channel == WaveformChannel.swing && s.page == 0,
-                  )
-                  .toList()
-                ..sort((a, b) => a.index.compareTo(b.index));
-          if (swingSlots.isNotEmpty) {
-            final firstWaveform =
-                allWaveforms
-                    .where((w) => w.id == swingSlots.first.waveformId)
-                    .firstOrNull;
-            if (firstWaveform != null && state.selectedSwingWaveform == null) {
-              state = state.copyWith(selectedSwingWaveform: firstWaveform);
-            }
-          }
+    var nextSwingWaveform = state.selectedSwingWaveform;
+    var nextVibrationWaveform = state.selectedVibrationWaveform;
+    var didChange = false;
 
-          final vibSlots =
-              slots
-                  .where(
-                    (s) =>
-                        s.channel == WaveformChannel.vibration && s.page == 0,
-                  )
-                  .toList()
-                ..sort((a, b) => a.index.compareTo(b.index));
-          if (vibSlots.isNotEmpty) {
-            final firstWaveform =
-                allWaveforms
-                    .where((w) => w.id == vibSlots.first.waveformId)
-                    .firstOrNull;
-            if (firstWaveform != null &&
-                state.selectedVibrationWaveform == null) {
-              state = state.copyWith(selectedVibrationWaveform: firstWaveform);
-            }
-          }
-        });
-      });
-    });
+    if (nextSwingWaveform == null) {
+      nextSwingWaveform = _findDefaultWaveform(
+        channel: WaveformChannel.swing,
+        slots: slots,
+        waveforms: allWaveforms,
+      );
+      if (nextSwingWaveform != null) {
+        didChange = true;
+      }
+    }
+
+    if (nextVibrationWaveform == null) {
+      nextVibrationWaveform = _findDefaultWaveform(
+        channel: WaveformChannel.vibration,
+        slots: slots,
+        waveforms: allWaveforms,
+      );
+      if (nextVibrationWaveform != null) {
+        didChange = true;
+      }
+    }
+
+    if (!didChange) {
+      return;
+    }
+
+    AppLogger().debug(
+      'ControllerStateNotifier: sync defaults '
+      'swing=${nextSwingWaveform?.name} '
+      'vibration=${nextVibrationWaveform?.name}',
+    );
+
+    state = state.copyWith(
+      selectedSwingWaveform: nextSwingWaveform,
+      selectedVibrationWaveform: nextVibrationWaveform,
+    );
+    _updatePlayer();
+  }
+
+  Waveform? _findDefaultWaveform({
+    required WaveformChannel channel,
+    required List<domain.FavoriteSlot> slots,
+    required List<Waveform> waveforms,
+  }) {
+    final pageZeroSlots = slots
+        .where((slot) => slot.channel == channel && slot.page == 0)
+        .toList()
+      ..sort((a, b) => a.index.compareTo(b.index));
+    if (pageZeroSlots.isEmpty) {
+      return null;
+    }
+
+    return waveforms
+        .where((waveform) => waveform.id == pageZeroSlots.first.waveformId)
+        .firstOrNull;
   }
 
   void selectPage(int page) {
