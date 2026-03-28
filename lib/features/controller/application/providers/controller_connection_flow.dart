@@ -202,10 +202,12 @@ class ControllerConnectionFlowController
         .listen(
           _handleDiscoveredDevices,
           onError: (Object error, StackTrace stackTrace) {
+            final errorMessage =
+                error is BleScanException ? error.message : '扫描失败，请重试';
             state = state.copyWith(
               isSearching: false,
               connectionStatus: DeviceConnectionStatus.disconnected,
-              errorMessage: '扫描失败，请重试',
+              errorMessage: errorMessage,
             );
           },
         );

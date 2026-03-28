@@ -95,25 +95,28 @@ class _SeekBarState extends ConsumerState<SeekBar> {
                     ),
                     Positioned(
                       left: (knobOffset - 5).clamp(0.0, width - 10),
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                          border: Border.all(
-                            color: const Color(0xFFE5DFFF),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(
-                                0xFFBCAAF1,
-                              ).withValues(alpha: 0.42),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
+                      child: Opacity(
+                        opacity: _dragFraction != null ? 1.0 : 0.0,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            border: Border.all(
+                              color: const Color(0xFFE5DFFF),
+                              width: 1.5,
                             ),
-                          ],
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFFBCAAF1,
+                                ).withValues(alpha: 0.42),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

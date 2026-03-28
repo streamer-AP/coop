@@ -41,6 +41,22 @@ class ApiClient {
     return response.data!;
   }
 
+  Future<Map<String, dynamic>> put(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) async {
+    final requestOptions = _resolveOptions(data, options);
+    final response = await _dio.put<Map<String, dynamic>>(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: requestOptions,
+    );
+    return response.data!;
+  }
+
   Options? _resolveOptions(dynamic data, Options? options) {
     if (data is! FormData) {
       return options;

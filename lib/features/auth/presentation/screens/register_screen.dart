@@ -9,7 +9,6 @@ import '../../application/providers/auth_providers.dart';
 import '../../domain/models/auth_exception.dart';
 import '../widgets/auth_chrome.dart';
 import '../widgets/auth_fields.dart';
-import 'verification_code_screen.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -23,7 +22,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _agreedToTerms = false;
   bool _isLoading = false;
 
-  String get _phoneDigits => _phoneController.text.replaceAll(RegExp(r'\D'), '');
+  String get _phoneDigits =>
+      _phoneController.text.replaceAll(RegExp(r'\D'), '');
 
   bool get _canSubmit => _phoneDigits.length >= 11;
 
@@ -71,38 +71,24 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder:
-            (_) => VerificationCodeScreen(
-              phone: _phoneDigits,
-              title: '验证码注册',
-              isRegister: true,
-              onVerified: _registerWithCode,
-            ),
-      ),
+    final code = await context.pushNamed<String>(
+      RouteNames.verificationCode,
+      queryParameters: {
+        'phone': _phoneDigits,
+        'title': '验证码注册',
+        'flow': 'register',
+      },
     );
+    if (code == null || !mounted) return;
+    _onCodeVerified(code);
   }
 
-  Future<void> _registerWithCode(String code) async {
-    await ref
-        .read(authNotifierProvider.notifier)
-        .register(phone: _phoneDigits, code: code);
-
+  void _onCodeVerified(String code) {
     if (!mounted) return;
-    final authState = ref.read(authNotifierProvider);
-    if (authState.hasError) {
-      TopBannerToast.show(
-        context,
-        message:
-            authState.error is AuthException
-                ? (authState.error as AuthException).displayMessage
-                : '注册失败',
-      );
-      return;
-    }
-
-    context.goNamed(RouteNames.setupPassword);
+    context.pushNamed(
+      RouteNames.setupPassword,
+      extra: {'phone': _phoneDigits, 'code': code},
+    );
   }
 
   @override

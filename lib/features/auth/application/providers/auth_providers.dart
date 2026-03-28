@@ -3,21 +3,20 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/storage/token_storage.dart';
+import '../../../../core/storage/user_storage_service.dart';
 import '../../data/auth_repository_impl.dart';
 import '../../domain/models/auth_exception.dart';
 import '../../domain/models/user.dart';
 import '../../domain/models/verification_result.dart';
 import '../../domain/models/verification_status.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../../resonance/application/providers/player_providers.dart';
 
 part 'auth_providers.g.dart';
 
 @Riverpod(keepAlive: true)
 AuthRepository authRepository(Ref ref) {
-  return AuthRepositoryImpl(
-    ref.watch(apiClientProvider),
-    TokenStorage(),
-  );
+  return AuthRepositoryImpl(ref.watch(apiClientProvider), TokenStorage());
 }
 
 @Riverpod(keepAlive: true)
@@ -30,6 +29,13 @@ class AuthNotifier extends _$AuthNotifier {
 
   Future<void> _init() async {
     final user = await ref.read(authRepositoryProvider).getCurrentUser();
+    // switchUser 已经在 UserStorageNotifier._tryRestoreFromCache() 中
+    // 用缓存的 userId 快速完成了。这里只在 userId 不同时才切换。
+    if (user != null && user.id.trim().isNotEmpty) {
+      await ref
+          .read(userStorageNotifierProvider.notifier)
+          .switchUser(user.id.trim(), force: true);
+    }
     state = AsyncData(user);
   }
 
@@ -38,11 +44,13 @@ class AuthNotifier extends _$AuthNotifier {
     required String code,
   }) async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
-      () => ref
+    state = await AsyncValue.guard(() async {
+      final user = await ref
           .read(authRepositoryProvider)
-          .loginWithCode(phone: phone, code: code),
-    );
+          .loginWithCode(phone: phone, code: code);
+      await _onUserAuthenticated(user);
+      return user;
+    });
   }
 
   Future<void> loginWithPassword({
@@ -50,23 +58,37 @@ class AuthNotifier extends _$AuthNotifier {
     required String password,
   }) async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
-      () => ref
+    state = await AsyncValue.guard(() async {
+      final user = await ref
           .read(authRepositoryProvider)
-          .loginWithPassword(phone: phone, password: password),
-    );
+          .loginWithPassword(phone: phone, password: password);
+      await _onUserAuthenticated(user);
+      return user;
+    });
   }
 
   Future<void> register({
     required String phone,
     required String code,
+    String? password,
   }) async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
-      () => ref
+    state = await AsyncValue.guard(() async {
+      final user = await ref
           .read(authRepositoryProvider)
-          .register(phone: phone, code: code),
-    );
+          .register(phone: phone, code: code, password: password);
+      await _onUserAuthenticated(user);
+      return user;
+    });
+  }
+
+  /// 登录/注册成功后，初始化用户存储空间。
+  Future<void> _onUserAuthenticated(User user) async {
+    if (user.id.trim().isNotEmpty) {
+      await ref
+          .read(userStorageNotifierProvider.notifier)
+          .switchUser(user.id.trim(), force: true);
+    }
   }
 
   Future<void> setupPassword(String password) async {
@@ -84,7 +106,15 @@ class AuthNotifier extends _$AuthNotifier {
   }
 
   Future<void> logout() async {
+    // 停止播放器
+    ref.read(playerStateNotifierProvider.notifier).clearPlaylist();
+
+    // 清理用户存储
+    await ref.read(userStorageNotifierProvider.notifier).clear();
+
+    // 调用后端登出 + 清除 token
     await ref.read(authRepositoryProvider).logout();
+
     state = const AsyncData(null);
   }
 

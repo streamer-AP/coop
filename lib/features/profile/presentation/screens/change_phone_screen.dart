@@ -61,10 +61,7 @@ class _ChangePhoneScreenState extends ConsumerState<ChangePhoneScreen> {
         body: PageView(
           controller: _pageController,
           physics: const NeverScrollableScrollPhysics(),
-          children: [
-            _buildStep1(),
-            _buildStep2(),
-          ],
+          children: [_buildStep1(), _buildStep2()],
         ),
       ),
     );
@@ -78,11 +75,10 @@ class _ChangePhoneScreenState extends ConsumerState<ChangePhoneScreen> {
           VerificationCodeInput(
             phoneController: _oldPhoneController,
             codeController: _oldCodeController,
-            onSendCode: () {
-              ref
-                  .read(authNotifierProvider.notifier)
-                  .sendVerificationCode(_oldPhoneController.text);
-            },
+            onSendCode:
+                () => ref
+                    .read(authNotifierProvider.notifier)
+                    .sendVerificationCode(_oldPhoneController.text),
           ),
           const SizedBox(height: 40),
           SizedBox(
@@ -111,11 +107,10 @@ class _ChangePhoneScreenState extends ConsumerState<ChangePhoneScreen> {
           VerificationCodeInput(
             phoneController: _newPhoneController,
             codeController: _newCodeController,
-            onSendCode: () {
-              ref
-                  .read(authNotifierProvider.notifier)
-                  .sendVerificationCode(_newPhoneController.text);
-            },
+            onSendCode:
+                () => ref
+                    .read(authNotifierProvider.notifier)
+                    .sendVerificationCode(_newPhoneController.text),
           ),
           const SizedBox(height: 40),
           SizedBox(
@@ -124,24 +119,24 @@ class _ChangePhoneScreenState extends ConsumerState<ChangePhoneScreen> {
               text: '确定修改',
               onPressed: () async {
                 try {
-                  await ref.read(profileRepositoryProvider).changePhone(
+                  await ref
+                      .read(profileRepositoryProvider)
+                      .changePhone(
                         oldPhone: _oldPhoneController.text,
                         oldCode: _oldCodeController.text,
                         newPhone: _newPhoneController.text,
                         newCode: _newCodeController.text,
                       );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('手机号修改成功')),
-                    );
-                    Navigator.of(context).pop();
-                  }
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('手机号修改成功')));
+                  Navigator.of(context).pop();
                 } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('修改失败，请重试')),
-                    );
-                  }
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('修改失败，请重试')));
                 }
               },
             ),

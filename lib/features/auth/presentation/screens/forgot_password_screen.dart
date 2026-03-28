@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../shared/widgets/top_banner_toast.dart';
-import '../../application/providers/auth_providers.dart';
 import '../../domain/models/auth_exception.dart';
 import '../widgets/auth_chrome.dart';
 import '../widgets/auth_fields.dart';
-import 'verification_code_screen.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -53,8 +53,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
     try {
       await ref
-          .read(authNotifierProvider.notifier)
-          .sendVerificationCode(_phoneDigits);
+          .read(apiClientProvider)
+          .post(
+            ApiEndpoints.forgotPwdSendCode,
+            queryParameters: {'mobile': _phoneDigits},
+          );
     } catch (e) {
       if (mounted) {
         TopBannerToast.show(
@@ -70,16 +73,16 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     }
 
     if (!mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder:
-            (_) => VerificationCodeScreen(
-              phone: _phoneDigits,
-              title: '重置密码',
-              onVerified: _resetPassword,
-            ),
-      ),
+    final code = await context.pushNamed<String>(
+      RouteNames.verificationCode,
+      queryParameters: {
+        'phone': _phoneDigits,
+        'title': '重置密码',
+        'flow': 'forgot-password',
+      },
     );
+    if (code == null || !mounted) return;
+    await _resetPassword(code);
   }
 
   Future<void> _resetPassword(String code) async {
@@ -87,12 +90,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       await ref
           .read(apiClientProvider)
           .post(
-            ApiEndpoints.resetPassword,
+            ApiEndpoints.forgotPwd,
             queryParameters: {
               'mobile': _phoneDigits,
               'code': code,
-              'password': _passwordController.text,
-              'veryPassword': _passwordController.text,
+              'newPwd': _passwordController.text,
             },
           );
     } catch (_) {

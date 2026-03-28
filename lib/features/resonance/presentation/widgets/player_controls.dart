@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/player_providers.dart';
 import '../../domain/models/playlist.dart';
 
@@ -26,7 +27,7 @@ class PlayerControls extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           _ControlIconButton(
-            icon: _repeatIcon(repeatMode),
+            icon: _repeatIcon(repeatMode, enabled: hasEntry),
             color: hasEntry ? mutedColor : disabledColor,
             onTap:
                 hasEntry
@@ -38,7 +39,7 @@ class PlayerControls extends ConsumerWidget {
                     : null,
           ),
           _ControlIconButton(
-            icon: const Icon(Icons.skip_previous_rounded, size: 30),
+            icon: AppIcons.icon(AppIcons.skipBack, size: 30),
             color: hasEntry ? mutedColor : disabledColor,
             onTap:
                 hasEntry
@@ -56,7 +57,7 @@ class PlayerControls extends ConsumerWidget {
             },
           ),
           _ControlIconButton(
-            icon: const Icon(Icons.skip_next_rounded, size: 30),
+            icon: AppIcons.icon(AppIcons.skipForward, size: 30),
             color: hasEntry ? mutedColor : disabledColor,
             onTap:
                 hasEntry
@@ -66,7 +67,7 @@ class PlayerControls extends ConsumerWidget {
                     : null,
           ),
           _ControlIconButton(
-            icon: const Icon(Icons.queue_music_rounded, size: 24),
+            icon: AppIcons.icon(AppIcons.playlist, size: 24),
             color: hasEntry ? mutedColor : disabledColor,
             onTap: hasEntry ? onPlaylistTap : null,
           ),
@@ -75,16 +76,16 @@ class PlayerControls extends ConsumerWidget {
     );
   }
 
-  Widget _repeatIcon(RepeatMode mode) {
-    final (icon, isActive) = switch (mode) {
-      RepeatMode.sequential => (Icons.repeat, false),
-      RepeatMode.single => (Icons.repeat_one, true),
-      RepeatMode.shuffle => (Icons.shuffle, true),
+  Widget _repeatIcon(RepeatMode mode, {required bool enabled}) {
+    final svgPath = switch (mode) {
+      RepeatMode.sequential => AppIcons.refresh2,
+      RepeatMode.single => AppIcons.refresh1,
+      RepeatMode.shuffle => AppIcons.shuffle,
     };
 
-    return Icon(
-      icon,
-      color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.5),
+    return AppIcons.icon(
+      svgPath,
+      color: enabled ? const Color(0xFF6A53A7) : const Color(0xFFC8C8C8),
     );
   }
 }
@@ -138,27 +139,43 @@ class _PlayPauseButton extends StatelessWidget {
           gradient:
               enabled
                   ? const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.white, Color(0xFFF0ECFB)],
+                    begin: Alignment(-0.42, -0.95),
+                    end: Alignment(0.88, 1.0),
+                    colors: [Color(0xFFEFECFD), Color(0xFF543A99)],
                   )
                   : const LinearGradient(
                     colors: [Color(0xFFE2E2E2), Color(0xFFD8D8D8)],
                   ),
+          border:
+              enabled
+                  ? Border.all(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    width: 0.8,
+                  )
+                  : null,
           boxShadow: [
             BoxShadow(
               color: const Color(
-                0xFF8E7FB0,
-              ).withValues(alpha: enabled ? 0.22 : 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
+                0xFF6A53A7,
+              ).withValues(alpha: enabled ? 0.30 : 0.08),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
-        child: Icon(
-          isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-          size: 34,
-          color: enabled ? const Color(0xFF6A53A7) : const Color(0xFFAFAFAF),
+        child: Center(
+          child:
+              isPlaying
+                  ? AppIcons.icon(
+                    AppIcons.pause,
+                    size: 20,
+                    color: enabled ? Colors.white : const Color(0xFFAFAFAF),
+                  )
+                  : AppIcons.icon(
+                    AppIcons.play,
+                    size: 20,
+                    color: enabled ? Colors.white : const Color(0xFFAFAFAF),
+                  ),
         ),
       ),
     );

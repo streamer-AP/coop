@@ -14,10 +14,17 @@ class MediaExtractionBridge {
       throw UnsupportedError('当前平台暂不支持视频抽取音频');
     }
 
-    final extractedPath = await _channel.invokeMethod<String>('extractAudio', {
-      'inputPath': inputPath,
-      'outputPath': outputPath,
-    });
+    final extractedPath = await _channel
+        .invokeMethod<String>('extractAudio', {
+          'inputPath': inputPath,
+          'outputPath': outputPath,
+        })
+        .onError<PlatformException>((error, _) {
+          final message = error.message?.trim();
+          throw Exception(
+            message == null || message.isEmpty ? '视频音频提取失败' : message,
+          );
+        });
 
     if (extractedPath == null || extractedPath.isEmpty) {
       throw Exception('视频音频提取失败');

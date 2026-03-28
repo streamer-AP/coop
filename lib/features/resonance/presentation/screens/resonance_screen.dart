@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/omao_toast.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/collection_providers.dart';
+import '../../application/providers/import_providers.dart';
 import '../../application/providers/player_providers.dart';
 import '../../application/providers/resonance_providers.dart';
 import '../../application/providers/search_providers.dart';
@@ -15,6 +18,7 @@ import '../widgets/audio_entry_action_sheet.dart';
 import '../widgets/audio_entry_tile.dart';
 import '../widgets/collection_action_sheet.dart';
 import '../widgets/collection_card.dart';
+import '../widgets/create_collection_dialog.dart';
 import '../widgets/import_instruction_sheet.dart';
 import '../widgets/mini_player_bar.dart';
 import '../widgets/sort_bottom_sheet.dart';
@@ -31,41 +35,144 @@ class ResonanceScreen extends ConsumerWidget {
         backgroundColor: AppColors.background,
         body: Stack(
           children: [
-            // Purple gradient background
-            Container(
-              height: 280,
-              decoration: const BoxDecoration(
-                gradient: AppColors.headerGradient,
+            // 流光背景
+            SizedBox.expand(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const ColoredBox(color: Color(0xFFEAEAEA)),
+                  // 紫色渐变 — Figma: rgba(99,78,131,0.7) → rgba(234,234,234,0.7), h=596, stop 79%
+                  Container(
+                    height: 596,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          const Color(0xFF634E83).withValues(alpha: 0.7),
+                          const Color(0xFFEAEAEA).withValues(alpha: 0.7),
+                        ],
+                        stops: const [0.0, 0.79],
+                      ),
+                    ),
+                  ),
+                  // Radial light glow
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 393,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: 0.15,
+                        child: Image.asset(
+                          'assets/figma/player/radial_light.png',
+                          fit: BoxFit.cover,
+                          alignment: Alignment.topCenter,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Noise texture
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: 0.12,
+                        child: Image.asset(
+                          'assets/figma/player/noise_texture.png',
+                          fit: BoxFit.cover,
+                          colorBlendMode: BlendMode.overlay,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Iridescent light
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 393,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: 0.30,
+                        child: Image.asset(
+                          'assets/figma/player/iridescent_light.png',
+                          fit: BoxFit.cover,
+                          alignment: Alignment.topLeft,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             // Main content
             SafeArea(
-              child: Column(
+              bottom: false,
+              child: Stack(
                 children: [
-                  _buildAppBar(context, ref),
-                  Expanded(
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        color: AppColors.listBackground,
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(30),
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildTabBar(),
-                          const Expanded(
-                            child: TabBarView(
-                              children: [_AllEntriesTab(), _CollectionsTab()],
+                  Column(
+                    children: [
+                      _buildAppBar(context, ref),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                const Color(0xFFEAEAEA).withValues(alpha: 0.3),
+                                const Color(0xFFE5DCE8).withValues(alpha: 0.3),
+                              ],
+                            ),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(30),
                             ),
                           ),
-                        ],
+                          child: Column(
+                            children: [
+                              _buildTabBar(),
+                              Expanded(
+                                child: Builder(
+                                  builder: (context) {
+                                    final tabController =
+                                        DefaultTabController.of(context);
+                                    return AnimatedBuilder(
+                                      animation: tabController,
+                                      builder: (context, _) {
+                                        final currentIndex =
+                                            tabController.index;
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 80,
+                                          ),
+                                          child:
+                                              currentIndex == 0
+                                                  ? const _AllEntriesTab()
+                                                  : const _CollectionsTab(),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                  MiniPlayerBar(
-                    onTap: () => context.pushNamed(RouteNames.resonancePlayer),
-                    onPlaylistTap: () => _showPlaylist(context),
+                  // Mini player floats at bottom
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: MediaQuery.of(context).padding.bottom,
+                    child: MiniPlayerBar(
+                      onTap:
+                          () => context.pushNamed(RouteNames.resonancePlayer),
+                      onPlaylistTap: () => _showPlaylist(context),
+                    ),
                   ),
                 ],
               ),
@@ -85,18 +192,15 @@ class ResonanceScreen extends ConsumerWidget {
           builder: (context, _) {
             final showImport = tabController.index == 0;
             return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
               child: Row(
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE0E0E0).withValues(alpha: 0.6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.chevron_left, size: 28),
-                      onPressed: () => context.pop(),
-                      color: const Color(0xFF49454F),
+                  GestureDetector(
+                    onTap: () => context.pop(),
+                    child: AppIcons.asset(
+                      AppIcons.arrowLeft,
+                      width: 40,
+                      height: 40,
                     ),
                   ),
                   const Expanded(
@@ -105,25 +209,23 @@ class ResonanceScreen extends ConsumerWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1C1B1F),
+                        fontWeight: FontWeight.w400,
+                        color: Colors.white,
+                        letterSpacing: 1.8,
                       ),
                     ),
                   ),
                   if (showImport)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE0E0E0).withValues(alpha: 0.6),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.add_box_outlined, size: 24),
-                        onPressed: () => _onImportTap(context, ref),
-                        color: const Color(0xFF49454F),
+                    _CircleButton(
+                      onTap: () => _onImportTap(context, ref),
+                      child: AppIcons.icon(
+                        AppIcons.importIcon,
+                        size: 20,
+                        color: Colors.white,
                       ),
                     )
                   else
-                    const SizedBox(width: 48),
+                    const SizedBox(width: 40),
                 ],
               ),
             );
@@ -143,7 +245,18 @@ class ResonanceScreen extends ConsumerWidget {
               isScrollable: true,
               tabAlignment: TabAlignment.start,
               padding: EdgeInsets.zero,
-              labelPadding: EdgeInsets.only(right: 24),
+              labelPadding: EdgeInsets.symmetric(horizontal: 14),
+              labelColor: Color(0xFF6A53A7),
+              unselectedLabelColor: Colors.white,
+              labelStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              unselectedLabelStyle: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w400,
+              ),
+              indicatorColor: Color(0xFF6A53A7),
+              indicatorSize: TabBarIndicatorSize.label,
+              indicatorWeight: 2,
+              dividerHeight: 0,
               tabs: [Tab(text: '全部'), Tab(text: '合集')],
             ),
           ),
@@ -176,19 +289,34 @@ class _SortButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return IconButton(
-      icon: const Icon(Icons.sort, color: Color(0xFF49454F), size: 24),
+      icon: AppIcons.icon(
+        AppIcons.sort,
+        size: 24,
+        color: const Color(0xFF49454F),
+      ),
       onPressed: () => SortBottomSheet.show(context),
     );
   }
 }
 
-class _AllEntriesTab extends ConsumerWidget {
+class _AllEntriesTab extends ConsumerStatefulWidget {
   const _AllEntriesTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final entriesAsync = ref.watch(watchEntriesProvider);
+  ConsumerState<_AllEntriesTab> createState() => _AllEntriesTabState();
+}
+
+class _AllEntriesTabState extends ConsumerState<_AllEntriesTab> {
+  final Set<int> _selectedEntryIds = <int>{};
+
+  bool get _selectionMode => _selectedEntryIds.isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
+    final entriesAsync = ref.watch(audioEntriesProvider);
     final sortMode = ref.watch(sortModeNotifierProvider);
+    final recentlyImportedIds = ref.watch(recentlyImportedEntryIdsProvider);
     final searchQuery = ref.watch(searchQueryProvider);
 
     return entriesAsync.when(
@@ -210,29 +338,61 @@ class _AllEntriesTab extends ConsumerWidget {
 
         // Apply sorting
         filtered = _sortEntries(filtered, sortMode);
+        filtered = _pinRecentlyImportedEntries(filtered, recentlyImportedIds);
 
         if (filtered.isEmpty) {
-          return _buildEmptyState();
+          if (!_selectionMode) {
+            return _buildEmptyState();
+          }
+
+          return Column(
+            children: [
+              _buildSelectionToolbar(context, visibleEntries: filtered),
+              Expanded(child: _buildEmptyState()),
+            ],
+          );
         }
-        return ListView.builder(
-          padding: const EdgeInsets.only(top: 8, bottom: 8),
-          itemCount: filtered.length,
-          itemBuilder: (context, index) {
-            final entry = filtered[index];
-            return AudioEntryTile(
-              entry: entry,
-              onTap:
-                  () => _playAndOpenPlayer(
-                    context,
-                    ref,
-                    entry,
-                    playlistTitle: '全部音频',
-                  ),
-              onMoreTap: () {
-                AudioEntryActionSheet.show(context, entry: entry);
-              },
-            );
-          },
+
+        return Column(
+          children: [
+            if (_selectionMode)
+              _buildSelectionToolbar(context, visibleEntries: filtered),
+            Expanded(
+              child: ListView.builder(
+                padding: EdgeInsets.only(
+                  top: _selectionMode ? 6 : 8,
+                  bottom: 8,
+                ),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final entry = filtered[index];
+                  final isSelected = _selectedEntryIds.contains(entry.id);
+
+                  return AudioEntryTile(
+                    entry: entry,
+                    selectionMode: _selectionMode,
+                    selected: isSelected,
+                    onLongPress: () => _enterSelection(entry.id),
+                    onTap:
+                        _selectionMode
+                            ? () => _toggleSelection(entry.id)
+                            : () => _playEntry(
+                              context,
+                              ref,
+                              entry,
+                              playlistTitle: '全部音频',
+                            ),
+                    onMoreTap:
+                        _selectionMode
+                            ? null
+                            : () {
+                              AudioEntryActionSheet.show(context, entry: entry);
+                            },
+                  );
+                },
+              ),
+            ),
+          ],
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -240,13 +400,186 @@ class _AllEntriesTab extends ConsumerWidget {
     );
   }
 
+  void _enterSelection(int entryId) {
+    if (_selectedEntryIds.contains(entryId)) return;
+    setState(() {
+      _selectedEntryIds.add(entryId);
+    });
+  }
+
+  void _toggleSelection(int entryId) {
+    setState(() {
+      if (_selectedEntryIds.contains(entryId)) {
+        _selectedEntryIds.remove(entryId);
+      } else {
+        _selectedEntryIds.add(entryId);
+      }
+    });
+  }
+
+  void _clearSelection() {
+    if (_selectedEntryIds.isEmpty) return;
+    setState(() {
+      _selectedEntryIds.clear();
+    });
+  }
+
+  void _toggleSelectAll(List<AudioEntry> visibleEntries) {
+    final visibleIds = visibleEntries.map((entry) => entry.id).toSet();
+    final allSelected =
+        visibleIds.isNotEmpty && visibleIds.every(_selectedEntryIds.contains);
+    setState(() {
+      if (allSelected) {
+        _selectedEntryIds.removeAll(visibleIds);
+      } else {
+        _selectedEntryIds.addAll(visibleIds);
+      }
+    });
+  }
+
+  Future<void> _deleteSelected(BuildContext context) async {
+    final ids = _selectedEntryIds.toList(growable: false);
+    if (ids.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('删除音频'),
+            content: Text('确定要删除选中的 ${ids.length} 个音频吗？此操作不可撤销。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('删除', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    final repo = ref.read(resonanceRepositoryProvider);
+    final playerNotifier = ref.read(playerStateNotifierProvider.notifier);
+
+    try {
+      await playerNotifier.removeEntriesByEntryIds(ids.toSet());
+      await repo.deleteEntriesCompletely(ids);
+      if (!mounted) return;
+      setState(() {
+        _selectedEntryIds.clear();
+      });
+      OmaoToast.show(this.context, '已删除 ${ids.length} 个音频');
+    } catch (error) {
+      if (!mounted) return;
+      OmaoToast.show(this.context, '删除失败: $error', isSuccess: false);
+    }
+  }
+
+  Widget _buildSelectionToolbar(
+    BuildContext context, {
+    required List<AudioEntry> visibleEntries,
+  }) {
+    final visibleIds = visibleEntries.map((entry) => entry.id).toSet();
+    final allSelected =
+        visibleIds.isNotEmpty && visibleIds.every(_selectedEntryIds.contains);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.86),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6A53A7).withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: AppIcons.icon(
+                AppIcons.circleCheck,
+                size: 14,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '已选 ${_selectedEntryIds.length} 项',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1C1B1F),
+            ),
+          ),
+          const Spacer(),
+          _SelectionToolbarAction(
+            label: allSelected ? '取消全选' : '全选',
+            icon: allSelected
+                ? Icons.remove_done_outlined
+                : Icons.done_all_rounded,
+            onTap: visibleEntries.isEmpty
+                ? null
+                : () => _toggleSelectAll(visibleEntries),
+          ),
+          const SizedBox(width: 4),
+          _SelectionToolbarAction(
+            label: '删除',
+            icon: Icons.delete_outline_rounded,
+            foregroundColor: const Color(0xFFD64545),
+            onTap: () => _deleteSelected(context),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: _clearSelection,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.72),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: Color(0xFF6A6472),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   List<AudioEntry> _sortEntries(List<AudioEntry> entries, SortMode mode) {
     final sorted = List<AudioEntry>.of(entries);
     switch (mode) {
       case SortMode.alphabeticalAsc:
-        sorted.sort((a, b) => a.title.compareTo(b.title));
+        sorted.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
       case SortMode.alphabeticalDesc:
-        sorted.sort((a, b) => b.title.compareTo(a.title));
+        sorted.sort(
+          (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+        );
       case SortMode.timeAsc:
         sorted.sort(
           (a, b) => (a.createdAt ?? DateTime(0)).compareTo(
@@ -263,13 +596,44 @@ class _AllEntriesTab extends ConsumerWidget {
     return sorted;
   }
 
+  List<AudioEntry> _pinRecentlyImportedEntries(
+    List<AudioEntry> entries,
+    List<int> recentlyImportedIds,
+  ) {
+    if (recentlyImportedIds.isEmpty) {
+      return entries;
+    }
+
+    final recentIndex = {
+      for (var i = 0; i < recentlyImportedIds.length; i++)
+        recentlyImportedIds[i]: i,
+    };
+    final pinned = <AudioEntry>[];
+    final remaining = <AudioEntry>[];
+
+    for (final entry in entries) {
+      if (recentIndex.containsKey(entry.id)) {
+        pinned.add(entry);
+      } else {
+        remaining.add(entry);
+      }
+    }
+
+    if (pinned.isEmpty) {
+      return entries;
+    }
+
+    pinned.sort((a, b) => recentIndex[a.id]!.compareTo(recentIndex[b.id]!));
+    return [...pinned, ...remaining];
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.send,
+          AppIcons.icon(
+            AppIcons.send01,
             size: 64,
             color: const Color(0xFF79747E).withValues(alpha: 0.5),
           ),
@@ -289,33 +653,72 @@ class _AllEntriesTab extends ConsumerWidget {
   }
 }
 
-Future<void> _playAndOpenPlayer(
+class _SelectionToolbarAction extends StatelessWidget {
+  const _SelectionToolbarAction({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.foregroundColor = const Color(0xFF6A53A7),
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    final color = enabled
+        ? foregroundColor
+        : foregroundColor.withValues(alpha: 0.35);
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: foregroundColor.withValues(alpha: enabled ? 0.06 : 0.03),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _playEntry(
   BuildContext context,
   WidgetRef ref,
   AudioEntry entry, {
-  List<AudioEntry>? playlistEntries,
   required String playlistTitle,
 }) async {
-  String? errorMessage;
   try {
     await ref
         .read(playerStateNotifierProvider.notifier)
-        .playEntryWithTitle(
-          entry,
-          context: playlistEntries,
-          playlistTitle: playlistTitle,
-        );
+        .playAllEntry(entry, playlistTitle: playlistTitle);
   } catch (error) {
-    errorMessage = '$error'.replaceFirst('Exception: ', '').trim();
-  }
-
-  if (!context.mounted) return;
-  context.pushNamed(RouteNames.resonancePlayer);
-
-  final message = errorMessage;
-  if (message != null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message.isEmpty ? '当前音频无法播放' : message)),
+    if (!context.mounted) return;
+    final message = '$error'.replaceFirst('Exception: ', '').trim();
+    OmaoToast.show(
+      context,
+      message.isEmpty ? '当前音频无法播放' : message,
+      isSuccess: false,
     );
   }
 }
@@ -326,58 +729,34 @@ class _CollectionsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final collectionsAsync = ref.watch(collectionsProvider);
+    final sortMode = ref.watch(sortModeNotifierProvider);
 
     return collectionsAsync.when(
       data: (collections) {
-        return ListView(
+        final sortedCollections = _sortCollections(collections, sortMode);
+        return ListView.builder(
           padding: const EdgeInsets.only(top: 8, bottom: 8),
-          children: [
-            // New collection entry
-            InkWell(
-              onTap: () => _showNewCollectionDialog(context, ref),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE0E0E0),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.add,
-                        color: Color(0xFF79747E),
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      '新建合集',
-                      style: TextStyle(fontSize: 16, color: Color(0xFF79747E)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            ...collections.map(
-              (collection) => CollectionCard(
-                collection: collection,
-                onTap:
-                    () => context.pushNamed(
-                      RouteNames.collectionDetail,
-                      pathParameters: {'id': collection.id.toString()},
-                    ),
-                onMoreTap: () {
-                  CollectionActionSheet.show(context, collection: collection);
-                },
-              ),
-            ),
-          ],
+          itemCount: sortedCollections.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return NewCollectionTile(
+                onTap: () => _showNewCollectionDialog(context, ref),
+              );
+            }
+
+            final collection = sortedCollections[index - 1];
+            return CollectionCard(
+              collection: collection,
+              onTap:
+                  () => context.pushNamed(
+                    RouteNames.collectionDetail,
+                    pathParameters: {'id': collection.id.toString()},
+                  ),
+              onMoreTap: () {
+                CollectionActionSheet.show(context, collection: collection);
+              },
+            );
+          },
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -385,37 +764,63 @@ class _CollectionsTab extends ConsumerWidget {
     );
   }
 
-  void _showNewCollectionDialog(BuildContext context, WidgetRef ref) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('新建合集'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: '请输入合集名称'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('取消'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  final name = controller.text.trim();
-                  if (name.isEmpty) return;
-                  final service = ref.read(collectionServiceProvider);
-                  await service.createCollection(
-                    AudioCollection(id: 0, title: name),
-                  );
-                  if (ctx.mounted) Navigator.of(ctx).pop();
-                },
-                child: const Text('确定'),
-              ),
-            ],
-          ),
+  List<AudioCollection> _sortCollections(
+    List<AudioCollection> collections,
+    SortMode mode,
+  ) {
+    final sorted = List<AudioCollection>.of(collections);
+    switch (mode) {
+      case SortMode.alphabeticalAsc:
+        sorted.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
+      case SortMode.alphabeticalDesc:
+        sorted.sort(
+          (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+        );
+      case SortMode.timeAsc:
+        sorted.sort((a, b) => a.id.compareTo(b.id));
+      case SortMode.timeDesc:
+        sorted.sort((a, b) => b.id.compareTo(a.id));
+    }
+    return sorted;
+  }
+
+  Future<void> _showNewCollectionDialog(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final name = await CreateCollectionDialog.show(context);
+    if (!context.mounted || name == null || name.isEmpty) {
+      return;
+    }
+    final service = ref.read(collectionServiceProvider);
+    final uniqueName = await service.uniqueCollectionTitle(name);
+    await service.createCollection(AudioCollection(id: 0, title: uniqueName));
+    ref.invalidate(collectionsProvider);
+  }
+}
+
+/// 30% white circle button matching Figma top bar style.
+class _CircleButton extends StatelessWidget {
+  const _CircleButton({required this.onTap, required this.child});
+
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.3),
+          shape: BoxShape.circle,
+        ),
+        child: Center(child: child),
+      ),
     );
   }
 }

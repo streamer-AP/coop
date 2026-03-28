@@ -37,6 +37,14 @@ class WaveformPlayerService {
     _swingIntensity = swingIntensity.clamp(0, 100);
     _vibrationIntensity = vibrationIntensity.clamp(0, 100);
 
+    AppLogger().debug(
+      '$_tag: update '
+      'swingWaveform=${_swingWaveform?.name} '
+      'vibrationWaveform=${_vibrationWaveform?.name} '
+      'swingIntensity=$_swingIntensity '
+      'vibrationIntensity=$_vibrationIntensity',
+    );
+
     if (_swingIntensity == 0 && _vibrationIntensity == 0) {
       _timer?.cancel();
       _timer = null;
@@ -66,13 +74,14 @@ class WaveformPlayerService {
   void _tick() {
     if (_swingIntensity == 0 && _vibrationIntensity == 0) return;
 
-    final swing = _computeChannelValue(
-      _swingWaveform,
-      _swingIntensity,
-    );
+    final swing = _computeChannelValue(_swingWaveform, _swingIntensity);
     final vibration = _computeChannelValue(
       _vibrationWaveform,
       _vibrationIntensity,
+    );
+
+    AppLogger().debug(
+      '$_tag: tick elapsedMs=$_elapsedMs send=[$swing, $vibration]',
     );
 
     _arbitrator.submitSignal(

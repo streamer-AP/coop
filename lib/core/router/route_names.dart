@@ -7,11 +7,13 @@ class RouteNames {
   static const login = 'login';
   static const passwordLogin = 'password-login';
   static const register = 'register';
+  static const verificationCode = 'verification-code';
   static const setupPassword = 'setup-password';
   static const forgotPassword = 'forgot-password';
   static const resonance = 'resonance';
   static const resonancePlayer = 'resonance-player';
   static const collectionDetail = 'collection-detail';
+  static const addToCollection = 'add-to-collection';
   static const importScreen = 'import-screen';
   static const controller = 'controller';
   static const editWaveformsMain = 'edit-waveforms-main';
@@ -28,10 +30,12 @@ class RouteNames {
   static const profileEdit = 'profile-edit';
   static const accountSecurity = 'account-security';
   static const changePassword = 'change-password';
+  static const originalPasswordChange = 'original-password-change';
   static const changePasswordCode = 'change-password-code';
   static const changePhone = 'change-phone';
   static const feedback = 'feedback';
   static const contact = 'contact';
+  static const qrScanner = 'qr-scanner';
   static const userAgreement = 'user-agreement';
   static const privacyPolicy = 'privacy-policy';
   static const appInfo = 'app-info';

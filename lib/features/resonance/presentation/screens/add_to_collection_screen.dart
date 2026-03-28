@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/omao_toast.dart';
 import '../../application/providers/collection_providers.dart';
 import '../../application/providers/resonance_providers.dart';
 import '../../domain/models/audio_entry.dart';
@@ -23,13 +24,13 @@ class AddToCollectionScreen extends ConsumerStatefulWidget {
       _AddToCollectionScreenState();
 }
 
-class _AddToCollectionScreenState
-    extends ConsumerState<AddToCollectionScreen> {
+class _AddToCollectionScreenState extends ConsumerState<AddToCollectionScreen> {
   final Set<int> _selectedIds = {};
+  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
-    final entriesAsync = ref.watch(watchEntriesProvider);
+    final entriesAsync = ref.watch(audioEntriesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -40,9 +41,10 @@ class _AddToCollectionScreenState
             child: Text(
               '完成 (${_selectedIds.length})',
               style: TextStyle(
-                color: _selectedIds.isEmpty
-                    ? const Color(0xFF79747E)
-                    : AppColors.primary,
+                color:
+                    _selectedIds.isEmpty
+                        ? const Color(0xFF79747E)
+                        : AppColors.primary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -54,31 +56,132 @@ class _AddToCollectionScreenState
           if (entries.isEmpty) {
             return const Center(child: Text('暂无音频'));
           }
-          return ListView.builder(
-            itemCount: entries.length,
-            itemBuilder: (context, index) {
-              final entry = entries[index];
-              final isExisting =
-                  widget.existingEntryIds.contains(entry.id);
-              final isSelected = _selectedIds.contains(entry.id);
 
-              return _SelectableEntryTile(
-                entry: entry,
-                isSelected: isSelected,
-                isDisabled: isExisting,
-                onTap: isExisting
-                    ? null
-                    : () {
-                        setState(() {
-                          if (isSelected) {
-                            _selectedIds.remove(entry.id);
-                          } else {
-                            _selectedIds.add(entry.id);
-                          }
-                        });
-                      },
+          final selectableEntries =
+              entries
+                  .where(
+                    (e) => !widget.existingEntryIds.contains(e.id),
+                  )
+                  .toList();
+
+          final filteredEntries =
+              _searchQuery.isEmpty
+                  ? entries
+                  : entries
+                      .where(
+                        (e) =>
+                            e.title.toLowerCase().contains(
+                              _searchQuery.toLowerCase(),
+                            ) ||
+                            (e.artist?.toLowerCase().contains(
+                                  _searchQuery.toLowerCase(),
+                                ) ??
+                                false),
+                      )
+                      .toList();
+
+          final allSelectableSelected =
+              selectableEntries.isNotEmpty &&
+              selectableEntries.every(
+                (e) => _selectedIds.contains(e.id),
               );
-            },
+
+          return Column(
+            children: [
+              // Search bar
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: '搜索音频',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (value) => setState(() => _searchQuery = value),
+                ),
+              ),
+              // Select all / deselect all
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Text(
+                      '共 ${selectableEntries.length} 首可添加',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF79747E),
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed:
+                          selectableEntries.isEmpty
+                              ? null
+                              : () {
+                                setState(() {
+                                  if (allSelectableSelected) {
+                                    _selectedIds.clear();
+                                  } else {
+                                    _selectedIds.addAll(
+                                      selectableEntries.map((e) => e.id),
+                                    );
+                                  }
+                                });
+                              },
+                      child: Text(
+                        allSelectableSelected ? '取消全选' : '全选',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: filteredEntries.length,
+                  itemBuilder: (context, index) {
+                    final entry = filteredEntries[index];
+                    final isExisting = widget.existingEntryIds.contains(
+                      entry.id,
+                    );
+                    final isSelected = _selectedIds.contains(entry.id);
+
+                    return _SelectableEntryTile(
+                      entry: entry,
+                      isSelected: isSelected,
+                      isDisabled: isExisting,
+                      onTap:
+                          isExisting
+                              ? null
+                              : () {
+                                setState(() {
+                                  if (isSelected) {
+                                    _selectedIds.remove(entry.id);
+                                  } else {
+                                    _selectedIds.add(entry.id);
+                                  }
+                                });
+                              },
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -93,10 +196,9 @@ class _AddToCollectionScreenState
       _selectedIds.toList(),
       widget.collectionId,
     );
+    ref.invalidate(collectionsProvider);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已成功添加 ${_selectedIds.length} 条音频')),
-      );
+      OmaoToast.show(context, '已成功添加 ${_selectedIds.length} 条音频');
       Navigator.of(context).pop(true);
     }
   }
@@ -142,11 +244,7 @@ class _SelectableEntryTile extends StatelessWidget {
             _buildCover(theme),
           ],
         ),
-        title: Text(
-          entry.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(entry.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           entry.artist ?? '',
           maxLines: 1,
@@ -177,16 +275,13 @@ class _SelectableEntryTile extends StatelessWidget {
   }
 
   Widget _placeholderCover(ThemeData theme) {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Icon(
-        Icons.music_note,
-        color: theme.colorScheme.onSurfaceVariant,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.asset(
+        'assets/figma/player/default_cover.png',
+        width: 48,
+        height: 48,
+        fit: BoxFit.cover,
       ),
     );
   }

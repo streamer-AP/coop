@@ -1,7 +1,6 @@
 import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
@@ -48,36 +47,107 @@ class ExportService {
       }
     }
 
-    final archive = Archive();
-    for (final mapEntry in filesToPack.entries) {
-      final bytes = await mapEntry.value.readAsBytes();
-      archive.addFile(ArchiveFile(mapEntry.key, bytes.length, bytes));
+    final defaultName = _buildDefaultZipName(entry.filePath);
+    final tempZipPath = await _newTempZipPath(defaultName);
+    final encoder = ZipFileEncoder()..create(tempZipPath);
+    try {
+      for (final mapEntry in filesToPack.entries) {
+        encoder.addFile(mapEntry.value, mapEntry.key);
+      }
+    } finally {
+      encoder.close();
     }
 
-    final zipBytes = ZipEncoder().encode(archive);
-    if (zipBytes.isEmpty) {
+    final tempZip = File(tempZipPath);
+    if (!await tempZip.exists() || await tempZip.length() == 0) {
       throw Exception('压缩导出文件失败');
     }
 
-    final defaultName = _buildDefaultZipName(entry.filePath);
-    final selectedPath = await FilePicker.platform.saveFile(
+    final resolvedPath = await _saveZipFile(
+      tempZip,
       dialogTitle: '导出条目',
       fileName: defaultName,
-      type: FileType.any,
-      bytes: Uint8List.fromList(zipBytes),
     );
-
-    if (selectedPath == null || selectedPath.isEmpty) {
-      return null;
-    }
-
-    final resolvedPath = await _persistZipIfNeeded(
-      selectedPath,
-      Uint8List.fromList(zipBytes),
-    );
+    await _safeDeleteTempFile(tempZipPath);
+    if (resolvedPath == null) return null;
 
     AppLogger().info(
       'Exported ${entry.title} as ZIP with ${filesToPack.length} files to $resolvedPath',
+    );
+
+    return resolvedPath;
+  }
+
+  /// 一键导出所有音频条目为单个 ZIP（每个条目一个子目录）。
+  /// [onProgress] 回调参数: (已处理数, 总数)。
+  Future<String?> exportAll({
+    void Function(int current, int total)? onProgress,
+  }) async {
+    final entries = await _repository.getAllEntries();
+    if (entries.isEmpty) {
+      throw Exception('没有可导出的音频');
+    }
+
+    final tempZipPath = await _newTempZipPath('omao_export.zip');
+    final encoder = ZipFileEncoder()..create(tempZipPath);
+    try {
+      for (var i = 0; i < entries.length; i++) {
+        final entry = entries[i];
+        onProgress?.call(i, entries.length);
+
+        final dirName = p.basenameWithoutExtension(entry.filePath);
+        final mediaFile = File(entry.filePath);
+        if (!await mediaFile.exists()) continue;
+
+        encoder.addFile(mediaFile, '$dirName/${p.basename(entry.filePath)}');
+
+        if (entry.coverPath != null) {
+          final coverFile = File(entry.coverPath!);
+          if (await coverFile.exists()) {
+            encoder.addFile(
+              coverFile,
+              '$dirName/${p.basename(entry.coverPath!)}',
+            );
+          }
+        }
+
+        final subtitles = await _repository.getSubtitlesForEntry(entry.id);
+        for (final sub in subtitles) {
+          final subFile = File(sub.filePath);
+          if (await subFile.exists()) {
+            encoder.addFile(subFile, '$dirName/${p.basename(sub.filePath)}');
+          }
+        }
+
+        final scriptPath = await _repository.getScriptFilePathForEntry(entry.id);
+        if (scriptPath != null) {
+          final scriptFile = File(scriptPath);
+          if (await scriptFile.exists()) {
+            encoder.addFile(scriptFile, '$dirName/${p.basename(scriptPath)}');
+          }
+        }
+      }
+    } finally {
+      encoder.close();
+    }
+
+    onProgress?.call(entries.length, entries.length);
+
+    final tempZip = File(tempZipPath);
+    if (!await tempZip.exists() || await tempZip.length() == 0) {
+      throw Exception('压缩导出文件失败');
+    }
+
+    final resolvedPath = await _saveZipFile(
+      tempZip,
+      dialogTitle: '导出全部音声',
+      fileName: 'omao_export.zip',
+    );
+    await _safeDeleteTempFile(tempZipPath);
+    if (resolvedPath == null) return null;
+
+    AppLogger().info(
+      'Exported all ${entries.length} entries to $resolvedPath',
     );
 
     return resolvedPath;
@@ -88,23 +158,51 @@ class ExportService {
     return '$baseName.zip';
   }
 
-  Future<String> _persistZipIfNeeded(
-    String selectedPath,
-    Uint8List bytes,
-  ) async {
-    if (Platform.isAndroid || Platform.isIOS) {
-      return selectedPath;
+  Future<String?> _saveZipFile(
+    File sourceZip, {
+    required String dialogTitle,
+    required String fileName,
+  }) async {
+    final normalizedName =
+        fileName.toLowerCase().endsWith('.zip') ? fileName : '$fileName.zip';
+
+    if (Platform.isAndroid) {
+      final directoryPath = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: dialogTitle,
+      );
+      if (directoryPath == null || directoryPath.isEmpty) {
+        return null;
+      }
+      final targetPath = await _resolveCollision(
+        p.join(directoryPath, normalizedName),
+      );
+      await sourceZip.copy(targetPath);
+      return targetPath;
     }
 
+    final selectedPath = await FilePicker.platform.saveFile(
+      dialogTitle: dialogTitle,
+      fileName: normalizedName,
+      type: FileType.any,
+    );
+    if (selectedPath == null || selectedPath.isEmpty) {
+      return null;
+    }
     final normalizedPath =
         selectedPath.toLowerCase().endsWith('.zip')
             ? selectedPath
             : '$selectedPath.zip';
     final targetPath = await _resolveCollision(normalizedPath);
-    final targetFile = File(targetPath);
-    await targetFile.parent.create(recursive: true);
-    await targetFile.writeAsBytes(bytes);
+    await sourceZip.copy(targetPath);
     return targetPath;
+  }
+
+  Future<String> _newTempZipPath(String fileName) async {
+    final baseName = fileName.toLowerCase().endsWith('.zip')
+        ? p.basenameWithoutExtension(fileName)
+        : fileName;
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    return p.join(Directory.systemTemp.path, 'omao_${ts}_$baseName.zip');
   }
 
   Future<String> _resolveCollision(String originalPath) async {
@@ -122,5 +220,16 @@ class ExportService {
       candidate = p.join(directory, '$baseName$counter$extension');
     }
     return candidate;
+  }
+
+  Future<void> _safeDeleteTempFile(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {
+      // ignore temp cleanup failure
+    }
   }
 }

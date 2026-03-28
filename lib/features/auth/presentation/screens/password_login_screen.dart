@@ -143,9 +143,9 @@ class _PasswordLoginScreenState extends ConsumerState<PasswordLoginScreen> {
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
                                     children: [
-                                      const Text(
+                                      Text(
                                         '密码',
-                                        style: TextStyle(
+                                        style: AuthFonts.chineseTextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w500,
                                           color: AuthPalette.body,

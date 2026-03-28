@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/omao_toast.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/player_providers.dart';
 import '../../application/providers/resonance_providers.dart';
 import '../../application/services/export_service.dart';
+import '../../application/services/playlist_service.dart';
 import '../../domain/models/audio_entry.dart';
+import '../../domain/repositories/resonance_repository.dart';
 import 'collection_picker_dialog.dart';
 import 'subtitle_cover_import_sheet.dart';
 
@@ -70,64 +74,79 @@ class AudioEntryActionSheet extends ConsumerWidget {
             ),
             const Divider(height: 1),
             _ActionItem(
-              icon: Icons.upload_outlined,
+              svgPath: AppIcons.exportIcon,
               label: '导出',
               onTap: () {
                 Navigator.of(context).pop();
                 _showExportDialog(context, ref);
               },
             ),
-            if (!isInCollection) ...[
-              _ActionItem(
-                icon: Icons.download_outlined,
-                label: '导入字幕/封面/台本',
-                onTap: () {
-                  Navigator.of(context).pop();
-                  SubtitleCoverImportSheet.show(context, entry: entry);
-                },
-              ),
-            ],
             _ActionItem(
-              icon: Icons.drive_file_rename_outline,
-              label: '重命名',
+              svgPath: AppIcons.importIcon,
+              label: '导入字幕/封面/台本',
               onTap: () {
                 Navigator.of(context).pop();
-                _showRenameDialog(context, ref);
+                SubtitleCoverImportSheet.show(
+                  context,
+                  entry: entry,
+                  allowCoverImport: true,
+                );
               },
             ),
-            if (!isInCollection) ...[
+            _ActionItem(
+              svgPath: AppIcons.rename,
+              label: '重命名',
+              onTap: () {
+                final repo = ref.read(resonanceRepositoryProvider);
+                final navigator = Navigator.of(context);
+                final parentContext = navigator.context;
+                navigator.pop();
+                _showRenameDialog(parentContext, repo);
+              },
+            ),
+            _ActionItem(
+              svgPath: AppIcons.box,
+              label: '添加到合集',
+              onTap: () {
+                Navigator.of(context).pop();
+                _showAddToCollection(context);
+              },
+            ),
+            _ActionItem(
+              svgPath: AppIcons.add3,
+              label: '添加到当前播放列表',
+              onTap: () {
+                Navigator.of(context).pop();
+                _addToPlaylist(ref);
+              },
+            ),
+            if (!isInCollection)
               _ActionItem(
-                icon: Icons.playlist_add,
-                label: '添加到合集',
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showAddToCollection(context);
-                },
-              ),
-              _ActionItem(
-                icon: Icons.add_box_outlined,
-                label: '添加到当前播放列表',
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _addToPlaylist(ref);
-                },
-              ),
-              _ActionItem(
-                icon: Icons.delete_outline,
+                svgPath: AppIcons.delete,
                 label: '删除音频',
                 onTap: () {
+                  final repo = ref.read(resonanceRepositoryProvider);
+                  final playlistSvc = ref.read(playlistServiceProvider);
+                  final playerNotifier = ref.read(
+                    playerStateNotifierProvider.notifier,
+                  );
                   Navigator.of(context).pop();
-                  _showDeleteDialog(context, ref);
+                  _showDeleteDialog(
+                    context,
+                    repo: repo,
+                    playlistSvc: playlistSvc,
+                    playerNotifier: playerNotifier,
+                  );
                 },
               ),
-            ],
             if (isInCollection)
               _ActionItem(
-                icon: Icons.delete_outline,
+                svgPath: AppIcons.delete,
                 label: '移除音频',
                 onTap: () {
+                  final repo = ref.read(resonanceRepositoryProvider);
                   Navigator.of(context).pop();
-                  _showRemoveFromCollectionDialog(context, ref);
+                  _showRemoveFromCollectionDialog(context, repo: repo);
                 },
               ),
           ],
@@ -213,20 +232,16 @@ class AudioEntryActionSheet extends ConsumerWidget {
       final exportService = ExportService(repo);
       final exportPath = await exportService.exportEntry(entry);
       if (exportPath != null && context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('导出成功')));
+        OmaoToast.show(context, '导出成功');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('导出失败: $e')));
+        OmaoToast.show(context, '导出失败: $e', isSuccess: false);
       }
     }
   }
 
-  void _showRenameDialog(BuildContext context, WidgetRef ref) {
+  void _showRenameDialog(BuildContext context, ResonanceRepository repo) {
     final controller = TextEditingController(text: entry.title);
     showDialog(
       context: context,
@@ -245,12 +260,24 @@ class AudioEntryActionSheet extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () async {
-                  final newTitle = controller.text.trim();
-                  if (newTitle.isNotEmpty && newTitle != entry.title) {
-                    await ref
-                        .read(resonanceRepositoryProvider)
-                        .updateEntry(entry.copyWith(title: newTitle));
+                  var newTitle = controller.text.trim();
+                  if (newTitle.isEmpty || newTitle == entry.title) {
+                    if (ctx.mounted) Navigator.of(ctx).pop();
+                    return;
                   }
+                  // 重名自动追加尾缀 1, 2, 3...
+                  final existingTitles = await repo.getAllEntryTitles();
+                  final otherTitles =
+                      existingTitles.where((t) => t != entry.title).toSet();
+                  if (otherTitles.contains(newTitle)) {
+                    final base = newTitle;
+                    var suffix = 1;
+                    while (otherTitles.contains('$base$suffix')) {
+                      suffix++;
+                    }
+                    newTitle = '$base$suffix';
+                  }
+                  await repo.updateEntry(entry.copyWith(title: newTitle));
                   if (ctx.mounted) Navigator.of(ctx).pop();
                 },
                 child: const Text('确定'),
@@ -283,7 +310,12 @@ class AudioEntryActionSheet extends ConsumerWidget {
     ref.read(playerStateNotifierProvider.notifier).addToCurrentPlaylist(entry);
   }
 
-  void _showDeleteDialog(BuildContext context, WidgetRef ref) {
+  void _showDeleteDialog(
+    BuildContext context, {
+    required ResonanceRepository repo,
+    required PlaylistService playlistSvc,
+    required PlayerStateNotifier playerNotifier,
+  }) {
     showDialog(
       context: context,
       builder:
@@ -297,9 +329,25 @@ class AudioEntryActionSheet extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () async {
-                  await ref
-                      .read(resonanceRepositoryProvider)
-                      .deleteEntry(entry.id);
+                  try {
+                    // Remove from current playlist if present
+                    final playlist = playlistSvc.currentPlaylist;
+                    final playlistItem =
+                        playlist.items
+                            .where((item) => item.entry.id == entry.id)
+                            .firstOrNull;
+                    if (playlistItem != null) {
+                      await playerNotifier.removeFromPlaylist(playlistItem.uid);
+                    }
+                    // Delete entry and all associated data + files
+                    await repo.deleteEntryCompletely(entry.id);
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      Navigator.of(ctx).pop();
+                      OmaoToast.show(ctx, '删除失败: $e', isSuccess: false);
+                    }
+                    return;
+                  }
                   if (ctx.mounted) Navigator.of(ctx).pop();
                 },
                 child: const Text('删除', style: TextStyle(color: Colors.red)),
@@ -309,7 +357,10 @@ class AudioEntryActionSheet extends ConsumerWidget {
     );
   }
 
-  void _showRemoveFromCollectionDialog(BuildContext context, WidgetRef ref) {
+  void _showRemoveFromCollectionDialog(
+    BuildContext context, {
+    required ResonanceRepository repo,
+  }) {
     showDialog(
       context: context,
       builder:
@@ -323,9 +374,7 @@ class AudioEntryActionSheet extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () async {
-                  await ref
-                      .read(resonanceRepositoryProvider)
-                      .removeEntryFromCollection(entry.id, collectionId!);
+                  await repo.removeEntryFromCollection(entry.id, collectionId!);
                   if (ctx.mounted) Navigator.of(ctx).pop();
                 },
                 child: const Text('移除', style: TextStyle(color: Colors.red)),
@@ -337,20 +386,23 @@ class AudioEntryActionSheet extends ConsumerWidget {
 }
 
 class _ActionItem extends StatelessWidget {
-  const _ActionItem({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
+  const _ActionItem({this.svgPath, required this.label, required this.onTap});
 
-  final IconData icon;
+  final String? svgPath;
   final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: const Color(0xFF49454F), size: 24),
+      leading:
+          svgPath != null
+              ? AppIcons.icon(
+                svgPath!,
+                size: 24,
+                color: const Color(0xFF49454F),
+              )
+              : null,
       title: Text(
         label,
         style: const TextStyle(fontSize: 16, color: Color(0xFF1C1B1F)),

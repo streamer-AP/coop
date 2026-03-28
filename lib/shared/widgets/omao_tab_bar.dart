@@ -28,7 +28,11 @@ class OmaoTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = math.min(_designWidth, MediaQuery.sizeOf(context).width - 32);
+    final availableWidth = math.max(0.0, MediaQuery.sizeOf(context).width - 32);
+    final width = math.max(0.0, math.min(_designWidth, availableWidth));
+    if (width == 0) {
+      return const SizedBox.shrink();
+    }
     final scale = width / _designWidth;
     final height = _designHeight * scale;
     final bottomOffset = math.max(

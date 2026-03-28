@@ -1,11 +1,14 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
+import '../../../../shared/widgets/omao_toast.dart';
 import '../../application/providers/collection_providers.dart';
+import '../../application/providers/resonance_providers.dart';
 import '../../domain/models/audio_collection.dart';
+import 'collection_card.dart';
+import 'create_collection_dialog.dart';
 
 class CollectionPickerDialog extends ConsumerStatefulWidget {
   const CollectionPickerDialog({
@@ -25,6 +28,23 @@ class CollectionPickerDialog extends ConsumerStatefulWidget {
 class _CollectionPickerDialogState
     extends ConsumerState<CollectionPickerDialog> {
   final Set<int> _selectedCollectionIds = {};
+  Set<int>? _alreadyInCollectionIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAlreadyInCollections();
+  }
+
+  Future<void> _loadAlreadyInCollections() async {
+    final repo = ref.read(resonanceRepositoryProvider);
+    final ids = await repo.getCollectionIdsContainingAllEntries(
+      widget.entryIds,
+    );
+    if (mounted) {
+      setState(() => _alreadyInCollectionIds = ids);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +53,7 @@ class _CollectionPickerDialogState
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
@@ -44,10 +64,7 @@ class _CollectionPickerDialogState
               children: [
                 const Text(
                   '添加到合集',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                 ),
                 GestureDetector(
                   onTap: _selectedCollectionIds.isEmpty ? null : _confirm,
@@ -56,9 +73,10 @@ class _CollectionPickerDialogState
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: _selectedCollectionIds.isEmpty
-                          ? const Color(0xFF79747E)
-                          : AppColors.primary,
+                      color:
+                          _selectedCollectionIds.isEmpty
+                              ? const Color(0xFF79747E)
+                              : AppColors.primary,
                     ),
                   ),
                 ),
@@ -66,38 +84,7 @@ class _CollectionPickerDialogState
             ),
           ),
           const Divider(height: 1),
-          // New collection button
-          InkWell(
-            onTap: _showNewCollectionDialog,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE0E0E0),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.add,
-                      color: Color(0xFF79747E),
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    '新建合集',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Color(0xFF79747E),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          NewCollectionTile(onTap: _showNewCollectionDialog),
           Expanded(
             child: collectionsAsync.when(
               data: (collections) {
@@ -114,20 +101,30 @@ class _CollectionPickerDialogState
                   itemCount: collections.length,
                   itemBuilder: (context, index) {
                     final collection = collections[index];
-                    final isSelected =
-                        _selectedCollectionIds.contains(collection.id);
+                    final alreadyAdded =
+                        _alreadyInCollectionIds?.contains(collection.id) ??
+                        false;
+                    final isSelected = _selectedCollectionIds.contains(
+                      collection.id,
+                    );
                     return _CollectionItem(
                       collection: collection,
                       isSelected: isSelected,
-                      onTap: () {
-                        setState(() {
-                          if (isSelected) {
-                            _selectedCollectionIds.remove(collection.id);
-                          } else {
-                            _selectedCollectionIds.add(collection.id);
-                          }
-                        });
-                      },
+                      isDisabled: alreadyAdded,
+                      onTap:
+                          alreadyAdded
+                              ? null
+                              : () {
+                                setState(() {
+                                  if (isSelected) {
+                                    _selectedCollectionIds.remove(
+                                      collection.id,
+                                    );
+                                  } else {
+                                    _selectedCollectionIds.add(collection.id);
+                                  }
+                                });
+                              },
                     );
                   },
                 );
@@ -146,50 +143,28 @@ class _CollectionPickerDialogState
     for (final collectionId in _selectedCollectionIds) {
       await service.addEntriesToCollection(widget.entryIds, collectionId);
     }
+    ref.invalidate(collectionsProvider);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('添加成功')),
-      );
+      OmaoToast.show(context, '添加成功');
       Navigator.of(context).pop(true);
     }
   }
 
-  void _showNewCollectionDialog() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('新建合集'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: '请输入合集名称',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final name = controller.text.trim();
-              if (name.isEmpty) return;
-              final service = ref.read(collectionServiceProvider);
-              final collection = AudioCollection(id: 0, title: name);
-              final id = await service.createCollection(collection);
-              if (widget.entryIds.isNotEmpty) {
-                await service.addEntriesToCollection(widget.entryIds, id);
-              }
-              if (ctx.mounted) Navigator.of(ctx).pop();
-              if (mounted) Navigator.of(context).pop(true);
-            },
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _showNewCollectionDialog() async {
+    final name = await CreateCollectionDialog.show(context);
+    if (!mounted || name == null || name.isEmpty) {
+      return;
+    }
+    final service = ref.read(collectionServiceProvider);
+    final uniqueName = await service.uniqueCollectionTitle(name);
+    final collection = AudioCollection(id: 0, title: uniqueName);
+    final id = await service.createCollection(collection);
+    if (widget.entryIds.isNotEmpty) {
+      await service.addEntriesToCollection(widget.entryIds, id);
+    }
+    if (mounted) {
+      Navigator.of(context).pop(true);
+    }
   }
 }
 
@@ -197,99 +172,96 @@ class _CollectionItem extends StatelessWidget {
   const _CollectionItem({
     required this.collection,
     required this.isSelected,
-    required this.onTap,
+    this.isDisabled = false,
+    this.onTap,
   });
 
   final AudioCollection collection;
   final bool isSelected;
-  final VoidCallback onTap;
+  final bool isDisabled;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected ? AppColors.primary : const Color(0xFFBDBDBD),
-                  width: 2,
+    return Opacity(
+      opacity: isDisabled ? 0.45 : 1.0,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            children: [
+              _SelectionIndicator(
+                isSelected: isSelected,
+                isDisabled: isDisabled,
+              ),
+              const SizedBox(width: 12),
+              CollectionArtwork(coverPath: collection.coverPath),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      collection.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        if (isDisabled)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 6),
+                            child: Text(
+                              '已添加',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF797979),
+                              ),
+                            ),
+                          ),
+                        CollectionCountText(
+                          count: collection.entryCount,
+                          textStyle: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF797979),
+                            height: 22 / 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                color: isSelected ? AppColors.primary : Colors.transparent,
               ),
-              child: isSelected
-                  ? const Icon(Icons.check, color: Colors.white, size: 16)
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            _buildCover(),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    collection.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '共 ${collection.entryCount} 个',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF79747E),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildCover() {
-    if (collection.coverPath != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.file(
-          File(collection.coverPath!),
-          width: 56,
-          height: 56,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _placeholderCover(),
-        ),
-      );
-    }
-    return _placeholderCover();
-  }
+class _SelectionIndicator extends StatelessWidget {
+  const _SelectionIndicator({
+    required this.isSelected,
+    required this.isDisabled,
+  });
 
-  Widget _placeholderCover() {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        color: const Color(0xFFE0E0E0),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: const Icon(
-        Icons.library_music,
-        size: 28,
-        color: Color(0xFF79747E),
-      ),
-    );
+  final bool isSelected;
+  final bool isDisabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final assetPath =
+        isDisabled
+            ? AppIcons.circleAdded
+            : (isSelected ? AppIcons.circleCheck : AppIcons.circleUnchecked);
+    return AppIcons.asset(assetPath, width: 24, height: 24);
   }
 }

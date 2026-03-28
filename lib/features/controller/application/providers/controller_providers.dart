@@ -5,8 +5,9 @@ import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/bluetooth/ble_connection_manager.dart';
+import '../../../../core/logging/app_logger.dart';
 import '../../../../core/bluetooth/ble_signal_arbitrator.dart';
-import '../../data/controller_repository_impl.dart';
+import '../../data/controller_repository_impl.dart' as controller_data;
 import '../../domain/models/device_binding.dart' as domain;
 import '../../domain/models/favorite_slot.dart' as domain;
 import '../../domain/models/waveform.dart';
@@ -20,7 +21,7 @@ part 'controller_providers.g.dart';
 @riverpod
 ControllerRepository controllerRepository(Ref ref) {
   final db = ref.watch(appDatabaseProvider);
-  return ControllerRepositoryImpl(db.controllerDao, db.userDao);
+  return controller_data.ControllerRepositoryImpl(db.controllerDao, db.userDao);
 }
 
 @riverpod
@@ -36,7 +37,7 @@ Future<List<domain.FavoriteSlot>> favoriteSlots(Ref ref) {
 @riverpod
 Future<List<domain.FavoriteSlot>> favoriteSlotsByChannel(
   Ref ref,
-  String channel,
+  WaveformChannel channel,
 ) {
   return ref
       .watch(controllerRepositoryProvider)
@@ -66,6 +67,8 @@ WaveformPlayerService waveformPlayerService(Ref ref) {
 class ControllerStateNotifier extends _$ControllerStateNotifier {
   @override
   ControllerUiState build() {
+    ref.watch(waveformPlayerServiceProvider);
+
     ref.listen(connectionStateProvider, (prev, next) {
       next.whenData((connState) {
         if (connState == BleConnectionState.disconnected) {
@@ -89,30 +92,39 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
           if (allWaveforms.isEmpty) return;
 
           final swingSlots =
-              slots.where((s) => s.channel == 'swing' && s.page == 0).toList()
+              slots
+                  .where(
+                    (s) =>
+                        s.channel == WaveformChannel.swing && s.page == 0,
+                  )
+                  .toList()
                 ..sort((a, b) => a.index.compareTo(b.index));
           if (swingSlots.isNotEmpty) {
-            final firstWaveform = allWaveforms
-                .where((w) => w.id == swingSlots.first.waveformId)
-                .firstOrNull;
-            if (firstWaveform != null &&
-                state.selectedSwingWaveform == null) {
+            final firstWaveform =
+                allWaveforms
+                    .where((w) => w.id == swingSlots.first.waveformId)
+                    .firstOrNull;
+            if (firstWaveform != null && state.selectedSwingWaveform == null) {
               state = state.copyWith(selectedSwingWaveform: firstWaveform);
             }
           }
 
-          final vibSlots = slots
-              .where((s) => s.channel == 'vibration' && s.page == 0)
-              .toList()
-            ..sort((a, b) => a.index.compareTo(b.index));
+          final vibSlots =
+              slots
+                  .where(
+                    (s) =>
+                        s.channel == WaveformChannel.vibration && s.page == 0,
+                  )
+                  .toList()
+                ..sort((a, b) => a.index.compareTo(b.index));
           if (vibSlots.isNotEmpty) {
-            final firstWaveform = allWaveforms
-                .where((w) => w.id == vibSlots.first.waveformId)
-                .firstOrNull;
+            final firstWaveform =
+                allWaveforms
+                    .where((w) => w.id == vibSlots.first.waveformId)
+                    .firstOrNull;
             if (firstWaveform != null &&
                 state.selectedVibrationWaveform == null) {
-              state =
-                  state.copyWith(selectedVibrationWaveform: firstWaveform);
+              state = state.copyWith(selectedVibrationWaveform: firstWaveform);
             }
           }
         });
@@ -125,6 +137,10 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
   }
 
   void selectSwingWaveform(Waveform waveform) {
+    AppLogger().debug(
+      'ControllerStateNotifier: select swing waveform '
+      'id=${waveform.id} name=${waveform.name}',
+    );
     state = state.copyWith(
       selectedSwingWaveform: waveform,
       lastSelectedPage: state.selectedPage,
@@ -133,6 +149,10 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
   }
 
   void selectVibrationWaveform(Waveform waveform) {
+    AppLogger().debug(
+      'ControllerStateNotifier: select vibration waveform '
+      'id=${waveform.id} name=${waveform.name}',
+    );
     state = state.copyWith(
       selectedVibrationWaveform: waveform,
       lastSelectedPage: state.selectedPage,
@@ -141,11 +161,15 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
   }
 
   void setSwingIntensity(int value) {
+    AppLogger().debug('ControllerStateNotifier: set swing intensity=$value');
     state = state.copyWith(swingIntensity: value);
     _updatePlayer();
   }
 
   void setVibrationIntensity(int value) {
+    AppLogger().debug(
+      'ControllerStateNotifier: set vibration intensity=$value',
+    );
     state = state.copyWith(vibrationIntensity: value);
     _updatePlayer();
   }
@@ -156,6 +180,13 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
   }
 
   void _updatePlayer() {
+    AppLogger().debug(
+      'ControllerStateNotifier: update player '
+      'swingWaveform=${state.selectedSwingWaveform?.name} '
+      'vibrationWaveform=${state.selectedVibrationWaveform?.name} '
+      'swingIntensity=${state.swingIntensity} '
+      'vibrationIntensity=${state.vibrationIntensity}',
+    );
     final player = ref.read(waveformPlayerServiceProvider);
     player.update(
       swingWaveform: state.selectedSwingWaveform,

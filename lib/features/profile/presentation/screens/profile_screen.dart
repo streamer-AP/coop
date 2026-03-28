@@ -1,11 +1,18 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
+import '../../../resonance/application/providers/resonance_providers.dart';
+import '../../../resonance/application/services/export_service.dart';
 import '../../application/providers/profile_providers.dart';
 import '../../domain/models/profile.dart';
+import '../widgets/device_activation_dialog.dart';
 import '../widgets/glowing_avatar.dart';
 import '../widgets/profile_menu_item.dart';
 
@@ -17,118 +24,147 @@ class ProfileScreen extends ConsumerWidget {
     final profileAsync = ref.watch(profileNotifierProvider);
     final versionAsync = ref.watch(appVersionProvider);
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.profileBackgroundGradient,
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            _buildHeader(context, ref, profileAsync),
-            const SizedBox(height: 16),
-            Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: AppColors.cardBg,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(24),
+    return Stack(
+      children: [
+        const _ProfileBackdrop(),
+        SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _buildHeader(context, ref, profileAsync),
+              const SizedBox(height: 20),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(30),
+                  ),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(30),
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.42),
+                        ),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.90),
+                            const Color(0xFFE6E7F6).withValues(alpha: 0.18),
+                          ],
+                          stops: const [0.0, 1.0],
+                        ),
+                      ),
+                      child: ListView(
+                        padding: const EdgeInsets.only(top: 8, bottom: 100),
+                        children: [
+                          ProfileMenuItem(
+                            icon: Icons.security_outlined,
+                            svgPath: AppIcons.accountSecurity,
+                            title: '账号与安全',
+                            onTap:
+                                () => context.pushNamed(RouteNames.accountSecurity),
+                          ),
+                          ProfileMenuItem(
+                            icon: Icons.devices_other,
+                            svgPath: AppIcons.deviceLink,
+                            title: '设备验证&激活',
+                            onTap: () => DeviceActivationDialog.show(context),
+                          ),
+                          ProfileMenuItem(
+                            icon: Icons.file_download_outlined,
+                            svgPath: AppIcons.exportIcon,
+                            title: '一键导出本地音声',
+                            onTap: () => _exportAll(context, ref),
+                          ),
+                          ProfileMenuItem(
+                            icon: Icons.feedback_outlined,
+                            svgPath: AppIcons.notificationSquare,
+                            title: '建议反馈',
+                            onTap: () => context.pushNamed(RouteNames.feedback),
+                          ),
+                          ProfileMenuItem(
+                            icon: Icons.support_agent_outlined,
+                            svgPath: AppIcons.phoneCall,
+                            title: '联系我们',
+                            onTap: () => context.pushNamed(RouteNames.contact),
+                          ),
+                          ProfileMenuItem(
+                            icon: Icons.description_outlined,
+                            svgPath: AppIcons.fileEdit,
+                            title: '用户协议',
+                            onTap: () => context.pushNamed(RouteNames.userAgreement),
+                          ),
+                          ProfileMenuItem(
+                            icon: Icons.privacy_tip_outlined,
+                            svgPath: AppIcons.fileEye,
+                            title: '隐私政策',
+                            onTap: () => context.pushNamed(RouteNames.privacyPolicy),
+                          ),
+                          ProfileMenuItem(
+                            icon: Icons.system_update_outlined,
+                            svgPath: AppIcons.send01,
+                            title: '版本信息&检查更新',
+                            trailing: versionAsync.when(
+                              data:
+                                  (v) => Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(20),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.06),
+                                              blurRadius: 12,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          v.version,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ),
+                                      if (v.hasUpdate)
+                                        Container(
+                                          width: 10,
+                                          height: 10,
+                                          margin: const EdgeInsets.only(left: 4),
+                                          decoration: const BoxDecoration(
+                                            color: AppColors.unreadDot,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                              loading: () => const SizedBox.shrink(),
+                              error: (_, __) => const SizedBox.shrink(),
+                            ),
+                            showDivider: false,
+                            onTap: () {},
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                child: ListView(
-                  padding: const EdgeInsets.only(top: 8, bottom: 100),
-                  children: [
-                    ProfileMenuItem(
-                      icon: Icons.security_outlined,
-                      title: '账号与安全',
-                      onTap: () =>
-                          context.pushNamed(RouteNames.accountSecurity),
-                    ),
-                    ProfileMenuItem(
-                      icon: Icons.devices_other,
-                      title: '设备验证&激活',
-                      onTap: () {},
-                    ),
-                    ProfileMenuItem(
-                      icon: Icons.feedback_outlined,
-                      title: '建议反馈',
-                      onTap: () => context.pushNamed(RouteNames.feedback),
-                    ),
-                    ProfileMenuItem(
-                      icon: Icons.support_agent_outlined,
-                      title: '联系我们',
-                      onTap: () => context.pushNamed(RouteNames.contact),
-                      showDivider: false,
-                    ),
-                    const Divider(height: 8, thickness: 8, color: AppColors.listBackground),
-                    ProfileMenuItem(
-                      icon: Icons.description_outlined,
-                      title: '用户协议',
-                      onTap: () =>
-                          context.pushNamed(RouteNames.userAgreement),
-                    ),
-                    ProfileMenuItem(
-                      icon: Icons.privacy_tip_outlined,
-                      title: '隐私政策',
-                      onTap: () =>
-                          context.pushNamed(RouteNames.privacyPolicy),
-                    ),
-                    ProfileMenuItem(
-                      icon: Icons.info_outline,
-                      title: 'app信息和备案信息',
-                      onTap: () => context.pushNamed(RouteNames.appInfo),
-                    ),
-                    ProfileMenuItem(
-                      icon: Icons.system_update_outlined,
-                      title: '版本信息&检查更新',
-                      trailing: versionAsync.when(
-                        data: (v) => Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: AppColors.primary.withValues(alpha: 0.3),
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                v.version,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                            if (v.hasUpdate)
-                              Container(
-                                width: 8,
-                                height: 8,
-                                margin: const EdgeInsets.only(left: 4),
-                                decoration: const BoxDecoration(
-                                  color: AppColors.unreadDot,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                          ],
-                        ),
-                        loading: () => const SizedBox.shrink(),
-                        error: (_, __) => const SizedBox.shrink(),
-                      ),
-                      showDivider: false,
-                      onTap: () {},
-                    ),
-                  ],
-                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -138,8 +174,9 @@ class ProfileScreen extends ConsumerWidget {
     AsyncValue<Profile> profileAsync,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: GestureDetector(
@@ -148,34 +185,186 @@ class ProfileScreen extends ConsumerWidget {
                 children: [
                   Text(
                     profileAsync.whenOrNull(
-                          data: (p) => p.nickname ?? '未设置昵称',
+                          data: (p) {
+                            final nickname = p.nickname?.trim();
+                            return nickname == null || nickname.isEmpty
+                                ? '未设置昵称'
+                                : nickname;
+                          },
                         ) ??
                         '加载中...',
                     style: const TextStyle(
                       fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w500,
+                      height: 1.0,
                       color: Colors.white,
                     ),
                   ),
                   const SizedBox(width: 4),
-                  const Icon(
-                    Icons.chevron_right,
-                    color: Colors.white,
+                  AppIcons.icon(
+                    AppIcons.arrowRight,
                     size: 24,
+                    color: Colors.white,
                   ),
                 ],
               ),
             ),
           ),
           GlowingAvatar(
-            imageUrl: profileAsync.whenOrNull(
-              data: (p) => p.avatarUrl,
-            ),
-            size: 56,
+            imageUrl: profileAsync.whenOrNull(data: (p) => p.avatarUrl),
+            size: 80,
             onTap: () => context.pushNamed(RouteNames.profileEdit),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _exportAll(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(resonanceRepositoryProvider);
+    final exportService = ExportService(repo);
+
+    // Show progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (_) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('正在打包导出...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+    );
+
+    try {
+      final path = await exportService.exportAll();
+      if (!context.mounted) return;
+      Navigator.of(context).pop(); // close progress dialog
+      if (path != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('导出成功')));
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.of(context).pop(); // close progress dialog
+      final message = '$e'.replaceFirst('Exception: ', '').trim();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message.isEmpty ? '导出失败' : message)),
+      );
+    }
+  }
+}
+
+class _ProfileAssets {
+  const _ProfileAssets._();
+
+  static const background = 'assets/figma/home/home_bg.png';
+}
+
+class _ProfileBackdrop extends StatelessWidget {
+  const _ProfileBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final contentWidth = math.min(393.0, constraints.maxWidth);
+        final scale = contentWidth / 393.0;
+        final backgroundHeight = math.max(
+          874 * scale,
+          constraints.maxHeight + 24 * scale,
+        );
+        final overlayHeight = math.max(
+          857 * scale,
+          constraints.maxHeight + 2 * scale,
+        );
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const ColoredBox(color: AppColors.background),
+            Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: contentWidth,
+                height: constraints.maxHeight,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned(
+                      left: -48 * scale,
+                      top: -10 * scale,
+                      width: 490 * scale,
+                      height: backgroundHeight,
+                      child: Image.asset(
+                        _ProfileAssets.background,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                        filterQuality: FilterQuality.high,
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      top: -1 * scale,
+                      width: contentWidth,
+                      height: overlayHeight,
+                      child: ClipRect(
+                        child: BackdropFilter(
+                          filter: ui.ImageFilter.blur(
+                            sigmaX: 0.5 * scale,
+                            sigmaY: 0.5 * scale,
+                          ),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  const Color(0xFF28307C).withValues(alpha: 0.36),
+                                  const Color(0xFFE7EAFF).withValues(alpha: 0.36),
+                                ],
+                                stops: const [0.10659, 0.69387],
+                              ),
+                            ),
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.white.withValues(alpha: 0.08),
+                              Colors.white.withValues(alpha: 0.18),
+                            ],
+                            stops: const [0.0, 0.68, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

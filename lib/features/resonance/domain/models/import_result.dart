@@ -11,6 +11,9 @@ class ImportedItem with _$ImportedItem {
     String? subtitlePath,
     String? scriptPath,
     String? signalPath,
+    String? artist,
+    String? album,
+    @Default(0) int durationMs,
     @Default('audio') String mediaType,
   }) = _ImportedItem;
 }
