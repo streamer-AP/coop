@@ -80,6 +80,8 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
           children: [
             Row(
               children: [
+                const SizedBox(width: 26,height: 10,),
+                const Spacer(),
                 Image.asset(
                   widget.headerIconAsset,
                   width: 22,

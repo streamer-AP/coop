@@ -9,6 +9,7 @@ class LoggingInterceptor extends Interceptor {
     _logger.d('''
     ${options.method} ${options.uri}
     ${options.queryParameters}
+    ${options.headers}
         ''');
     handler.next(options);
   }

@@ -17,6 +17,7 @@ class BleSignalSender {
   BleSignal? _currentSignal;
   Uint8List? _lastPayload;
   bool _stopAfterCurrentSend = false;
+  bool _hasLoggedDisconnectedSkip = false;
 
   static const sendInterval = Duration(milliseconds: 200);
 
@@ -39,12 +40,14 @@ class BleSignalSender {
     _timer = null;
     _currentSignal = null;
     _lastPayload = null;
+    _hasLoggedDisconnectedSkip = false;
     AppLogger().debug('$_tag: stopped');
   }
 
   void updateSignal(BleSignal signal) {
     _currentSignal = signal;
     _stopAfterCurrentSend = _isIdleSignal(signal);
+    _hasLoggedDisconnectedSkip = false;
     if (_timer == null) {
       start();
     }
@@ -52,12 +55,25 @@ class BleSignalSender {
 
   Future<void> _sendSignal() async {
     if (_currentSignal == null) return;
+
+    final signal = _currentSignal!;
     if (!_connectionManager.isConnected) {
-      AppLogger().debug('$_tag: skip send, device not connected');
+      if (_isIdleSignal(signal)) {
+        AppLogger().debug(
+          '$_tag: idle signal skipped because device not connected, stopping sender',
+        );
+        stop();
+        return;
+      }
+
+      if (!_hasLoggedDisconnectedSkip) {
+        _hasLoggedDisconnectedSkip = true;
+        AppLogger().debug('$_tag: skip send, device not connected');
+      }
       return;
     }
 
-    final signal = _currentSignal!;
+    _hasLoggedDisconnectedSkip = false;
     final payload = _protocol.encodeSignal(signal);
     _lastPayload = payload;
     AppLogger().debug(
