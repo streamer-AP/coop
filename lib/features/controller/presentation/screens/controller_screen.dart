@@ -29,8 +29,10 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   static const _backgroundAsset = ControllerAssets.blueConnectionBackground;
   static const _gradientAsset = ControllerAssets.gradientSliding;
   static const List<int> _strengthValues = [0, 33, 66, 100];
+  static const _gradientRevealOffset = 20.0;
 
   bool _isDeviceSheetOpen = false;
+  bool _showTopGradient = false;
 
   @override
   void initState() {
@@ -92,6 +94,16 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
     }
   }
 
+  void _handleContentScroll(double offset) {
+    final shouldShow = offset > _gradientRevealOffset;
+    if (_showTopGradient == shouldShow || !mounted) {
+      return;
+    }
+    setState(() {
+      _showTopGradient = shouldShow;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final connectionFlow = ref.watch(controllerConnectionFlowProvider);
@@ -103,15 +115,12 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
       backgroundColor: ControllerAssets.background,
       body: Stack(
         children: [
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
+          Positioned.fill(
             child: IgnorePointer(
               child: Image.asset(
                 _backgroundAsset,
-                height: 360,
                 fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
               ),
             ),
           ),
@@ -191,11 +200,22 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
 
     return Stack(
       children: [
-        SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            children: [
-              ControllerSettingCard(
+        Positioned.fill(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            color: _showTopGradient ? Colors.transparent : Colors.transparent,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification.metrics.axis == Axis.vertical) {
+                  _handleContentScroll(notification.metrics.pixels);
+                }
+                return false;
+              },
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: Column(
+                  children: [
+                    ControllerSettingCard(
                 title: '摆摇设置',
                 headerIconAsset: ControllerAssets.swingTag,
                 waveformIconAsset: ControllerAssets.swingItemTag,
@@ -217,32 +237,35 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                     .setSwingIntensity(_strengthValues[index]),
                 onSettingsTap: () {},
               ),
-              const SizedBox(height: 18),
-              ControllerSettingCard(
-                title: '震动设置',
-                headerIconAsset: ControllerAssets.vibratingTag,
-                waveformIconAsset: ControllerAssets.vibratingItemTag,
-                waveformPages: vibrationPages,
-                selectedPageIndex: vibrationSelection.pageIndex,
-                selectedItemIndex: vibrationSelection.itemIndex,
-                strengthIndex: _strengthIndexFromValue(
-                  uiState.vibrationIntensity,
+              const SizedBox(height: 12),
+                    ControllerSettingCard(
+                      title: '震动设置',
+                      headerIconAsset: ControllerAssets.vibratingTag,
+                      waveformIconAsset: ControllerAssets.vibratingItemTag,
+                      waveformPages: vibrationPages,
+                      selectedPageIndex: vibrationSelection.pageIndex,
+                      selectedItemIndex: vibrationSelection.itemIndex,
+                      strengthIndex: _strengthIndexFromValue(
+                        uiState.vibrationIntensity,
+                      ),
+                      onWaveformSelected:
+                          (pageIndex, itemIndex) => _selectWaveform(
+                        channel: WaveformChannel.vibration,
+                        pageIndex: pageIndex,
+                        itemIndex: itemIndex,
+                        slots: slots,
+                        waveforms: waveforms,
+                      ),
+                      onStrengthChanged:
+                          (index) => ref
+                          .read(controllerStateNotifierProvider.notifier)
+                          .setVibrationIntensity(_strengthValues[index]),
+                      onSettingsTap: () {},
+                    ),
+                  ],
                 ),
-                onWaveformSelected:
-                    (pageIndex, itemIndex) => _selectWaveform(
-                  channel: WaveformChannel.vibration,
-                  pageIndex: pageIndex,
-                  itemIndex: itemIndex,
-                  slots: slots,
-                  waveforms: waveforms,
-                ),
-                onStrengthChanged:
-                    (index) => ref
-                    .read(controllerStateNotifierProvider.notifier)
-                    .setVibrationIntensity(_strengthValues[index]),
-                onSettingsTap: () {},
               ),
-            ],
+            ),
           ),
         ),
         Positioned(
@@ -250,7 +273,11 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
           left: 0,
           right: 0,
           child: IgnorePointer(
-            child: Image.asset(_gradientAsset, height: 40, fit: BoxFit.fill),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: _showTopGradient ? 1 : 0,
+              child: Image.asset(_gradientAsset, height: 60, fit: BoxFit.fill),
+            ),
           ),
         ),
       ],

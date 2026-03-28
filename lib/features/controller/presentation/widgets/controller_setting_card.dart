@@ -72,6 +72,7 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
         image: DecorationImage(
           image: AssetImage(ControllerAssets.settingBackground),
           fit: BoxFit.fill,
+          opacity: 0.74,
         ),
       ),
       child: Padding(
@@ -93,7 +94,7 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                   widget.title,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -113,23 +114,23 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             Image.asset(
               ControllerAssets.settingLineTop,
               height: 1,
               width: double.infinity,
               fit: BoxFit.fill,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             const Text(
               '波形',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             SizedBox(
               height: 112,
               child: PageView.builder(
@@ -148,7 +149,7 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                         '暂无波形',
                         style: TextStyle(
                           color: Colors.white70,
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -242,23 +243,23 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                 );
               }),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Image.asset(
               ControllerAssets.settingLineBottom,
               height: 1,
               width: double.infinity,
               fit: BoxFit.fill,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             const Text(
               '强度',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             ControllerStrengthSlider(
               selectedIndex: widget.strengthIndex,
               labels: const ['关', '弱', '中', '强'],
