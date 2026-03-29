@@ -70,11 +70,11 @@ class ControllerRepositoryImpl implements ControllerRepository {
           normalizedKeyframes
               .map(
                 (kf) => WaveformKeyframesCompanion.insert(
-              waveformId: waveformId,
-              timeMs: kf.timeMs,
-              value: kf.value,
-            ),
-          )
+                  waveformId: waveformId,
+                  timeMs: kf.timeMs,
+                  value: kf.value,
+                ),
+              )
               .toList(),
         );
       }
@@ -99,11 +99,11 @@ class ControllerRepositoryImpl implements ControllerRepository {
         normalizedKeyframes
             .map(
               (kf) => WaveformKeyframesCompanion.insert(
-            waveformId: waveform.id,
-            timeMs: kf.timeMs,
-            value: kf.value,
-          ),
-        )
+                waveformId: waveform.id,
+                timeMs: kf.timeMs,
+                value: kf.value,
+              ),
+            )
             .toList(),
       );
     }
@@ -138,8 +138,8 @@ class ControllerRepositoryImpl implements ControllerRepository {
 
   @override
   Future<List<FavoriteSlot>> getFavoriteSlotsByChannel(
-      WaveformChannel channel,
-      ) async {
+    WaveformChannel channel,
+  ) async {
     await _ensureLocalDebugWaveformData();
     // final rows = await _dao.getFavoriteSlotsByChannel(channel.name);
     // return rows
@@ -176,8 +176,8 @@ class ControllerRepositoryImpl implements ControllerRepository {
 
     final remaining = await _dao.getFavoriteSlotsByChannel(channel.name);
     final pageSlots =
-    remaining.where((s) => s.page == page).toList()
-      ..sort((a, b) => a.slotIndex.compareTo(b.slotIndex));
+        remaining.where((s) => s.page == page).toList()
+          ..sort((a, b) => a.slotIndex.compareTo(b.slotIndex));
 
     final reindexed = <FavoriteSlotsCompanion>[];
     for (var i = 0; i < pageSlots.length; i++) {
@@ -195,21 +195,21 @@ class ControllerRepositoryImpl implements ControllerRepository {
 
   @override
   Future<void> reorderFavoriteSlotsOnPage(
-      WaveformChannel channel,
-      int page,
-      List<FavoriteSlot> slots,
-      ) => _dao.updateSlotsOnPage(
+    WaveformChannel channel,
+    int page,
+    List<FavoriteSlot> slots,
+  ) => _dao.updateSlotsOnPage(
     channel.name,
     page,
     slots
         .map(
           (s) => FavoriteSlotsCompanion.insert(
-        channel: channel.name,
-        page: page,
-        slotIndex: s.index,
-        waveformId: s.waveformId,
-      ),
-    )
+            channel: channel.name,
+            page: page,
+            slotIndex: s.index,
+            waveformId: s.waveformId,
+          ),
+        )
         .toList(),
   );
 
@@ -280,7 +280,8 @@ class ControllerRepositoryImpl implements ControllerRepository {
       channel: WaveformChannel.swing,
       waveforms: allWaveforms,
       existingSlots: allSlots,
-      orderedNames: swingDebugWaveforms.map((waveform) => waveform.name).toList(),
+      orderedNames:
+          swingDebugWaveforms.map((waveform) => waveform.name).toList(),
     );
     await _ensureDefaultFavoriteSlots(
       channel: WaveformChannel.vibration,
@@ -295,18 +296,52 @@ class ControllerRepositoryImpl implements ControllerRepository {
     required List<Waveform> existingWaveforms,
     required List<Waveform> debugWaveforms,
   }) async {
-    final existingKeys = existingWaveforms
-        .map((waveform) => '${waveform.channel.name}::${waveform.name}')
-        .toSet();
+    final existingByKey = <String, Waveform>{
+      for (final waveform in existingWaveforms)
+        '${waveform.channel.name}::${waveform.name}': waveform,
+    };
 
     for (final waveform in debugWaveforms) {
       final key = '${waveform.channel.name}::${waveform.name}';
-      if (existingKeys.contains(key)) {
+      final existing = existingByKey[key];
+      if (existing == null) {
+        final waveformId = await saveWaveform(waveform);
+        existingByKey[key] = waveform.copyWith(id: waveformId);
         continue;
       }
-      await saveWaveform(waveform);
-      existingKeys.add(key);
+
+      if (!_shouldSyncDebugWaveform(existing, waveform)) {
+        continue;
+      }
+
+      final syncedWaveform = waveform.copyWith(id: existing.id);
+      await saveWaveform(syncedWaveform);
+      existingByKey[key] = syncedWaveform;
     }
+  }
+
+  bool _shouldSyncDebugWaveform(Waveform existing, Waveform desired) {
+    if (existing.durationMs != desired.durationMs ||
+        existing.signalIntervalMs != desired.signalIntervalMs ||
+        existing.signalDelayMs != desired.signalDelayMs ||
+        existing.isBuiltIn != desired.isBuiltIn) {
+      return true;
+    }
+
+    if (existing.keyframes.length != desired.keyframes.length) {
+      return true;
+    }
+
+    for (var index = 0; index < existing.keyframes.length; index++) {
+      final existingKeyframe = existing.keyframes[index];
+      final desiredKeyframe = desired.keyframes[index];
+      if (existingKeyframe.timeMs != desiredKeyframe.timeMs ||
+          existingKeyframe.value != desiredKeyframe.value) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   Future<void> _ensureDefaultFavoriteSlots({
@@ -317,9 +352,8 @@ class ControllerRepositoryImpl implements ControllerRepository {
   }) async {
     final channelSlots =
         existingSlots.where((slot) => slot.channel == channel.name).toList();
-    final occupiedPositions = channelSlots
-        .map((slot) => '${slot.page}:${slot.slotIndex}')
-        .toSet();
+    final occupiedPositions =
+        channelSlots.map((slot) => '${slot.page}:${slot.slotIndex}').toSet();
     final usedWaveformIds = channelSlots.map((slot) => slot.waveformId).toSet();
 
     final orderedWaveforms = <Waveform>[];
@@ -332,9 +366,10 @@ class ControllerRepositoryImpl implements ControllerRepository {
       }
     }
 
-    final availableWaveforms = orderedWaveforms
-        .where((waveform) => !usedWaveformIds.contains(waveform.id))
-        .toList();
+    final availableWaveforms =
+        orderedWaveforms
+            .where((waveform) => !usedWaveformIds.contains(waveform.id))
+            .toList();
     var nextWaveformIndex = 0;
 
     for (var page = 0; page < 3; page++) {
@@ -362,178 +397,107 @@ class ControllerRepositoryImpl implements ControllerRepository {
 
   List<Waveform> _buildSwingDebugWaveforms() {
     return [
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '羽毛轻扫',
         channel: WaveformChannel.swing,
-        durationMs: 4000,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 15),
-          WaveformKeyframe(timeMs: 1000, value: 42),
-          WaveformKeyframe(timeMs: 2000, value: 70),
-          WaveformKeyframe(timeMs: 2000, value: 70),
-          WaveformKeyframe(timeMs: 2000, value: 70),
-          WaveformKeyframe(timeMs: 2000, value: 70),
-          WaveformKeyframe(timeMs: 2000, value: 70),
-          WaveformKeyframe(timeMs: 2000, value: 70),
-          WaveformKeyframe(timeMs: 2000, value: 70),
-          WaveformKeyframe(timeMs: 2000, value: 70),
-          WaveformKeyframe(timeMs: 3000, value: 42),
-          WaveformKeyframe(timeMs: 4000, value: 15),
+        sliderValues: const [
+          [26, 26, 28, 30, 32, 34, 36, 38],
+          [40, 38, 36, 34, 32, 30, 28, 26],
+          [26, 28, 30, 32, 30, 28, 26, 26],
+          [26, 0, 0, 0, 0, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '深海呼吸',
         channel: WaveformChannel.swing,
-        durationMs: 2400,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 0),
-          WaveformKeyframe(timeMs: 400, value: 100),
-          WaveformKeyframe(timeMs: 800, value: 18),
-          WaveformKeyframe(timeMs: 1200, value: 100),
-          WaveformKeyframe(timeMs: 1600, value: 18),
-          WaveformKeyframe(timeMs: 2400, value: 0),
-          WaveformKeyframe(timeMs: 2400, value: 0),
-          WaveformKeyframe(timeMs: 2400, value: 0),
-          WaveformKeyframe(timeMs: 2400, value: 0),
-          WaveformKeyframe(timeMs: 2400, value: 0),
-          WaveformKeyframe(timeMs: 2400, value: 0),
-          WaveformKeyframe(timeMs: 2400, value: 0),
-          WaveformKeyframe(timeMs: 2400, value: 0),
-          WaveformKeyframe(timeMs: 2400, value: 0),
+        sliderValues: const [
+          [26, 28, 30, 32, 34, 36, 38, 40],
+          [42, 44, 46, 46, 44, 42, 40, 38],
+          [36, 34, 32, 30, 28, 26, 26, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '午后清风',
         channel: WaveformChannel.swing,
-        durationMs: 3600,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 20),
-          WaveformKeyframe(timeMs: 900, value: 20),
-          WaveformKeyframe(timeMs: 1800, value: 55),
-          WaveformKeyframe(timeMs: 2700, value: 82),
-          WaveformKeyframe(timeMs: 3600, value: 20),
-          WaveformKeyframe(timeMs: 3600, value: 20),
-          WaveformKeyframe(timeMs: 3600, value: 20),
-          WaveformKeyframe(timeMs: 3600, value: 20),
+        sliderValues: const [
+          [26, 29, 28, 31, 30, 33, 32, 35],
+          [34, 37, 36, 34, 32, 33, 30, 31],
+          [28, 29, 26, 26, 0, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '晨露微光',
         channel: WaveformChannel.swing,
-        durationMs: 3200,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 10),
-          WaveformKeyframe(timeMs: 600, value: 76),
-          WaveformKeyframe(timeMs: 1200, value: 35),
-          WaveformKeyframe(timeMs: 1800, value: 92),
-          WaveformKeyframe(timeMs: 2400, value: 28),
-          WaveformKeyframe(timeMs: 3200, value: 10),
+        sliderValues: const [
+          [26, 26, 28, 28, 30, 30, 32, 34],
+          [36, 38, 40, 42, 42, 40, 38, 36],
+          [34, 32, 30, 30, 28, 28, 26, 26],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '溪流潺潺',
         channel: WaveformChannel.swing,
-        durationMs: 2200,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 0),
-          WaveformKeyframe(timeMs: 350, value: 88),
-          WaveformKeyframe(timeMs: 700, value: 0),
-          WaveformKeyframe(timeMs: 1050, value: 88),
-          WaveformKeyframe(timeMs: 1400, value: 0),
-          WaveformKeyframe(timeMs: 1750, value: 88),
-          WaveformKeyframe(timeMs: 2200, value: 0),
+        sliderValues: const [
+          [26, 28, 30, 32, 34, 36, 38, 36],
+          [38, 40, 38, 36, 34, 32, 30, 28],
+          [26, 26, 26, 0, 0, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '丝绸摩挲',
         channel: WaveformChannel.swing,
-        durationMs: 2800,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 22),
-          WaveformKeyframe(timeMs: 700, value: 68),
-          WaveformKeyframe(timeMs: 1400, value: 22),
-          WaveformKeyframe(timeMs: 2100, value: 68),
-          WaveformKeyframe(timeMs: 2800, value: 22),
+        sliderValues: const [
+          [26, 28, 30, 32, 34, 36, 38, 40],
+          [40, 38, 36, 34, 32, 30, 28, 26],
+          [26, 26, 0, 0, 0, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '深海潜流',
         channel: WaveformChannel.swing,
-        durationMs: 3000,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 10),
-          WaveformKeyframe(timeMs: 600, value: 22),
-          WaveformKeyframe(timeMs: 1200, value: 40),
-          WaveformKeyframe(timeMs: 1800, value: 62),
-          WaveformKeyframe(timeMs: 2400, value: 88),
-          WaveformKeyframe(timeMs: 3000, value: 18),
+        sliderValues: const [
+          [26, 28, 30, 32, 34, 36, 38, 40],
+          [42, 40, 38, 36, 34, 32, 30, 28],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '耳鬓斯磨',
         channel: WaveformChannel.swing,
-        durationMs: 3000,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 90),
-          WaveformKeyframe(timeMs: 600, value: 72),
-          WaveformKeyframe(timeMs: 1200, value: 54),
-          WaveformKeyframe(timeMs: 1800, value: 36),
-          WaveformKeyframe(timeMs: 2400, value: 24),
-          WaveformKeyframe(timeMs: 3000, value: 12),
+        sliderValues: const [
+          [26, 28, 30, 34, 38, 40, 42, 42],
+          [40, 38, 34, 30, 28, 26, 26, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '钟摆催眠',
         channel: WaveformChannel.swing,
-        durationMs: 2400,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 0),
-          WaveformKeyframe(timeMs: 300, value: 82),
-          WaveformKeyframe(timeMs: 600, value: 30),
-          WaveformKeyframe(timeMs: 900, value: 100),
-          WaveformKeyframe(timeMs: 1200, value: 20),
-          WaveformKeyframe(timeMs: 2400, value: 0),
+        sliderValues: const [
+          [26, 30, 34, 38, 40, 42, 40, 38],
+          [34, 30, 26, 26, 26, 26, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '琴弦共鸣',
         channel: WaveformChannel.swing,
-        durationMs: 3600,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 18),
-          WaveformKeyframe(timeMs: 600, value: 64),
-          WaveformKeyframe(timeMs: 1200, value: 26),
-          WaveformKeyframe(timeMs: 1800, value: 78),
-          WaveformKeyframe(timeMs: 2400, value: 30),
-          WaveformKeyframe(timeMs: 3000, value: 92),
-          WaveformKeyframe(timeMs: 3600, value: 18),
+        sliderValues: const [
+          [26, 32, 38, 42, 40, 36, 30, 28],
+          [30, 36, 40, 38, 32, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '惊涛骇浪',
         channel: WaveformChannel.swing,
-        durationMs: 2600,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 18),
-          WaveformKeyframe(timeMs: 450, value: 86),
-          WaveformKeyframe(timeMs: 900, value: 28),
-          WaveformKeyframe(timeMs: 1350, value: 72),
-          WaveformKeyframe(timeMs: 1800, value: 24),
-          WaveformKeyframe(timeMs: 2250, value: 92),
-          WaveformKeyframe(timeMs: 2600, value: 18),
+        sliderValues: const [
+          [26, 30, 40, 50, 46, 36, 30, 40],
+          [55, 46, 36, 26, 0, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '陨石坠落',
         channel: WaveformChannel.swing,
-        durationMs: 3400,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 12),
-          WaveformKeyframe(timeMs: 680, value: 58),
-          WaveformKeyframe(timeMs: 1360, value: 88),
-          WaveformKeyframe(timeMs: 2040, value: 52),
-          WaveformKeyframe(timeMs: 2720, value: 76),
-          WaveformKeyframe(timeMs: 3400, value: 12),
+        sliderValues: const [
+          [26, 30, 34, 40, 46, 52, 46, 34],
+          [26, 26, 0, 0, 0, 0, 0, 0],
         ],
       ),
     ];
@@ -541,177 +505,133 @@ class ControllerRepositoryImpl implements ControllerRepository {
 
   List<Waveform> _buildVibrationDebugWaveforms() {
     return [
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '星夜呢喃',
         channel: WaveformChannel.vibration,
-        durationMs: 3200,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 20),
-          WaveformKeyframe(timeMs: 800, value: 36),
-          WaveformKeyframe(timeMs: 1600, value: 26),
-          WaveformKeyframe(timeMs: 2400, value: 40),
-          WaveformKeyframe(timeMs: 2400, value: 40),
-          WaveformKeyframe(timeMs: 2400, value: 40),
-          WaveformKeyframe(timeMs: 2400, value: 40),
-          WaveformKeyframe(timeMs: 2400, value: 40),
-          WaveformKeyframe(timeMs: 3200, value: 20),
+        sliderValues: const [
+          [28, 28, 28, 30, 30, 32, 32, 32],
+          [30, 30, 28, 28, 28, 28, 30, 30],
+          [32, 32, 32, 30, 30, 28, 28, 28],
+          [28, 0, 0, 0, 0, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '绵绵细雨',
         channel: WaveformChannel.vibration,
-        durationMs: 1800,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 0),
-          WaveformKeyframe(timeMs: 300, value: 92),
-          WaveformKeyframe(timeMs: 600, value: 0),
-          WaveformKeyframe(timeMs: 900, value: 92),
-          WaveformKeyframe(timeMs: 1200, value: 0),
-          WaveformKeyframe(timeMs: 1500, value: 92),
-          WaveformKeyframe(timeMs: 1800, value: 0),
-          WaveformKeyframe(timeMs: 1800, value: 0),
-          WaveformKeyframe(timeMs: 1800, value: 100),
-          WaveformKeyframe(timeMs: 1800, value: 100),
-          WaveformKeyframe(timeMs: 1800, value: 100),
+        sliderValues: const [
+          [26, 34, 26, 38, 28, 36, 26, 40],
+          [30, 34, 26, 38, 28, 36, 26, 40],
+          [30, 34, 26, 38, 28, 36, 26, 34],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '潮汐呼吸',
         channel: WaveformChannel.vibration,
-        durationMs: 3500,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 15),
-          WaveformKeyframe(timeMs: 700, value: 30),
-          WaveformKeyframe(timeMs: 1400, value: 50),
-          WaveformKeyframe(timeMs: 2100, value: 70),
-          WaveformKeyframe(timeMs: 2800, value: 90),
-          WaveformKeyframe(timeMs: 3500, value: 18),
+        sliderValues: const [
+          [26, 28, 30, 32, 34, 36, 38, 40],
+          [42, 44, 46, 46, 44, 42, 40, 38],
+          [36, 34, 32, 30, 28, 26, 26, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '麦浪起伏',
         channel: WaveformChannel.vibration,
-        durationMs: 2400,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 30),
-          WaveformKeyframe(timeMs: 400, value: 78),
-          WaveformKeyframe(timeMs: 800, value: 42),
-          WaveformKeyframe(timeMs: 1200, value: 86),
-          WaveformKeyframe(timeMs: 1600, value: 36),
-          WaveformKeyframe(timeMs: 2400, value: 30),
+        sliderValues: const [
+          [26, 30, 34, 38, 34, 30, 26, 30],
+          [34, 38, 34, 30, 26, 30, 34, 38],
+          [34, 30, 26, 26, 0, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '心跳同频',
         channel: WaveformChannel.vibration,
-        durationMs: 1600,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 35),
-          WaveformKeyframe(timeMs: 200, value: 85),
-          WaveformKeyframe(timeMs: 400, value: 30),
-          WaveformKeyframe(timeMs: 600, value: 90),
-          WaveformKeyframe(timeMs: 800, value: 32),
-          WaveformKeyframe(timeMs: 1000, value: 92),
-          WaveformKeyframe(timeMs: 1200, value: 34),
-          WaveformKeyframe(timeMs: 1600, value: 35),
+        sliderValues: const [
+          [26, 50, 26, 26, 44, 26, 26, 26],
+          [50, 26, 26, 44, 26, 26, 26, 26],
+          [26, 0, 0, 0, 0, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '指尖魔法',
         channel: WaveformChannel.vibration,
-        durationMs: 2400,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 18),
-          WaveformKeyframe(timeMs: 400, value: 62),
-          WaveformKeyframe(timeMs: 800, value: 18),
-          WaveformKeyframe(timeMs: 1200, value: 78),
-          WaveformKeyframe(timeMs: 1600, value: 18),
-          WaveformKeyframe(timeMs: 2000, value: 92),
-          WaveformKeyframe(timeMs: 2400, value: 18),
+        sliderValues: const [
+          [26, 26, 58, 26, 26, 58, 26, 26],
+          [58, 26, 26, 58, 26, 26, 58, 26],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '极光爆发',
         channel: WaveformChannel.vibration,
-        durationMs: 2600,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 0),
-          WaveformKeyframe(timeMs: 500, value: 72),
-          WaveformKeyframe(timeMs: 900, value: 0),
-          WaveformKeyframe(timeMs: 1400, value: 72),
-          WaveformKeyframe(timeMs: 1800, value: 0),
-          WaveformKeyframe(timeMs: 2300, value: 72),
-          WaveformKeyframe(timeMs: 2600, value: 0),
+        sliderValues: const [
+          [26, 30, 34, 38, 42, 46, 52, 58],
+          [64, 70, 64, 58, 52, 46, 38, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '荒原疾驰',
         channel: WaveformChannel.vibration,
-        durationMs: 1400,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 42),
-          WaveformKeyframe(timeMs: 175, value: 88),
-          WaveformKeyframe(timeMs: 350, value: 44),
-          WaveformKeyframe(timeMs: 525, value: 90),
-          WaveformKeyframe(timeMs: 700, value: 46),
-          WaveformKeyframe(timeMs: 875, value: 92),
-          WaveformKeyframe(timeMs: 1050, value: 48),
-          WaveformKeyframe(timeMs: 1400, value: 42),
+        sliderValues: const [
+          [26, 46, 42, 50, 44, 52, 46, 50],
+          [44, 52, 46, 50, 44, 26, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '骤雨拍打',
         channel: WaveformChannel.vibration,
-        durationMs: 3000,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 16),
-          WaveformKeyframe(timeMs: 600, value: 48),
-          WaveformKeyframe(timeMs: 1200, value: 82),
-          WaveformKeyframe(timeMs: 1800, value: 38),
-          WaveformKeyframe(timeMs: 2400, value: 70),
-          WaveformKeyframe(timeMs: 3000, value: 16),
+        sliderValues: const [
+          [26, 70, 26, 58, 26, 78, 26, 50],
+          [26, 74, 26, 54, 26, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '暗潮低鸣',
         channel: WaveformChannel.vibration,
-        durationMs: 2000,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 12),
-          WaveformKeyframe(timeMs: 300, value: 100),
-          WaveformKeyframe(timeMs: 700, value: 20),
-          WaveformKeyframe(timeMs: 1100, value: 100),
-          WaveformKeyframe(timeMs: 1500, value: 28),
-          WaveformKeyframe(timeMs: 2000, value: 12),
+        sliderValues: const [
+          [26, 30, 34, 38, 40, 42, 42, 40],
+          [38, 34, 30, 26, 0, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '萤火微光',
         channel: WaveformChannel.vibration,
-        durationMs: 3600,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 10),
-          WaveformKeyframe(timeMs: 900, value: 35),
-          WaveformKeyframe(timeMs: 1800, value: 68),
-          WaveformKeyframe(timeMs: 2700, value: 35),
-          WaveformKeyframe(timeMs: 3600, value: 10),
+        sliderValues: const [
+          [26, 26, 26, 52, 26, 26, 46, 26],
+          [26, 58, 26, 26, 42, 26, 26, 52],
+          [26, 26, 26, 0, 0, 0, 0, 0],
         ],
       ),
-      _buildDebugWaveform(
+      _buildDebugWaveformFromSliderValues(
         name: '蜻蜓点水',
         channel: WaveformChannel.vibration,
-        durationMs: 3200,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 24),
-          WaveformKeyframe(timeMs: 500, value: 76),
-          WaveformKeyframe(timeMs: 1000, value: 28),
-          WaveformKeyframe(timeMs: 1500, value: 84),
-          WaveformKeyframe(timeMs: 2000, value: 32),
-          WaveformKeyframe(timeMs: 2600, value: 92),
-          WaveformKeyframe(timeMs: 3200, value: 24),
+        sliderValues: const [
+          [26, 78, 26, 26, 26, 72, 26, 26],
+          [26, 82, 26, 0, 0, 0, 0, 0],
         ],
       ),
     ];
+  }
+
+  Waveform _buildDebugWaveformFromSliderValues({
+    required String name,
+    required WaveformChannel channel,
+    required List<List<int>> sliderValues,
+  }) {
+    final keyframes = <WaveformKeyframe>[];
+    var timeMs = 1000;
+
+    for (final sliderRow in sliderValues) {
+      for (final value in sliderRow) {
+        keyframes.add(WaveformKeyframe(timeMs: timeMs, value: value));
+        timeMs += 1000;
+      }
+    }
+
+    return _buildDebugWaveform(
+      name: name,
+      channel: channel,
+      durationMs: keyframes.length * 1000,
+      keyframes: keyframes,
+    );
   }
 
   List<WaveformKeyframe> _normalizeKeyframes(List<WaveformKeyframe> keyframes) {
@@ -724,8 +644,9 @@ class ControllerRepositoryImpl implements ControllerRepository {
       deduplicatedByTime[keyframe.timeMs] = keyframe;
     }
 
-    final normalized = deduplicatedByTime.values.toList()
-      ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
+    final normalized =
+        deduplicatedByTime.values.toList()
+          ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
     return normalized;
   }
 
@@ -768,16 +689,16 @@ class ControllerRepositoryImpl implements ControllerRepository {
     return rows
         .map(
           (r) => UsageLog(
-        id: r.id,
-        startTime: r.startTime,
-        signalMode: r.signalMode,
-        waveformId: r.waveformId,
-        intensityLevel: r.intensityLevel,
-        durationMs: r.durationMs,
-        deviceModel: r.deviceModel,
-        deviceSerial: r.deviceSerial,
-      ),
-    )
+            id: r.id,
+            startTime: r.startTime,
+            signalMode: r.signalMode,
+            waveformId: r.waveformId,
+            intensityLevel: r.intensityLevel,
+            durationMs: r.durationMs,
+            deviceModel: r.deviceModel,
+            deviceSerial: r.deviceSerial,
+          ),
+        )
         .toList();
   }
 
@@ -808,9 +729,9 @@ class ControllerRepositoryImpl implements ControllerRepository {
       signalDelayMs: row.waveform.signalDelayMs,
       isBuiltIn: row.waveform.isBuiltIn,
       keyframes:
-      row.keyframes
-          .map((kf) => WaveformKeyframe(timeMs: kf.timeMs, value: kf.value))
-          .toList(),
+          row.keyframes
+              .map((kf) => WaveformKeyframe(timeMs: kf.timeMs, value: kf.value))
+              .toList(),
     );
   }
 
