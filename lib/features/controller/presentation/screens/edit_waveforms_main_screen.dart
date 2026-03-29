@@ -413,7 +413,7 @@ class _EditWaveformsMainScreenState
 
       OmaoToast.show(context, '保存成功', isSuccess: true);
 
-      // Navigator.of(context).maybePop();
+      Navigator.of(context).maybePop();
     } catch (error) {
       if (!mounted) {
         return;
@@ -525,10 +525,6 @@ class _EditWaveformsMainScreenState
       OmaoToast.show(context, '本页位置已满', isSuccess: false);
       return;
     }
-    if (totalCount == 0) {
-      OmaoToast.show(context, '至少添加1个波形预设', isSuccess: false);
-      return;
-    }
     final currentPageSlots =
         channelSlots.where((slot) => slot.page == currentPageIndex).toList();
     if (currentPageSlots.length >= 4) {
@@ -556,13 +552,14 @@ class _EditWaveformsMainScreenState
     required int itemIndex,
   }) {
     final channelSlots = _draftFavoriteSlotsForChannel(channel);
+    if (channelSlots.length <= 1) {
+      OmaoToast.show(context, '至少添加1个波形预设', isSuccess: false);
+      return;
+    }
+
     final pageSlots =
         channelSlots.where((slot) => slot.page == pageIndex).toList()
           ..sort((a, b) => a.index.compareTo(b.index));
-    if (pageSlots.length <= 1) {
-      OmaoToast.show(context, '常用波形至少保留1个', isSuccess: false);
-      return;
-    }
 
     final remainingPageSlots = <FavoriteSlot>[];
     for (var i = 0; i < pageSlots.length; i++) {
