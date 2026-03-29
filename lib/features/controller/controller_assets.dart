@@ -4,6 +4,7 @@ class ControllerAssets {
   ControllerAssets._();
 
   static const background = Color(0xFFEAEAEA);
+  static const background2 = Color(0xFFD8D5DC);
   static const accent = Color(0xFF6A53A7);
   static const bodyText = Color(0xFF797979);
   static const indicatorInactive = Color(0x80FFFFFF);

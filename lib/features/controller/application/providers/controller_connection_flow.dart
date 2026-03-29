@@ -193,6 +193,7 @@ class ControllerConnectionFlowController
       state = state.copyWith(
         isSearching: false,
         didTimeout: true,
+        infoMessage: '未查找到蓝牙设备',
         connectionStatus: DeviceConnectionStatus.disconnected,
       );
     });
