@@ -9,12 +9,16 @@ class ControllerStrengthSlider extends StatefulWidget {
     required this.selectedIndex,
     required this.labels,
     required this.onChanged,
+    this.enabled = true,
+    this.onDisabledInteraction,
     super.key,
   });
 
   final int selectedIndex;
   final List<String> labels;
   final ValueChanged<int> onChanged;
+  final bool enabled;
+  final VoidCallback? onDisabledInteraction;
 
   @override
   State<ControllerStrengthSlider> createState() =>
@@ -58,25 +62,48 @@ class _ControllerStrengthSliderState extends State<ControllerStrengthSlider> {
           children: [
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onHorizontalDragStart:
-                  (details) => setState(
-                    () =>
-                        _dragValue = _valueFromOffset(
-                          details.localPosition.dx,
-                          maxWidth,
-                        ),
-                  ),
-              onHorizontalDragUpdate:
-                  (details) => setState(
-                    () =>
-                        _dragValue = _valueFromOffset(
-                          details.localPosition.dx,
-                          maxWidth,
-                        ),
-                  ),
-              onHorizontalDragEnd: (_) => _commitDrag(maxIndex),
-              onHorizontalDragCancel: () => _commitDrag(maxIndex),
+              onHorizontalDragStart: (details) {
+                if (!widget.enabled) {
+                  widget.onDisabledInteraction?.call();
+                  return;
+                }
+                setState(
+                  () =>
+                      _dragValue = _valueFromOffset(
+                        details.localPosition.dx,
+                        maxWidth,
+                      ),
+                );
+              },
+              onHorizontalDragUpdate: (details) {
+                if (!widget.enabled) {
+                  return;
+                }
+                setState(
+                  () =>
+                      _dragValue = _valueFromOffset(
+                        details.localPosition.dx,
+                        maxWidth,
+                      ),
+                );
+              },
+              onHorizontalDragEnd: (_) {
+                if (!widget.enabled) {
+                  return;
+                }
+                _commitDrag(maxIndex);
+              },
+              onHorizontalDragCancel: () {
+                if (!widget.enabled) {
+                  return;
+                }
+                _commitDrag(maxIndex);
+              },
               onTapDown: (details) {
+                if (!widget.enabled) {
+                  widget.onDisabledInteraction?.call();
+                  return;
+                }
                 final nextValue = _valueFromOffset(
                   details.localPosition.dx,
                   maxWidth,

@@ -21,6 +21,8 @@ class ControllerSettingCard extends StatefulWidget {
     required this.onWaveformSelected,
     required this.onStrengthChanged,
     required this.onSettingsTap,
+    this.isStrengthEnabled = true,
+    this.onStrengthDisabledInteraction,
     super.key,
   });
 
@@ -33,6 +35,8 @@ class ControllerSettingCard extends StatefulWidget {
   final int strengthIndex;
   final ValueChanged<int> onStrengthChanged;
   final VoidCallback onSettingsTap;
+  final bool isStrengthEnabled;
+  final VoidCallback? onStrengthDisabledInteraction;
   final void Function(int pageIndex, int itemIndex) onWaveformSelected;
 
   @override
@@ -264,6 +268,8 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
               selectedIndex: widget.strengthIndex,
               labels: const ['关', '弱', '中', '强'],
               onChanged: widget.onStrengthChanged,
+              enabled: widget.isStrengthEnabled,
+              onDisabledInteraction: widget.onStrengthDisabledInteraction,
             ),
           ],
         ),

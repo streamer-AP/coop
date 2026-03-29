@@ -149,6 +149,7 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                                 slots,
                                 waveforms,
                                 uiState,
+                                connectionFlow.isConnected,
                               ),
                           loading:
                               () => const Center(
@@ -177,6 +178,7 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
     List<FavoriteSlot> slots,
     List<Waveform> waveforms,
     ControllerUiState uiState,
+    bool isConnected,
   ) {
     final swingPages = _buildWaveformPages(
       WaveformChannel.swing,
@@ -238,6 +240,8 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                           (index) => ref
                               .read(controllerStateNotifierProvider.notifier)
                               .setSwingIntensity(_strengthValues[index]),
+                      isStrengthEnabled: isConnected,
+                      onStrengthDisabledInteraction: _showConnectRequiredToast,
                       onSettingsTap: () {
                         context.pushNamed(
                           RouteNames.editWaveformsMain,
@@ -268,6 +272,8 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                           (index) => ref
                               .read(controllerStateNotifierProvider.notifier)
                               .setVibrationIntensity(_strengthValues[index]),
+                      isStrengthEnabled: isConnected,
+                      onStrengthDisabledInteraction: _showConnectRequiredToast,
                       onSettingsTap: () {
                         context.pushNamed(
                           RouteNames.editWaveformsMain,
@@ -353,6 +359,13 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
     }
 
     await notifier.startScan();
+  }
+
+  void _showConnectRequiredToast() {
+    if (!mounted) {
+      return;
+    }
+    TopBannerToast.show(context, message: '请先连接设备');
   }
 
   Future<void> _showDeviceSheet() async {
