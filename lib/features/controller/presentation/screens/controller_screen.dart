@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:omao_app/core/router/route_names.dart';
 
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/network/api_client.dart';
@@ -14,7 +16,6 @@ import '../../application/providers/controller_ui_providers.dart'
 import '../../controller_assets.dart';
 import '../../domain/models/favorite_slot.dart';
 import '../../domain/models/waveform.dart';
-import 'edit_waveforms_main_screen.dart';
 import '../widgets/controller_device_connect_item.dart';
 import '../widgets/controller_device_status_card.dart';
 import '../widgets/controller_setting_card.dart';
@@ -128,11 +129,7 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                     connectionStatus: connectionFlow.connectionStatus,
                     onConnectionTap: () => _handleConnectionTap(connectionFlow),
                     onEditTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const EditWaveformsMainScreen(),
-                        ),
-                      );
+                      
                     },
                   ),
                 ),
@@ -148,15 +145,18 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                       ),
                       loading:
                           () => const Center(
-                        child: CircularProgressIndicator(),
+                        // child: CircularProgressIndicator(),
                       ),
                       error:
-                          (error, _) =>
-                          Center(child: Text('波形加载失败：$error')),
+                          // (error, _) => Center(child: Text('波形加载失败：$error')),
+                          (error, _) => const Center(),
                     ),
                     loading:
-                        () => const Center(child: CircularProgressIndicator()),
-                    error: (error, _) => Center(child: Text('配置加载失败：$error')),
+                        () => const Center(),
+                    error: (error, _) {
+                      AppLogger().debug('error=$error');
+                      return const Center();
+                      },
                   ),
                 ),
               ],
@@ -219,7 +219,12 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                     (index) => ref
                     .read(controllerStateNotifierProvider.notifier)
                     .setSwingIntensity(_strengthValues[index]),
-                onSettingsTap: () {},
+                onSettingsTap: () {
+                  context.pushNamed(
+                    RouteNames.editWaveformsMain,
+                    extra: WaveformChannel.swing,
+                  );
+                },
               ),
               const SizedBox(height: 18),
               ControllerSettingCard(
@@ -244,7 +249,12 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                     (index) => ref
                     .read(controllerStateNotifierProvider.notifier)
                     .setVibrationIntensity(_strengthValues[index]),
-                onSettingsTap: () {},
+                onSettingsTap: () {
+                  context.pushNamed(
+                    RouteNames.editWaveformsMain,
+                    extra: WaveformChannel.vibration,
+                  );
+                },
               ),
             ],
           ),
@@ -452,18 +462,32 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   }
 }
 
-class _ControllerDeviceSheet extends ConsumerWidget {
+class _ControllerDeviceSheet extends ConsumerStatefulWidget {
   const _ControllerDeviceSheet();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ControllerDeviceSheet> createState() =>
+      _ControllerDeviceSheetState();
+}
+
+class _ControllerDeviceSheetState extends ConsumerState<_ControllerDeviceSheet> {
+  bool _closeRequested = false;
+
+  @override
+  Widget build(BuildContext context) {
     final connectionFlow = ref.watch(controllerConnectionFlowProvider);
 
-    if (connectionFlow.isConnected) {
+    if (connectionFlow.isConnected && !_closeRequested) {
+      _closeRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
+        if (!mounted) {
+          return;
         }
+        final route = ModalRoute.of(context);
+        if (route?.isCurrent != true) {
+          return;
+        }
+        Navigator.of(context).pop();
       });
     }
 

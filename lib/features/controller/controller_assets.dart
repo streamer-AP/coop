@@ -54,5 +54,7 @@ class ControllerAssets {
       'assets/figma/controller/icon_vibrating_item_tag.png';
   static const waveformBg = 'assets/figma/controller/icon_new_waveform_bg.png';
   static const waveformSlider = 'assets/figma/controller/icon_controller_slider.png';
-  
+  static const waveformAdd = 'assets/figma/controller/icon_wave_add.png';
+  static const waveformEdit = 'assets/figma/controller/icon_wave_edit.png';
+  static const waveformEditGary = 'assets/figma/controller/icon_wave_edit_gray.png';
 }
