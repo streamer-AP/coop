@@ -213,6 +213,24 @@ class ControllerRepositoryImpl implements ControllerRepository {
         .toList(),
   );
 
+  @override
+  Future<void> replaceFavoriteSlotsForChannel(
+    WaveformChannel channel,
+    List<FavoriteSlot> slots,
+  ) => _dao.replaceFavoriteSlotsForChannel(
+    channel.name,
+    slots
+        .map(
+          (slot) => FavoriteSlotsCompanion.insert(
+            channel: channel.name,
+            page: slot.page,
+            slotIndex: slot.index,
+            waveformId: slot.waveformId,
+          ),
+        )
+        .toList(),
+  );
+
   // --- 设备绑定 ---
 
   @override

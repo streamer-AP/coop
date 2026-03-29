@@ -25,6 +25,10 @@ abstract class ControllerRepository {
     int page,
     List<FavoriteSlot> slots,
   );
+  Future<void> replaceFavoriteSlotsForChannel(
+    WaveformChannel channel,
+    List<FavoriteSlot> slots,
+  );
 
   // --- 设备绑定 ---
   Future<DeviceBinding?> getActiveDeviceBinding();

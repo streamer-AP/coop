@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../controller_assets.dart';
@@ -47,35 +49,51 @@ class EditWaveformsPresetPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          Wrap(
-            spacing: 10,
-            runSpacing: 14,
-            runAlignment: WrapAlignment.center,
-            alignment: WrapAlignment.center,
-            children:
-                officialPresets
-                    .map(
-                      (waveform) => _PresetChip(
-                        label: waveform.name,
-                        enabled:
-                            waveform.name.trim().isNotEmpty &&
-                            !configuredWaveformIds.contains(waveform.id),
-                        leadingIconAsset: null,
-                        trailingBadge:
-                            waveform.name.trim().isEmpty
-                                ? _PresetBadge.none
-                                : configuredWaveformIds.contains(waveform.id)
-                                ? _PresetBadge.none
-                                : _PresetBadge.add,
-                        backgroundColor: Colors.white,
-                        borderColor: const Color(0xFF8C7ABF),
-                        textColor: const Color(0xFF8C7ABF),
-                        onBadgeTap: null,
-                        onLeftTap: null,
-                        onTap: () => onOfficialPresetTap(waveform),
-                      ),
-                    )
-                    .toList(),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 8.0;
+              final chipWidth =
+                  math
+                      .max(
+                        0,
+                        ((constraints.maxWidth - spacing * 2) / 3).floor(),
+                      )
+                      .toDouble();
+
+              return Wrap(
+                spacing: spacing,
+                runSpacing: 12,
+                runAlignment: WrapAlignment.center,
+                alignment: WrapAlignment.center,
+                children:
+                    officialPresets
+                        .map(
+                          (waveform) => _PresetChip(
+                            width: chipWidth,
+                            label: waveform.name,
+                            enabled:
+                                waveform.name.trim().isNotEmpty &&
+                                !configuredWaveformIds.contains(waveform.id),
+                            leadingIconAsset: null,
+                            trailingBadge:
+                                waveform.name.trim().isEmpty
+                                    ? _PresetBadge.none
+                                    : configuredWaveformIds.contains(
+                                      waveform.id,
+                                    )
+                                    ? _PresetBadge.none
+                                    : _PresetBadge.add,
+                            backgroundColor: Colors.white,
+                            borderColor: const Color(0xFF8C7ABF),
+                            textColor: const Color(0xFF8C7ABF),
+                            onBadgeTap: null,
+                            onLeftTap: null,
+                            onTap: () => onOfficialPresetTap(waveform),
+                          ),
+                        )
+                        .toList(),
+              );
+            },
           ),
           const SizedBox(height: 22),
           const Divider(height: 1, thickness: 1, color: Color(0xFFDFDFDF)),
@@ -92,39 +110,55 @@ class EditWaveformsPresetPanel extends StatelessWidget {
           ),
 
           const SizedBox(height: 18),
-          Wrap(
-            spacing: 10,
-            runSpacing: 14,
-            runAlignment: WrapAlignment.center,
-            children: [
-              ...customPresets.map(
-                (waveform) => _PresetChip(
-                  label: waveform.name,
-                  enabled: waveform.name.trim().isNotEmpty &&
-                            !configuredWaveformIds.contains(waveform.id),
-                  leadingIconAsset: waveform.name.trim().isNotEmpty &&
-                          !configuredWaveformIds.contains(waveform.id)
-                      ? ControllerAssets.waveformEdit
-                      : ControllerAssets.waveformEditGary,
-                  trailingBadge:
-                      waveform.name.trim().isEmpty
-                          ? _PresetBadge.none
-                          : configuredWaveformIds.contains(waveform.id)
-                          ? _PresetBadge.none
-                          : _PresetBadge.add,
-                  backgroundColor: Colors.white,
-                  borderColor: const Color(0xFF8C7ABF),
-                  textColor: const Color(0xFF8A73C2),
-                  onTap: () {},
-                  onLeftTap: () => onCustomPresetTap(waveform),
-                  onBadgeTap:
-                      trailingBadgeIsAdd(waveform, configuredWaveformIds)
-                          ? () => onCustomPresetAddTap(waveform)
-                          : null,
-                ),
-              ),
-              _PresetActionButton(onTap: onCreateTap),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 8.0;
+              final chipWidth =
+                  math
+                      .max(
+                        0,
+                        ((constraints.maxWidth - spacing * 2) / 3).floor(),
+                      )
+                      .toDouble();
+
+              return Wrap(
+                spacing: spacing,
+                runSpacing: 12,
+                runAlignment: WrapAlignment.center,
+                children: [
+                  ...customPresets.map(
+                    (waveform) => _PresetChip(
+                      width: chipWidth,
+                      label: waveform.name,
+                      enabled:
+                          waveform.name.trim().isNotEmpty &&
+                          !configuredWaveformIds.contains(waveform.id),
+                      leadingIconAsset:
+                          waveform.name.trim().isNotEmpty &&
+                                  !configuredWaveformIds.contains(waveform.id)
+                              ? ControllerAssets.waveformEdit
+                              : ControllerAssets.waveformEditGary,
+                      trailingBadge:
+                          waveform.name.trim().isEmpty
+                              ? _PresetBadge.none
+                              : configuredWaveformIds.contains(waveform.id)
+                              ? _PresetBadge.none
+                              : _PresetBadge.add,
+                      backgroundColor: Colors.white,
+                      borderColor: const Color(0xFF8C7ABF),
+                      textColor: const Color(0xFF8A73C2),
+                      onTap: () {},
+                      onLeftTap: () => onCustomPresetTap(waveform),
+                      onBadgeTap:
+                          trailingBadgeIsAdd(waveform, configuredWaveformIds)
+                              ? () => onCustomPresetAddTap(waveform)
+                              : null,
+                    ),
+                  ),
+                  _PresetActionButton(width: chipWidth, onTap: onCreateTap),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 18),
         ],
@@ -135,6 +169,7 @@ class EditWaveformsPresetPanel extends StatelessWidget {
 
 class _PresetChip extends StatelessWidget {
   const _PresetChip({
+    required this.width,
     required this.label,
     required this.enabled,
     required this.leadingIconAsset,
@@ -147,6 +182,7 @@ class _PresetChip extends StatelessWidget {
     required this.onLeftTap,
   });
 
+  final double width;
   final String label;
   final bool enabled;
   final String? leadingIconAsset;
@@ -171,7 +207,7 @@ class _PresetChip extends StatelessWidget {
         onTap: canTap ? onTap : null,
         borderRadius: BorderRadius.circular(999),
         child: Container(
-          width: 104,
+          width: width,
           height: 42,
           alignment: Alignment.center,
           decoration: BoxDecoration(
@@ -223,7 +259,7 @@ class _PresetChip extends StatelessWidget {
                     child: Container(
                       width: 20,
                       height: 20,
-                      
+
                       child: Center(
                         child: Image.asset(
                           trailingBadge == _PresetBadge.add
@@ -255,8 +291,9 @@ bool trailingBadgeIsAdd(Waveform waveform, Set<int> configuredWaveformIds) {
 enum _PresetBadge { none, add, edit, remove }
 
 class _PresetActionButton extends StatelessWidget {
-  const _PresetActionButton({required this.onTap});
+  const _PresetActionButton({required this.width, required this.onTap});
 
+  final double width;
   final VoidCallback onTap;
 
   @override
@@ -267,14 +304,13 @@ class _PresetActionButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: Container(
-          width: 104,
+          width: width,
           height: 42,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: const Color(0xFF8C7ABF), width: 1.2),
-
           ),
           child: const Row(
             mainAxisSize: MainAxisSize.min,
@@ -284,6 +320,8 @@ class _PresetActionButton extends StatelessWidget {
               SizedBox(width: 6),
               Text(
                 '新建波形',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: Color(0xFF8C7ABF), fontSize: 14),
               ),
             ],
