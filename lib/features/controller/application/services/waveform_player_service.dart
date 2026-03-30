@@ -80,9 +80,9 @@ class WaveformPlayerService {
       _vibrationIntensity,
     );
 
-    AppLogger().debug(
-      '$_tag: tick elapsedMs=$_elapsedMs send=[$swing, $vibration]',
-    );
+    // AppLogger().debug(
+    //   '$_tag: tick elapsedMs=$_elapsedMs send=[$swing, $vibration]',
+    // );
 
     _arbitrator.submitSignal(
       BleSignal(

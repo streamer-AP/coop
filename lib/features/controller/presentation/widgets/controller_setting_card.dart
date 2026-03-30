@@ -4,9 +4,10 @@ import '../../controller_assets.dart';
 import 'controller_strength_slider.dart';
 
 class ControllerWaveformItemData {
-  const ControllerWaveformItemData({required this.name});
+  const ControllerWaveformItemData({required this.name, this.isEmpty = false});
 
   final String name;
+  final bool isEmpty;
 }
 
 class ControllerSettingCard extends StatefulWidget {
@@ -21,6 +22,8 @@ class ControllerSettingCard extends StatefulWidget {
     required this.onWaveformSelected,
     required this.onStrengthChanged,
     required this.onSettingsTap,
+    this.isStrengthEnabled = true,
+    this.onStrengthDisabledInteraction,
     super.key,
   });
 
@@ -33,6 +36,8 @@ class ControllerSettingCard extends StatefulWidget {
   final int strengthIndex;
   final ValueChanged<int> onStrengthChanged;
   final VoidCallback onSettingsTap;
+  final bool isStrengthEnabled;
+  final VoidCallback? onStrengthDisabledInteraction;
   final void Function(int pageIndex, int itemIndex) onWaveformSelected;
 
   @override
@@ -72,6 +77,7 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
         image: DecorationImage(
           image: AssetImage(ControllerAssets.settingBackground),
           fit: BoxFit.fill,
+          opacity: 0.74,
         ),
       ),
       child: Padding(
@@ -80,6 +86,8 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
           children: [
             Row(
               children: [
+                const SizedBox(width: 26, height: 10),
+                const Spacer(),
                 Image.asset(
                   widget.headerIconAsset,
                   width: 22,
@@ -91,7 +99,7 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                   widget.title,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -111,23 +119,23 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             Image.asset(
               ControllerAssets.settingLineTop,
               height: 1,
               width: double.infinity,
               fit: BoxFit.fill,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             const Text(
               '波形',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             SizedBox(
               height: 112,
               child: PageView.builder(
@@ -146,7 +154,7 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                         '暂无波形',
                         style: TextStyle(
                           color: Colors.white70,
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -163,15 +171,18 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                         children: List.generate(items.length, (itemIndex) {
                           final item = items[itemIndex];
                           final isSelected =
+                              !item.isEmpty &&
                               widget.selectedPageIndex == pageIndex &&
                               widget.selectedItemIndex == itemIndex;
 
                           return GestureDetector(
                             onTap:
-                                () => widget.onWaveformSelected(
-                                  pageIndex,
-                                  itemIndex,
-                                ),
+                                item.isEmpty
+                                    ? null
+                                    : () => widget.onWaveformSelected(
+                                      pageIndex,
+                                      itemIndex,
+                                    ),
                             child: Container(
                               width: itemWidth,
                               height: 44,
@@ -188,29 +199,32 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                               ),
-                              child: Row(
-                                children: [
-                                  Image.asset(
-                                    widget.waveformIconAsset,
-                                    width: 20,
-                                    height: 20,
-                                    fit: BoxFit.contain,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      item.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
+                              child:
+                                  item.isEmpty
+                                      ? const SizedBox.expand()
+                                      : Row(
+                                        children: [
+                                          Image.asset(
+                                            widget.waveformIconAsset,
+                                            width: 20,
+                                            height: 20,
+                                            fit: BoxFit.contain,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              item.name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                  ),
-                                ],
-                              ),
                             ),
                           );
                         }),
@@ -240,27 +254,29 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                 );
               }),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Image.asset(
               ControllerAssets.settingLineBottom,
               height: 1,
               width: double.infinity,
               fit: BoxFit.fill,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             const Text(
               '强度',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             ControllerStrengthSlider(
               selectedIndex: widget.strengthIndex,
               labels: const ['关', '弱', '中', '强'],
               onChanged: widget.onStrengthChanged,
+              enabled: widget.isStrengthEnabled,
+              onDisabledInteraction: widget.onStrengthDisabledInteraction,
             ),
           ],
         ),

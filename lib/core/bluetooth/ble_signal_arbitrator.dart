@@ -40,10 +40,10 @@ class BleSignalArbitrator {
     if (_shouldAccept(signal.source)) {
       _activeSource = signal.source;
       _sender.updateSignal(signal);
-      AppLogger().debug(
-        '$_tag: accepted ${signal.source.name} '
-        'swing=${signal.swing} vibration=${signal.vibration}',
-      );
+      // AppLogger().debug(
+      //   '$_tag: accepted ${signal.source.name} '
+      //   'swing=${signal.swing} vibration=${signal.vibration}',
+      // );
     }
   }
 

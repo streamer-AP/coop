@@ -16,6 +16,8 @@ class RouteNames {
   static const addToCollection = 'add-to-collection';
   static const importScreen = 'import-screen';
   static const controller = 'controller';
+  static const editWaveformsMain = 'edit-waveforms-main';
+  static const newWaveform = 'new-waveform';
   static const waveformEditor = 'waveform-editor';
   static const story = 'story';
   static const storyScene = 'story-scene';

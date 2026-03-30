@@ -9,6 +9,8 @@ import '../domain/models/device_binding.dart';
 import '../domain/models/favorite_slot.dart';
 import '../domain/models/usage_log.dart';
 import '../domain/models/waveform.dart';
+import 'controller_debug_waveform_presets.dart';
+import 'controller_waveform_config_codec.dart';
 import '../domain/repositories/controller_repository.dart';
 
 class ControllerRepositoryImpl implements ControllerRepository {
@@ -52,6 +54,8 @@ class ControllerRepositoryImpl implements ControllerRepository {
 
   @override
   Future<int> saveWaveform(Waveform waveform) async {
+    final normalizedKeyframes = _normalizeKeyframes(waveform.keyframes);
+
     if (waveform.id == 0) {
       final waveformId = await _dao.insertWaveform(
         WaveformsCompanion.insert(
@@ -63,16 +67,16 @@ class ControllerRepositoryImpl implements ControllerRepository {
           isBuiltIn: Value(waveform.isBuiltIn),
         ),
       );
-      if (waveform.keyframes.isNotEmpty) {
+      if (normalizedKeyframes.isNotEmpty) {
         await _dao.insertKeyframes(
-          waveform.keyframes
+          normalizedKeyframes
               .map(
                 (kf) => WaveformKeyframesCompanion.insert(
-              waveformId: waveformId,
-              timeMs: kf.timeMs,
-              value: kf.value,
-            ),
-          )
+                  waveformId: waveformId,
+                  timeMs: kf.timeMs,
+                  value: kf.value,
+                ),
+              )
               .toList(),
         );
       }
@@ -92,16 +96,16 @@ class ControllerRepositoryImpl implements ControllerRepository {
     );
 
     await _dao.deleteKeyframesForWaveform(waveform.id);
-    if (waveform.keyframes.isNotEmpty) {
+    if (normalizedKeyframes.isNotEmpty) {
       await _dao.insertKeyframes(
-        waveform.keyframes
+        normalizedKeyframes
             .map(
               (kf) => WaveformKeyframesCompanion.insert(
-            waveformId: waveform.id,
-            timeMs: kf.timeMs,
-            value: kf.value,
-          ),
-        )
+                waveformId: waveform.id,
+                timeMs: kf.timeMs,
+                value: kf.value,
+              ),
+            )
             .toList(),
       );
     }
@@ -109,7 +113,10 @@ class ControllerRepositoryImpl implements ControllerRepository {
   }
 
   @override
-  Future<void> deleteWaveform(int id) => _dao.deleteWaveform(id);
+  Future<void> deleteWaveform(int id) async {
+    await _dao.deleteFavoriteSlotsForWaveform(id);
+    await _dao.deleteWaveform(id);
+  }
 
   // --- 常用波形配置 ---
 
@@ -133,8 +140,8 @@ class ControllerRepositoryImpl implements ControllerRepository {
 
   @override
   Future<List<FavoriteSlot>> getFavoriteSlotsByChannel(
-      WaveformChannel channel,
-      ) async {
+    WaveformChannel channel,
+  ) async {
     await _ensureLocalDebugWaveformData();
     // final rows = await _dao.getFavoriteSlotsByChannel(channel.name);
     // return rows
@@ -171,8 +178,8 @@ class ControllerRepositoryImpl implements ControllerRepository {
 
     final remaining = await _dao.getFavoriteSlotsByChannel(channel.name);
     final pageSlots =
-    remaining.where((s) => s.page == page).toList()
-      ..sort((a, b) => a.slotIndex.compareTo(b.slotIndex));
+        remaining.where((s) => s.page == page).toList()
+          ..sort((a, b) => a.slotIndex.compareTo(b.slotIndex));
 
     final reindexed = <FavoriteSlotsCompanion>[];
     for (var i = 0; i < pageSlots.length; i++) {
@@ -190,23 +197,126 @@ class ControllerRepositoryImpl implements ControllerRepository {
 
   @override
   Future<void> reorderFavoriteSlotsOnPage(
-      WaveformChannel channel,
-      int page,
-      List<FavoriteSlot> slots,
-      ) => _dao.updateSlotsOnPage(
+    WaveformChannel channel,
+    int page,
+    List<FavoriteSlot> slots,
+  ) => _dao.updateSlotsOnPage(
     channel.name,
     page,
     slots
         .map(
           (s) => FavoriteSlotsCompanion.insert(
-        channel: channel.name,
-        page: page,
-        slotIndex: s.index,
-        waveformId: s.waveformId,
-      ),
-    )
+            channel: channel.name,
+            page: page,
+            slotIndex: s.index,
+            waveformId: s.waveformId,
+          ),
+        )
         .toList(),
   );
+
+  @override
+  Future<void> replaceFavoriteSlotsForChannel(
+    WaveformChannel channel,
+    List<FavoriteSlot> slots,
+  ) => _dao.replaceFavoriteSlotsForChannel(
+    channel.name,
+    slots
+        .map(
+          (slot) => FavoriteSlotsCompanion.insert(
+            channel: channel.name,
+            page: slot.page,
+            slotIndex: slot.index,
+            waveformId: slot.waveformId,
+          ),
+        )
+        .toList(),
+  );
+
+  @override
+  Future<bool> syncChannelConfigFromRemoteResponse(
+    WaveformChannel channel,
+    Map<String, dynamic> response,
+  ) async {
+    final decodedSlots = ControllerWaveformConfigCodec.decodeRemoteSlots(
+      channel: channel,
+      response: response,
+    );
+    if (decodedSlots == null) {
+      return false;
+    }
+
+    final existingWaveforms =
+        (await _dao.getWaveformsByChannel(
+          channel.name,
+        )).map(_toWaveformDomain).toList();
+    final existingByName = <String, Waveform>{
+      for (final waveform in existingWaveforms) waveform.name.trim(): waveform,
+    };
+
+    final favoriteSlots = <FavoriteSlot>[];
+    for (final decodedSlot in decodedSlots) {
+      if (decodedSlot.isEmpty) {
+        continue;
+      }
+
+      final waveformName = decodedSlot.waveform.name.trim();
+      final existing = existingByName[waveformName];
+      final waveformId = await saveWaveform(
+        decodedSlot.waveform.copyWith(id: existing?.id ?? 0),
+      );
+      existingByName[waveformName] = decodedSlot.waveform.copyWith(
+        id: waveformId,
+      );
+      favoriteSlots.add(
+        FavoriteSlot(
+          channel: channel,
+          page: decodedSlot.page,
+          index: decodedSlot.index,
+          waveformId: waveformId,
+        ),
+      );
+    }
+
+    if (favoriteSlots.isEmpty) {
+      final blankMarker = existingByName[''];
+      await saveWaveform(
+        Waveform(
+          id: blankMarker?.id ?? 0,
+          name: '',
+          channel: channel,
+          durationMs: 0,
+          signalIntervalMs: 200,
+          signalDelayMs: 0,
+          isBuiltIn: true,
+          keyframes: const [],
+        ),
+      );
+    }
+
+    await replaceFavoriteSlotsForChannel(channel, favoriteSlots);
+    return true;
+  }
+
+  @override
+  Future<void> ensureLocalChannelConfig(WaveformChannel channel) async {
+    await _ensureLocalDebugWaveformData();
+
+    final channelSlots = await _dao.getFavoriteSlotsByChannel(channel.name);
+    if (channelSlots.isNotEmpty) {
+      return;
+    }
+
+    final channelWaveforms =
+        (await _dao.getWaveformsByChannel(
+          channel.name,
+        )).map(_toWaveformDomain).toList();
+    if (_hasBlankConfigMarker(channel, channelWaveforms)) {
+      return;
+    }
+
+    await _seedDebugFavoriteSlotsForChannel(channel, channelWaveforms);
+  }
 
   // --- 设备绑定 ---
 
@@ -252,200 +362,183 @@ class ControllerRepositoryImpl implements ControllerRepository {
   }
 
   Future<void> _ensureLocalDebugWaveformDataInternal() async {
+    final swingDebugWaveforms =
+        ControllerDebugWaveformPresets.buildSwingWaveforms();
+    final vibrationDebugWaveforms =
+        ControllerDebugWaveformPresets.buildVibrationWaveforms();
+
     var allWaveforms =
-    (await _dao.getAllWaveforms()).map(_toWaveformDomain).toList();
-    final swingWaveforms =
-    allWaveforms
-        .where((waveform) => waveform.channel == WaveformChannel.swing)
-        .toList();
-    final vibrationWaveforms =
-    allWaveforms
-        .where((waveform) => waveform.channel == WaveformChannel.vibration)
-        .toList();
+        (await _dao.getAllWaveforms()).map(_toWaveformDomain).toList();
 
-    if (swingWaveforms.isEmpty) {
-      for (final waveform in _buildSwingDebugWaveforms()) {
-        await saveWaveform(waveform);
-      }
-    }
-
-    if (vibrationWaveforms.isEmpty) {
-      for (final waveform in _buildVibrationDebugWaveforms()) {
-        await saveWaveform(waveform);
-      }
-    }
+    await _ensureDebugWaveformsExist(
+      existingWaveforms: allWaveforms,
+      debugWaveforms: swingDebugWaveforms,
+    );
+    await _ensureDebugWaveformsExist(
+      existingWaveforms: allWaveforms,
+      debugWaveforms: vibrationDebugWaveforms,
+    );
 
     allWaveforms =
         (await _dao.getAllWaveforms()).map(_toWaveformDomain).toList();
     final allSlots = await _dao.getAllFavoriteSlots();
-    final hasSwingSlots = allSlots.any((slot) => slot.channel == 'swing');
-    final hasVibrationSlots = allSlots.any(
-          (slot) => slot.channel == 'vibration',
+
+    await _ensureDefaultFavoriteSlots(
+      channel: WaveformChannel.swing,
+      waveforms: allWaveforms,
+      existingSlots: allSlots,
+      orderedNames:
+          swingDebugWaveforms.map((waveform) => waveform.name).toList(),
     );
+    await _ensureDefaultFavoriteSlots(
+      channel: WaveformChannel.vibration,
+      waveforms: allWaveforms,
+      existingSlots: allSlots,
+      orderedNames:
+          vibrationDebugWaveforms.map((waveform) => waveform.name).toList(),
+    );
+  }
 
-    if (!hasSwingSlots) {
-      await _seedDefaultFavoriteSlots(
-        channel: WaveformChannel.swing,
-        waveforms: allWaveforms,
-      );
-    }
+  Future<void> _ensureDebugWaveformsExist({
+    required List<Waveform> existingWaveforms,
+    required List<Waveform> debugWaveforms,
+  }) async {
+    final existingByKey = <String, Waveform>{
+      for (final waveform in existingWaveforms)
+        '${waveform.channel.name}::${waveform.name}': waveform,
+    };
 
-    if (!hasVibrationSlots) {
-      await _seedDefaultFavoriteSlots(
-        channel: WaveformChannel.vibration,
-        waveforms: allWaveforms,
-      );
+    for (final waveform in debugWaveforms) {
+      final key = '${waveform.channel.name}::${waveform.name}';
+      final existing = existingByKey[key];
+      if (existing == null) {
+        final waveformId = await saveWaveform(waveform);
+        existingByKey[key] = waveform.copyWith(id: waveformId);
+        continue;
+      }
+
+      if (!_shouldSyncDebugWaveform(existing, waveform)) {
+        continue;
+      }
+
+      final syncedWaveform = waveform.copyWith(id: existing.id);
+      await saveWaveform(syncedWaveform);
+      existingByKey[key] = syncedWaveform;
     }
   }
 
-  Future<void> _seedDefaultFavoriteSlots({
+  bool _shouldSyncDebugWaveform(Waveform existing, Waveform desired) {
+    if (existing.durationMs != desired.durationMs ||
+        existing.signalIntervalMs != desired.signalIntervalMs ||
+        existing.signalDelayMs != desired.signalDelayMs ||
+        existing.isBuiltIn != desired.isBuiltIn) {
+      return true;
+    }
+
+    if (existing.keyframes.length != desired.keyframes.length) {
+      return true;
+    }
+
+    for (var index = 0; index < existing.keyframes.length; index++) {
+      final existingKeyframe = existing.keyframes[index];
+      final desiredKeyframe = desired.keyframes[index];
+      if (existingKeyframe.timeMs != desiredKeyframe.timeMs ||
+          existingKeyframe.value != desiredKeyframe.value) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  Future<void> _ensureDefaultFavoriteSlots({
     required WaveformChannel channel,
     required List<Waveform> waveforms,
+    required List<db.FavoriteSlot> existingSlots,
+    required List<String> orderedNames,
   }) async {
-    final channelWaveforms =
-    waveforms.where((waveform) => waveform.channel == channel).toList()
-      ..sort((a, b) => a.id.compareTo(b.id));
-
-    for (var index = 0; index < channelWaveforms.length && index < 4; index++) {
-      await setFavoriteSlot(
-        FavoriteSlot(
-          channel: channel,
-          page: 0,
-          index: index,
-          waveformId: channelWaveforms[index].id,
-        ),
-      );
+    final channelSlots =
+        existingSlots.where((slot) => slot.channel == channel.name).toList();
+    if (channelSlots.isNotEmpty || _hasBlankConfigMarker(channel, waveforms)) {
+      return;
     }
+
+    await _seedDebugFavoriteSlotsForChannel(channel, waveforms, orderedNames);
   }
 
-  List<Waveform> _buildSwingDebugWaveforms() {
-    return [
-      _buildDebugWaveform(
-        name: '平缓摆动',
-        channel: WaveformChannel.swing,
-        durationMs: 4000,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 15),
-          WaveformKeyframe(timeMs: 1000, value: 42),
-          WaveformKeyframe(timeMs: 2000, value: 70),
-          WaveformKeyframe(timeMs: 3000, value: 42),
-          WaveformKeyframe(timeMs: 4000, value: 15),
-        ],
-      ),
-      _buildDebugWaveform(
-        name: '冲刺摆动',
-        channel: WaveformChannel.swing,
-        durationMs: 2400,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 0),
-          WaveformKeyframe(timeMs: 400, value: 100),
-          WaveformKeyframe(timeMs: 800, value: 18),
-          WaveformKeyframe(timeMs: 1200, value: 100),
-          WaveformKeyframe(timeMs: 1600, value: 18),
-          WaveformKeyframe(timeMs: 2400, value: 0),
-        ],
-      ),
-      _buildDebugWaveform(
-        name: '阶梯摆动',
-        channel: WaveformChannel.swing,
-        durationMs: 3600,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 20),
-          WaveformKeyframe(timeMs: 900, value: 20),
-          WaveformKeyframe(timeMs: 1800, value: 55),
-          WaveformKeyframe(timeMs: 2700, value: 82),
-          WaveformKeyframe(timeMs: 3600, value: 20),
-        ],
-      ),
-      _buildDebugWaveform(
-        name: '波浪摆动',
-        channel: WaveformChannel.swing,
-        durationMs: 3200,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 10),
-          WaveformKeyframe(timeMs: 600, value: 76),
-          WaveformKeyframe(timeMs: 1200, value: 35),
-          WaveformKeyframe(timeMs: 1800, value: 92),
-          WaveformKeyframe(timeMs: 2400, value: 28),
-          WaveformKeyframe(timeMs: 3200, value: 10),
-        ],
-      ),
-    ];
+  Future<void> _seedDebugFavoriteSlotsForChannel(
+    WaveformChannel channel, [
+    List<Waveform>? allWaveforms,
+    List<String>? orderedNames,
+  ]) async {
+    final waveforms =
+        allWaveforms ??
+        (await _dao.getAllWaveforms()).map(_toWaveformDomain).toList();
+    final channelSlots = await _dao.getFavoriteSlotsByChannel(channel.name);
+    if (channelSlots.isNotEmpty || _hasBlankConfigMarker(channel, waveforms)) {
+      return;
+    }
+
+    final names =
+        orderedNames ?? ControllerDebugWaveformPresets.orderedNamesFor(channel);
+    final orderedWaveforms = <Waveform>[];
+    for (final name in names) {
+      for (final waveform in waveforms) {
+        if (waveform.channel == channel && waveform.name == name) {
+          orderedWaveforms.add(waveform);
+          break;
+        }
+      }
+    }
+
+    final favoriteSlots = <FavoriteSlot>[];
+    var nextWaveformIndex = 0;
+    for (var page = 0; page < 3; page++) {
+      for (var index = 0; index < 4; index++) {
+        if (nextWaveformIndex >= orderedWaveforms.length) {
+          await replaceFavoriteSlotsForChannel(channel, favoriteSlots);
+          return;
+        }
+        favoriteSlots.add(
+          FavoriteSlot(
+            channel: channel,
+            page: page,
+            index: index,
+            waveformId: orderedWaveforms[nextWaveformIndex++].id,
+          ),
+        );
+      }
+    }
+
+    await replaceFavoriteSlotsForChannel(channel, favoriteSlots);
   }
 
-  List<Waveform> _buildVibrationDebugWaveforms() {
-    return [
-      _buildDebugWaveform(
-        name: '轻柔震动',
-        channel: WaveformChannel.vibration,
-        durationMs: 3200,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 20),
-          WaveformKeyframe(timeMs: 800, value: 36),
-          WaveformKeyframe(timeMs: 1600, value: 26),
-          WaveformKeyframe(timeMs: 2400, value: 40),
-          WaveformKeyframe(timeMs: 3200, value: 20),
-        ],
-      ),
-      _buildDebugWaveform(
-        name: '脉冲震动',
-        channel: WaveformChannel.vibration,
-        durationMs: 1800,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 0),
-          WaveformKeyframe(timeMs: 300, value: 92),
-          WaveformKeyframe(timeMs: 600, value: 0),
-          WaveformKeyframe(timeMs: 900, value: 92),
-          WaveformKeyframe(timeMs: 1200, value: 0),
-          WaveformKeyframe(timeMs: 1500, value: 92),
-          WaveformKeyframe(timeMs: 1800, value: 0),
-        ],
-      ),
-      _buildDebugWaveform(
-        name: '递进震动',
-        channel: WaveformChannel.vibration,
-        durationMs: 3500,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 15),
-          WaveformKeyframe(timeMs: 700, value: 30),
-          WaveformKeyframe(timeMs: 1400, value: 50),
-          WaveformKeyframe(timeMs: 2100, value: 70),
-          WaveformKeyframe(timeMs: 2800, value: 90),
-          WaveformKeyframe(timeMs: 3500, value: 18),
-        ],
-      ),
-      _buildDebugWaveform(
-        name: '波浪震动',
-        channel: WaveformChannel.vibration,
-        durationMs: 2400,
-        keyframes: const [
-          WaveformKeyframe(timeMs: 0, value: 30),
-          WaveformKeyframe(timeMs: 400, value: 78),
-          WaveformKeyframe(timeMs: 800, value: 42),
-          WaveformKeyframe(timeMs: 1200, value: 86),
-          WaveformKeyframe(timeMs: 1600, value: 36),
-          WaveformKeyframe(timeMs: 2400, value: 30),
-        ],
-      ),
-    ];
-  }
-
-  Waveform _buildDebugWaveform({
-    required String name,
-    required WaveformChannel channel,
-    required int durationMs,
-    required List<WaveformKeyframe> keyframes,
-  }) {
-    return Waveform(
-      id: 0,
-      name: name,
-      channel: channel,
-      durationMs: durationMs,
-      signalIntervalMs: 200,
-      signalDelayMs: 0,
-      isBuiltIn: true,
-      keyframes: keyframes,
+  bool _hasBlankConfigMarker(
+    WaveformChannel channel,
+    List<Waveform> waveforms,
+  ) {
+    return waveforms.any(
+      (waveform) =>
+          waveform.channel == channel &&
+          waveform.isBuiltIn &&
+          waveform.name.trim().isEmpty,
     );
+  }
+
+  List<WaveformKeyframe> _normalizeKeyframes(List<WaveformKeyframe> keyframes) {
+    if (keyframes.isEmpty) {
+      return const [];
+    }
+
+    final deduplicatedByTime = <int, WaveformKeyframe>{};
+    for (final keyframe in keyframes) {
+      deduplicatedByTime[keyframe.timeMs] = keyframe;
+    }
+
+    final normalized =
+        deduplicatedByTime.values.toList()
+          ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
+    return normalized;
   }
 
   // --- 使用日志 ---
@@ -469,21 +562,24 @@ class ControllerRepositoryImpl implements ControllerRepository {
     return rows
         .map(
           (r) => UsageLog(
-        id: r.id,
-        startTime: r.startTime,
-        signalMode: r.signalMode,
-        waveformId: r.waveformId,
-        intensityLevel: r.intensityLevel,
-        durationMs: r.durationMs,
-        deviceModel: r.deviceModel,
-        deviceSerial: r.deviceSerial,
-      ),
-    )
+            id: r.id,
+            startTime: r.startTime,
+            signalMode: r.signalMode,
+            waveformId: r.waveformId,
+            intensityLevel: r.intensityLevel,
+            durationMs: r.durationMs,
+            deviceModel: r.deviceModel,
+            deviceSerial: r.deviceSerial,
+          ),
+        )
         .toList();
   }
 
   @override
   Future<void> markSynced(List<int> ids) => _dao.markLogsSynced(ids);
+
+  @override
+  Future<void> deleteUsageLogs(List<int> ids) => _dao.deleteUsageLogs(ids);
 
   // --- 云同步 ---
 
@@ -509,9 +605,9 @@ class ControllerRepositoryImpl implements ControllerRepository {
       signalDelayMs: row.waveform.signalDelayMs,
       isBuiltIn: row.waveform.isBuiltIn,
       keyframes:
-      row.keyframes
-          .map((kf) => WaveformKeyframe(timeMs: kf.timeMs, value: kf.value))
-          .toList(),
+          row.keyframes
+              .map((kf) => WaveformKeyframe(timeMs: kf.timeMs, value: kf.value))
+              .toList(),
     );
   }
 

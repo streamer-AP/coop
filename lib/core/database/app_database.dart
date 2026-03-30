@@ -48,7 +48,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration {
@@ -88,6 +88,21 @@ class AppDatabase extends _$AppDatabase {
         // v6 → v7: 音频条目新增专辑字段，保留原文件名作为 title
         if (from < 7) {
           await m.addColumn(audioEntries, audioEntries.album);
+        }
+        if (from >= 2 && from < 8) {
+          await customStatement(
+            'ALTER TABLE usage_logs RENAME TO usage_logs_old',
+          );
+          await m.createTable(usageLogs);
+          await customStatement(
+            'INSERT INTO usage_logs '
+            '(id, start_time, signal_mode, waveform_id, intensity_level, '
+            'duration_ms, device_model, device_serial, is_synced) '
+            'SELECT id, start_time, signal_mode, CAST(waveform_id AS TEXT), '
+            'intensity_level, duration_ms, device_model, device_serial, '
+            'is_synced FROM usage_logs_old',
+          );
+          await customStatement('DROP TABLE usage_logs_old');
         }
       },
     );

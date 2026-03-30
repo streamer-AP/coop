@@ -8,8 +8,8 @@ class UsageLog with _$UsageLog {
   const factory UsageLog({
     required int id,
     required DateTime startTime,
-    required String signalMode,    // 'swing' / 'vibration' / 'both'
-    required int waveformId,
+    required String signalMode, // 'swing' / 'vibration' / 'both'
+    required String waveformId,
     required int intensityLevel,
     required int durationMs,
     String? deviceModel,

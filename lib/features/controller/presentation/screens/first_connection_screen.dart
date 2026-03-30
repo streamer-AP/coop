@@ -49,13 +49,6 @@ class _FirstConnectionScreen extends ConsumerState<FirstConnectionScreen>
           _rotationController.stop();
         }
 
-        if (next.didTimeout && previous?.didTimeout != true && mounted) {
-          TopBannerToast.show(context, message: '未搜索到设备', isError: false);
-          ref
-              .read(controllerConnectionFlowProvider.notifier)
-              .clearTimeoutFlag();
-        }
-
         final errorMessage = next.errorMessage;
         if (errorMessage != null &&
             errorMessage != previous?.errorMessage &&

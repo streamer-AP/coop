@@ -5,6 +5,7 @@ import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/bluetooth/ble_connection_manager.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/bluetooth/ble_signal_arbitrator.dart';
 import '../../data/controller_repository_impl.dart' as controller_data;
@@ -13,6 +14,7 @@ import '../../domain/models/favorite_slot.dart' as domain;
 import '../../domain/models/waveform.dart';
 import '../../domain/repositories/controller_repository.dart';
 import '../services/waveform_player_service.dart';
+import '../services/waveform_usage_log_service.dart';
 import '../../../../core/database/app_database.dart'
     hide Waveform, DeviceBinding, FavoriteSlot;
 
@@ -23,6 +25,16 @@ ControllerRepository controllerRepository(Ref ref) {
   final db = ref.watch(appDatabaseProvider);
   return controller_data.ControllerRepositoryImpl(db.controllerDao, db.userDao);
 }
+
+final waveformUsageLogServiceProvider = Provider<WaveformUsageLogService>((
+  ref,
+) {
+  return WaveformUsageLogService(
+    repository: ref.watch(controllerRepositoryProvider),
+    apiClient: ref.watch(apiClientProvider),
+    bleConnectionManager: ref.watch(bleConnectionManagerProvider),
+  );
+});
 
 @riverpod
 Future<List<Waveform>> waveforms(Ref ref) {
@@ -57,6 +69,8 @@ Stream<BleConnectionState> connectionState(Ref ref) {
 
 @riverpod
 WaveformPlayerService waveformPlayerService(Ref ref) {
+  ref.keepAlive();
+
   final arbitrator = ref.watch(bleSignalArbitratorProvider);
   final service = WaveformPlayerService(arbitrator);
   ref.onDispose(service.dispose);
@@ -67,6 +81,7 @@ WaveformPlayerService waveformPlayerService(Ref ref) {
 class ControllerStateNotifier extends _$ControllerStateNotifier {
   @override
   ControllerUiState build() {
+    ref.keepAlive();
     ref.watch(waveformPlayerServiceProvider);
 
     ref.listen(connectionStateProvider, (prev, next) {
@@ -77,59 +92,107 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
       });
     });
 
-    _autoSelectDefault();
+    ref.listen<AsyncValue<List<domain.FavoriteSlot>>>(
+      favoriteSlotsProvider,
+      (_, __) => _syncDefaultSelections(),
+    );
+    ref.listen<AsyncValue<List<Waveform>>>(
+      waveformsProvider,
+      (_, __) => _syncDefaultSelections(),
+    );
+
+    Future.microtask(_syncDefaultSelections);
 
     return const ControllerUiState();
   }
 
-  void _autoSelectDefault() {
-    Future.microtask(() {
-      if (state.selectedSwingWaveform != null) return;
-      final slotsAsync = ref.read(favoriteSlotsProvider);
-      final waveformsAsync = ref.read(waveformsProvider);
-      slotsAsync.whenData((slots) {
-        waveformsAsync.whenData((allWaveforms) {
-          if (allWaveforms.isEmpty) return;
+  void _syncDefaultSelections() {
+    final slots = ref.read(favoriteSlotsProvider).valueOrNull;
+    final allWaveforms = ref.read(waveformsProvider).valueOrNull;
+    if (slots == null || allWaveforms == null) {
+      return;
+    }
 
-          final swingSlots =
-              slots
-                  .where(
-                    (s) =>
-                        s.channel == WaveformChannel.swing && s.page == 0,
-                  )
-                  .toList()
-                ..sort((a, b) => a.index.compareTo(b.index));
-          if (swingSlots.isNotEmpty) {
-            final firstWaveform =
-                allWaveforms
-                    .where((w) => w.id == swingSlots.first.waveformId)
-                    .firstOrNull;
-            if (firstWaveform != null && state.selectedSwingWaveform == null) {
-              state = state.copyWith(selectedSwingWaveform: firstWaveform);
-            }
-          }
+    final nextSwingWaveform = _resolveCurrentOrDefaultWaveform(
+      channel: WaveformChannel.swing,
+      currentWaveform: state.selectedSwingWaveform,
+      slots: slots,
+      waveforms: allWaveforms,
+    );
+    final nextVibrationWaveform = _resolveCurrentOrDefaultWaveform(
+      channel: WaveformChannel.vibration,
+      currentWaveform: state.selectedVibrationWaveform,
+      slots: slots,
+      waveforms: allWaveforms,
+    );
 
-          final vibSlots =
-              slots
-                  .where(
-                    (s) =>
-                        s.channel == WaveformChannel.vibration && s.page == 0,
-                  )
-                  .toList()
-                ..sort((a, b) => a.index.compareTo(b.index));
-          if (vibSlots.isNotEmpty) {
-            final firstWaveform =
-                allWaveforms
-                    .where((w) => w.id == vibSlots.first.waveformId)
-                    .firstOrNull;
-            if (firstWaveform != null &&
-                state.selectedVibrationWaveform == null) {
-              state = state.copyWith(selectedVibrationWaveform: firstWaveform);
-            }
-          }
-        });
-      });
-    });
+    final didChange =
+        nextSwingWaveform?.id != state.selectedSwingWaveform?.id ||
+        nextVibrationWaveform?.id != state.selectedVibrationWaveform?.id;
+    if (!didChange) {
+      return;
+    }
+
+    AppLogger().debug(
+      'ControllerStateNotifier: sync defaults '
+      'swing=${nextSwingWaveform?.name} '
+      'vibration=${nextVibrationWaveform?.name}',
+    );
+
+    state = ControllerUiState(
+      selectedPage: state.selectedPage,
+      lastSelectedPage: state.lastSelectedPage,
+      selectedSwingWaveform: nextSwingWaveform,
+      selectedVibrationWaveform: nextVibrationWaveform,
+      swingIntensity: state.swingIntensity,
+      vibrationIntensity: state.vibrationIntensity,
+    );
+    _updatePlayer();
+  }
+
+  Waveform? _resolveCurrentOrDefaultWaveform({
+    required WaveformChannel channel,
+    required Waveform? currentWaveform,
+    required List<domain.FavoriteSlot> slots,
+    required List<Waveform> waveforms,
+  }) {
+    if (currentWaveform != null) {
+      final stillExists = slots.any(
+        (slot) =>
+            slot.channel == channel && slot.waveformId == currentWaveform.id,
+      );
+      if (stillExists && currentWaveform.name.trim().isNotEmpty) {
+        return waveforms
+                .where((waveform) => waveform.id == currentWaveform.id)
+                .firstOrNull ??
+            currentWaveform;
+      }
+    }
+
+    return _findDefaultWaveform(
+      channel: channel,
+      slots: slots,
+      waveforms: waveforms,
+    );
+  }
+
+  Waveform? _findDefaultWaveform({
+    required WaveformChannel channel,
+    required List<domain.FavoriteSlot> slots,
+    required List<Waveform> waveforms,
+  }) {
+    final pageZeroSlots =
+        slots
+            .where((slot) => slot.channel == channel && slot.page == 0)
+            .toList()
+          ..sort((a, b) => a.index.compareTo(b.index));
+    if (pageZeroSlots.isEmpty) {
+      return null;
+    }
+
+    return waveforms
+        .where((waveform) => waveform.id == pageZeroSlots.first.waveformId)
+        .firstOrNull;
   }
 
   void selectPage(int page) {
@@ -177,6 +240,16 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
   void resetIntensities() {
     state = state.copyWith(swingIntensity: 0, vibrationIntensity: 0);
     ref.read(waveformPlayerServiceProvider).stop();
+    unawaited(
+      ref
+          .read(waveformUsageLogServiceProvider)
+          .syncState(
+            swingWaveform: state.selectedSwingWaveform,
+            swingIntensity: state.swingIntensity,
+            vibrationWaveform: state.selectedVibrationWaveform,
+            vibrationIntensity: state.vibrationIntensity,
+          ),
+    );
   }
 
   void _updatePlayer() {
@@ -194,11 +267,31 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
       swingIntensity: state.swingIntensity,
       vibrationIntensity: state.vibrationIntensity,
     );
+    unawaited(
+      ref
+          .read(waveformUsageLogServiceProvider)
+          .syncState(
+            swingWaveform: state.selectedSwingWaveform,
+            swingIntensity: state.swingIntensity,
+            vibrationWaveform: state.selectedVibrationWaveform,
+            vibrationIntensity: state.vibrationIntensity,
+          ),
+    );
   }
 
   void _onDisconnected() {
     state = state.copyWith(swingIntensity: 0, vibrationIntensity: 0);
     ref.read(waveformPlayerServiceProvider).stop();
+    unawaited(
+      ref
+          .read(waveformUsageLogServiceProvider)
+          .syncState(
+            swingWaveform: state.selectedSwingWaveform,
+            swingIntensity: state.swingIntensity,
+            vibrationWaveform: state.selectedVibrationWaveform,
+            vibrationIntensity: state.vibrationIntensity,
+          ),
+    );
   }
 }
 

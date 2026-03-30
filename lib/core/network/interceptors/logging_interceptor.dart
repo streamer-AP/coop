@@ -8,8 +8,9 @@ class LoggingInterceptor extends Interceptor {
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     _logger.d('''
     ${options.method} ${options.uri}
-    query=${options.queryParameters}
-    data=${options.data}
+    query: ${options.queryParameters}
+    body: ${_formatRequestData(options.data)}
+    headers: ${options.headers}
         ''');
     handler.next(options);
   }
@@ -34,5 +35,17 @@ class LoggingInterceptor extends Interceptor {
     response=${err.response?.data}
     ''', error: err);
     handler.next(err);
+  }
+
+  Object? _formatRequestData(dynamic data) {
+    if (data is FormData) {
+      return {
+        'fields': Map<String, String>.fromEntries(
+          data.fields.map((field) => MapEntry(field.key, field.value)),
+        ),
+        'files': data.files.map((file) => file.key).toList(),
+      };
+    }
+    return data;
   }
 }

@@ -4,12 +4,14 @@ class ControllerAssets {
   ControllerAssets._();
 
   static const background = Color(0xFFEAEAEA);
+  static const background2 = Color(0xFFD8D5DC);
   static const accent = Color(0xFF6A53A7);
   static const bodyText = Color(0xFF797979);
   static const indicatorInactive = Color(0x80FFFFFF);
   static const sliderDot = Color(0x66FFFFFF);
   static const deviceLogoBackground = Color(0xFFF1F1F5);
   static const connectItemButtonBackground = Color(0xFFF3EFFD);
+  static const editBgBackground = Color(0xFFF5F5F5);
 
   static const blueConnectionBackground =
       'assets/figma/controller/icon_blue_con_bg.png';
@@ -51,4 +53,9 @@ class ControllerAssets {
   static const vibratingTag = 'assets/figma/controller/icon_vibrating_tag.png';
   static const vibratingItemTag =
       'assets/figma/controller/icon_vibrating_item_tag.png';
+  static const waveformBg = 'assets/figma/controller/icon_new_waveform_bg.png';
+  static const waveformSlider = 'assets/figma/controller/icon_controller_slider.png';
+  static const waveformAdd = 'assets/figma/controller/icon_wave_add.png';
+  static const waveformEdit = 'assets/figma/controller/icon_wave_edit.png';
+  static const waveformEditGary = 'assets/figma/controller/icon_wave_edit_gray.png';
 }

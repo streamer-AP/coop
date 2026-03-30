@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:omao_app/core/router/route_names.dart';
 
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/network/api_client.dart';
@@ -29,8 +31,11 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   static const _backgroundAsset = ControllerAssets.blueConnectionBackground;
   static const _gradientAsset = ControllerAssets.gradientSliding;
   static const List<int> _strengthValues = [0, 33, 66, 100];
+  static const _gradientRevealOffset = 20.0;
 
   bool _isDeviceSheetOpen = false;
+  bool _showTopGradient = false;
+  late final Future<void> _waveformConfigBootstrapFuture;
 
   @override
   void initState() {
@@ -38,7 +43,7 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
 
     ref.listenManual<ControllerConnectionFlowState>(
       controllerConnectionFlowProvider,
-          (previous, next) {
+      (previous, next) {
         final errorMessage = next.errorMessage;
         if (errorMessage != null &&
             errorMessage != previous?.errorMessage &&
@@ -69,49 +74,80 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
       },
     );
 
-    unawaited(_requestDefaultWaveformConfigs());
+    _waveformConfigBootstrapFuture = _requestDefaultWaveformConfigs();
+    unawaited(ref.read(waveformUsageLogServiceProvider).flushPendingLogs());
   }
 
   Future<void> _requestDefaultWaveformConfigs() async {
     final apiClient = ref.read(apiClientProvider);
+    final repository = ref.read(controllerRepositoryProvider);
 
-    try {
-      await Future.wait([
-        apiClient.get(ApiEndpoints.querySwing),
-        apiClient.get(ApiEndpoints.queryVibration),
-      ]);
-    } catch (error, stackTrace) {
-      AppLogger().warning(
-        'ControllerScreen: preload default waveform configs failed',
-      );
-      AppLogger().error(
-        'ControllerScreen: preload default waveform configs error',
-        error: error,
-        stackTrace: stackTrace,
-      );
+    Future<void> syncChannel({
+      required WaveformChannel channel,
+      required String endpoint,
+    }) async {
+      var synced = false;
+      try {
+        final response = await apiClient.get(endpoint);
+        synced = await repository.syncChannelConfigFromRemoteResponse(
+          channel,
+          response,
+        );
+      } catch (error, stackTrace) {
+        AppLogger().warning(
+          'ControllerScreen: preload ${channel.name} waveform configs failed',
+        );
+        AppLogger().error(
+          'ControllerScreen: preload ${channel.name} waveform configs error',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+
+      if (!synced) {
+        await repository.ensureLocalChannelConfig(channel);
+      }
     }
+
+    await Future.wait([
+      syncChannel(
+        channel: WaveformChannel.swing,
+        endpoint: ApiEndpoints.querySwing,
+      ),
+      syncChannel(
+        channel: WaveformChannel.vibration,
+        endpoint: ApiEndpoints.queryVibration,
+      ),
+    ]);
+
+    ref.invalidate(waveformsProvider);
+    ref.invalidate(favoriteSlotsProvider);
+  }
+
+  void _handleContentScroll(double offset) {
+    final shouldShow = offset > _gradientRevealOffset;
+    if (_showTopGradient == shouldShow || !mounted) {
+      return;
+    }
+    setState(() {
+      _showTopGradient = shouldShow;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final connectionFlow = ref.watch(controllerConnectionFlowProvider);
-    final uiState = ref.watch(controllerStateNotifierProvider);
-    final favoriteSlotsAsync = ref.watch(favoriteSlotsProvider);
-    final waveformsAsync = ref.watch(waveformsProvider);
 
     return Scaffold(
       backgroundColor: ControllerAssets.background,
       body: Stack(
         children: [
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
+          Positioned.fill(
             child: IgnorePointer(
               child: Image.asset(
                 _backgroundAsset,
-                height: 360,
                 fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
               ),
             ),
           ),
@@ -130,26 +166,41 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                   ),
                 ),
                 Expanded(
-                  child: favoriteSlotsAsync.when(
-                    data:
-                        (slots) => waveformsAsync.when(
-                      data:
-                          (waveforms) => _buildControlContent(
-                        slots,
-                        waveforms,
-                        uiState,
-                      ),
-                      loading:
-                          () => const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                      error:
-                          (error, _) =>
-                          Center(child: Text('波形加载失败：$error')),
-                    ),
-                    loading:
-                        () => const Center(child: CircularProgressIndicator()),
-                    error: (error, _) => Center(child: Text('配置加载失败：$error')),
+                  child: FutureBuilder<void>(
+                    future: _waveformConfigBootstrapFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Center();
+                      }
+
+                      final uiState = ref.watch(
+                        controllerStateNotifierProvider,
+                      );
+                      final favoriteSlotsAsync = ref.watch(
+                        favoriteSlotsProvider,
+                      );
+                      final waveformsAsync = ref.watch(waveformsProvider);
+
+                      return favoriteSlotsAsync.when(
+                        data:
+                            (slots) => waveformsAsync.when(
+                              data:
+                                  (waveforms) => _buildControlContent(
+                                    slots,
+                                    waveforms,
+                                    uiState,
+                                    connectionFlow.isConnected,
+                                  ),
+                              loading: () => const Center(),
+                              error: (error, _) => const Center(),
+                            ),
+                        loading: () => const Center(),
+                        error: (error, _) {
+                          AppLogger().debug('error=$error');
+                          return const Center();
+                        },
+                      );
+                    },
                   ),
                 ),
               ],
@@ -161,10 +212,11 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   }
 
   Widget _buildControlContent(
-      List<FavoriteSlot> slots,
-      List<Waveform> waveforms,
-      ControllerUiState uiState,
-      ) {
+    List<FavoriteSlot> slots,
+    List<Waveform> waveforms,
+    ControllerUiState uiState,
+    bool isConnected,
+  ) {
     final swingPages = _buildWaveformPages(
       WaveformChannel.swing,
       slots,
@@ -188,58 +240,88 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
 
     return Stack(
       children: [
-        SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            children: [
-              ControllerSettingCard(
-                title: '摆摇设置',
-                headerIconAsset: ControllerAssets.swingTag,
-                waveformIconAsset: ControllerAssets.swingItemTag,
-                waveformPages: swingPages,
-                selectedPageIndex: swingSelection.pageIndex,
-                selectedItemIndex: swingSelection.itemIndex,
-                strengthIndex: _strengthIndexFromValue(uiState.swingIntensity),
-                onWaveformSelected:
-                    (pageIndex, itemIndex) => _selectWaveform(
-                  channel: WaveformChannel.swing,
-                  pageIndex: pageIndex,
-                  itemIndex: itemIndex,
-                  slots: slots,
-                  waveforms: waveforms,
+        Positioned.fill(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            color: _showTopGradient ? Colors.transparent : Colors.transparent,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification.metrics.axis == Axis.vertical) {
+                  _handleContentScroll(notification.metrics.pixels);
+                }
+                return false;
+              },
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: Column(
+                  children: [
+                    ControllerSettingCard(
+                      title: '摆摇设置',
+                      headerIconAsset: ControllerAssets.swingTag,
+                      waveformIconAsset: ControllerAssets.swingItemTag,
+                      waveformPages: swingPages,
+                      selectedPageIndex: swingSelection.pageIndex,
+                      selectedItemIndex: swingSelection.itemIndex,
+                      strengthIndex: _strengthIndexFromValue(
+                        uiState.swingIntensity,
+                      ),
+                      onWaveformSelected:
+                          (pageIndex, itemIndex) => _selectWaveform(
+                            channel: WaveformChannel.swing,
+                            pageIndex: pageIndex,
+                            itemIndex: itemIndex,
+                            slots: slots,
+                            waveforms: waveforms,
+                          ),
+                      onStrengthChanged:
+                          (index) => ref
+                              .read(controllerStateNotifierProvider.notifier)
+                              .setSwingIntensity(_strengthValues[index]),
+                      isStrengthEnabled: isConnected,
+                      onStrengthDisabledInteraction: _showConnectRequiredToast,
+                      onSettingsTap: () {
+                        context.pushNamed(
+                          RouteNames.editWaveformsMain,
+                          extra: WaveformChannel.swing,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    ControllerSettingCard(
+                      title: '震动设置',
+                      headerIconAsset: ControllerAssets.vibratingTag,
+                      waveformIconAsset: ControllerAssets.vibratingItemTag,
+                      waveformPages: vibrationPages,
+                      selectedPageIndex: vibrationSelection.pageIndex,
+                      selectedItemIndex: vibrationSelection.itemIndex,
+                      strengthIndex: _strengthIndexFromValue(
+                        uiState.vibrationIntensity,
+                      ),
+                      onWaveformSelected:
+                          (pageIndex, itemIndex) => _selectWaveform(
+                            channel: WaveformChannel.vibration,
+                            pageIndex: pageIndex,
+                            itemIndex: itemIndex,
+                            slots: slots,
+                            waveforms: waveforms,
+                          ),
+                      onStrengthChanged:
+                          (index) => ref
+                              .read(controllerStateNotifierProvider.notifier)
+                              .setVibrationIntensity(_strengthValues[index]),
+                      isStrengthEnabled: isConnected,
+                      onStrengthDisabledInteraction: _showConnectRequiredToast,
+                      onSettingsTap: () {
+                        context.pushNamed(
+                          RouteNames.editWaveformsMain,
+                          extra: WaveformChannel.vibration,
+                        );
+                      },
+                    ),
+                  ],
                 ),
-                onStrengthChanged:
-                    (index) => ref
-                    .read(controllerStateNotifierProvider.notifier)
-                    .setSwingIntensity(_strengthValues[index]),
-                onSettingsTap: () {},
               ),
-              const SizedBox(height: 18),
-              ControllerSettingCard(
-                title: '震动设置',
-                headerIconAsset: ControllerAssets.vibratingTag,
-                waveformIconAsset: ControllerAssets.vibratingItemTag,
-                waveformPages: vibrationPages,
-                selectedPageIndex: vibrationSelection.pageIndex,
-                selectedItemIndex: vibrationSelection.itemIndex,
-                strengthIndex: _strengthIndexFromValue(
-                  uiState.vibrationIntensity,
-                ),
-                onWaveformSelected:
-                    (pageIndex, itemIndex) => _selectWaveform(
-                  channel: WaveformChannel.vibration,
-                  pageIndex: pageIndex,
-                  itemIndex: itemIndex,
-                  slots: slots,
-                  waveforms: waveforms,
-                ),
-                onStrengthChanged:
-                    (index) => ref
-                    .read(controllerStateNotifierProvider.notifier)
-                    .setVibrationIntensity(_strengthValues[index]),
-                onSettingsTap: () {},
-              ),
-            ],
+            ),
           ),
         ),
         Positioned(
@@ -247,7 +329,11 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
           left: 0,
           right: 0,
           child: IgnorePointer(
-            child: Image.asset(_gradientAsset, height: 40, fit: BoxFit.fill),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: _showTopGradient ? 1 : 0,
+              child: Image.asset(_gradientAsset, height: 60, fit: BoxFit.fill),
+            ),
           ),
         ),
       ],
@@ -296,8 +382,8 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   }
 
   Future<void> _handleConnectionTap(
-      ControllerConnectionFlowState connectionFlow,
-      ) async {
+    ControllerConnectionFlowState connectionFlow,
+  ) async {
     final notifier = ref.read(controllerConnectionFlowProvider.notifier);
 
     if (connectionFlow.isConnected) {
@@ -310,6 +396,13 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
     }
 
     await notifier.startScan();
+  }
+
+  void _showConnectRequiredToast() {
+    if (!mounted) {
+      return;
+    }
+    TopBannerToast.show(context, message: '请先连接设备');
   }
 
   Future<void> _showDeviceSheet() async {
@@ -347,15 +440,15 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
       slots: slots,
     );
     AppLogger().debug(
-      'channel=${channel.name}, pageIndex=$pageIndex, itemIndex=$itemIndex, '
-      'slots=${slots[0].toString()}, waveforms=${waveforms[0].keyframes}',
+      'ControllerScreen: select waveform '
+      'channel=${channel.name} pageIndex=$pageIndex itemIndex=$itemIndex',
     );
     if (selectedSlot == null) {
       return;
     }
 
     final waveform = _findWaveform(selectedSlot.waveformId, waveforms);
-    if (waveform == null) {
+    if (waveform == null || waveform.name.trim().isEmpty) {
       return;
     }
 
@@ -368,23 +461,30 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   }
 
   List<List<ControllerWaveformItemData>> _buildWaveformPages(
-      WaveformChannel channel,
-      List<FavoriteSlot> slots,
-      List<Waveform> waveforms,
-      ) {
+    WaveformChannel channel,
+    List<FavoriteSlot> slots,
+    List<Waveform> waveforms,
+  ) {
     return List.generate(3, (pageIndex) {
       final pageSlots =
-      slots
-          .where(
-            (slot) => slot.channel == channel && slot.page == pageIndex,
-      )
-          .toList()
-        ..sort((a, b) => a.index.compareTo(b.index));
+          slots
+              .where(
+                (slot) => slot.channel == channel && slot.page == pageIndex,
+              )
+              .toList()
+            ..sort((a, b) => a.index.compareTo(b.index));
+      final slotByIndex = {for (final slot in pageSlots) slot.index: slot};
 
-      return pageSlots.map((slot) {
+      return List.generate(4, (itemIndex) {
+        final slot = slotByIndex[itemIndex];
+        if (slot == null) {
+          return const ControllerWaveformItemData(name: '', isEmpty: true);
+        }
+
         final waveform = _findWaveform(slot.waveformId, waveforms);
-        return ControllerWaveformItemData(name: waveform?.name ?? '未命名波形');
-      }).toList();
+        final name = waveform?.name.trim() ?? '';
+        return ControllerWaveformItemData(name: name, isEmpty: name.isEmpty);
+      });
     });
   }
 
@@ -445,18 +545,33 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   }
 }
 
-class _ControllerDeviceSheet extends ConsumerWidget {
+class _ControllerDeviceSheet extends ConsumerStatefulWidget {
   const _ControllerDeviceSheet();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ControllerDeviceSheet> createState() =>
+      _ControllerDeviceSheetState();
+}
+
+class _ControllerDeviceSheetState
+    extends ConsumerState<_ControllerDeviceSheet> {
+  bool _closeRequested = false;
+
+  @override
+  Widget build(BuildContext context) {
     final connectionFlow = ref.watch(controllerConnectionFlowProvider);
 
-    if (connectionFlow.isConnected) {
+    if (connectionFlow.isConnected && !_closeRequested) {
+      _closeRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
+        if (!mounted) {
+          return;
         }
+        final route = ModalRoute.of(context);
+        if (route?.isCurrent != true) {
+          return;
+        }
+        Navigator.of(context).pop();
       });
     }
 
@@ -532,11 +647,11 @@ class _ControllerDeviceSheet extends ConsumerWidget {
                     return ControllerDeviceConnectItem(
                       device: device,
                       isConnecting:
-                      connectionFlow.connectingDeviceId == device.id,
+                          connectionFlow.connectingDeviceId == device.id,
                       onConnect:
                           () => ref
-                          .read(controllerConnectionFlowProvider.notifier)
-                          .connectDevice(device),
+                              .read(controllerConnectionFlowProvider.notifier)
+                              .connectDevice(device),
                     );
                   },
                 ),

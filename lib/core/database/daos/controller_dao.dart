@@ -185,6 +185,20 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
     });
   }
 
+  Future<void> replaceFavoriteSlotsForChannel(
+    String channel,
+    List<FavoriteSlotsCompanion> slots,
+  ) async {
+    await transaction(() async {
+      await (delete(favoriteSlots)
+        ..where((t) => t.channel.equals(channel))).go();
+      if (slots.isEmpty) return;
+      await batch((b) {
+        b.insertAll(favoriteSlots, slots);
+      });
+    });
+  }
+
   // --- 使用日志 ---
 
   Future<void> insertUsageLog(UsageLogsCompanion log) async =>
@@ -202,5 +216,11 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
     await (update(usageLogs)..where(
       (t) => t.id.isIn(ids),
     )).write(const UsageLogsCompanion(isSynced: Value(true)));
+  }
+
+  Future<void> deleteUsageLogs(List<int> ids) async {
+    if (ids.isEmpty) return;
+
+    await (delete(usageLogs)..where((t) => t.id.isIn(ids))).go();
   }
 }

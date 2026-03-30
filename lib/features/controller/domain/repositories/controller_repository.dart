@@ -25,6 +25,15 @@ abstract class ControllerRepository {
     int page,
     List<FavoriteSlot> slots,
   );
+  Future<void> replaceFavoriteSlotsForChannel(
+    WaveformChannel channel,
+    List<FavoriteSlot> slots,
+  );
+  Future<bool> syncChannelConfigFromRemoteResponse(
+    WaveformChannel channel,
+    Map<String, dynamic> response,
+  );
+  Future<void> ensureLocalChannelConfig(WaveformChannel channel);
 
   // --- 设备绑定 ---
   Future<DeviceBinding?> getActiveDeviceBinding();
@@ -36,6 +45,7 @@ abstract class ControllerRepository {
   Future<void> insertUsageLog(UsageLog log);
   Future<List<UsageLog>> getUnsynced();
   Future<void> markSynced(List<int> ids);
+  Future<void> deleteUsageLogs(List<int> ids);
 
   // --- 云同步 ---
   Future<void> syncToCloud();

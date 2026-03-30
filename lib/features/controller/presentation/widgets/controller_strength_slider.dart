@@ -9,12 +9,16 @@ class ControllerStrengthSlider extends StatefulWidget {
     required this.selectedIndex,
     required this.labels,
     required this.onChanged,
+    this.enabled = true,
+    this.onDisabledInteraction,
     super.key,
   });
 
   final int selectedIndex;
   final List<String> labels;
   final ValueChanged<int> onChanged;
+  final bool enabled;
+  final VoidCallback? onDisabledInteraction;
 
   @override
   State<ControllerStrengthSlider> createState() =>
@@ -30,6 +34,8 @@ class _ControllerStrengthSliderState extends State<ControllerStrengthSlider> {
   static const _knobWidth = 22.0;
   static const _knobHeight = 26.0;
   static const _trackTop = 10.0;
+  static const _trackHorizontalInset = 4.0;
+  static const _labelWidth = 22.0;
 
   double? _dragValue;
 
@@ -45,32 +51,59 @@ class _ControllerStrengthSliderState extends State<ControllerStrengthSlider> {
           maxWidth,
         );
         const trackY = _trackTop + (_knobHeight / 2) - (_trackHeight / 2);
-        final fillWidth = knobOffset + (_knobWidth / 2);
+        final trackWidth = math.max(0.0, maxWidth - (_trackHorizontalInset * 2));
+        final fillWidth = math.max(
+          0.0,
+          knobOffset + (_knobWidth / 2) - _trackHorizontalInset,
+        );
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onHorizontalDragStart:
-                  (details) => setState(
-                    () =>
-                        _dragValue = _valueFromOffset(
-                          details.localPosition.dx,
-                          maxWidth,
-                        ),
-                  ),
-              onHorizontalDragUpdate:
-                  (details) => setState(
-                    () =>
-                        _dragValue = _valueFromOffset(
-                          details.localPosition.dx,
-                          maxWidth,
-                        ),
-                  ),
-              onHorizontalDragEnd: (_) => _commitDrag(maxIndex),
-              onHorizontalDragCancel: () => _commitDrag(maxIndex),
+              onHorizontalDragStart: (details) {
+                if (!widget.enabled) {
+                  widget.onDisabledInteraction?.call();
+                  return;
+                }
+                setState(
+                  () =>
+                      _dragValue = _valueFromOffset(
+                        details.localPosition.dx,
+                        maxWidth,
+                      ),
+                );
+              },
+              onHorizontalDragUpdate: (details) {
+                if (!widget.enabled) {
+                  return;
+                }
+                setState(
+                  () =>
+                      _dragValue = _valueFromOffset(
+                        details.localPosition.dx,
+                        maxWidth,
+                      ),
+                );
+              },
+              onHorizontalDragEnd: (_) {
+                if (!widget.enabled) {
+                  return;
+                }
+                _commitDrag(maxIndex);
+              },
+              onHorizontalDragCancel: () {
+                if (!widget.enabled) {
+                  return;
+                }
+                _commitDrag(maxIndex);
+              },
               onTapDown: (details) {
+                if (!widget.enabled) {
+                  widget.onDisabledInteraction?.call();
+                  return;
+                }
                 final nextValue = _valueFromOffset(
                   details.localPosition.dx,
                   maxWidth,
@@ -84,8 +117,8 @@ class _ControllerStrengthSliderState extends State<ControllerStrengthSlider> {
                   clipBehavior: Clip.none,
                   children: [
                     Positioned(
-                      left: 0,
-                      right: 0,
+                      left: _trackHorizontalInset,
+                      width: trackWidth,
                       top: trackY,
                       child: Container(
                         height: _trackHeight,
@@ -96,7 +129,7 @@ class _ControllerStrengthSliderState extends State<ControllerStrengthSlider> {
                       ),
                     ),
                     Positioned(
-                      left: 0,
+                      left: _trackHorizontalInset,
                       width: fillWidth,
                       top: trackY,
                       child: Container(
@@ -135,25 +168,33 @@ class _ControllerStrengthSliderState extends State<ControllerStrengthSlider> {
               ),
             ),
             const SizedBox(height: 8),
-            Row(
-              children: List.generate(widget.labels.length, (index) {
-                return Expanded(
-                  child: Text(
-                    widget.labels[index],
-                    textAlign:
-                        index == 0
-                            ? TextAlign.left
-                            : index == widget.labels.length - 1
-                            ? TextAlign.right
-                            : TextAlign.center,
-                    style: const TextStyle(
-                      color: _labelColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+            SizedBox(
+              height: 18,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: List.generate(widget.labels.length, (index) {
+                  final centerX = _centerForIndex(index, maxWidth);
+                  final left = index == 0
+                      ? 0.0
+                      : index == widget.labels.length - 1
+                      ? maxWidth - _labelWidth
+                      : centerX - (_labelWidth / 2);
+
+                  return Positioned(
+                    left: left,
+                    width: _labelWidth,
+                    child: Text(
+                      widget.labels[index],
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: _labelColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                );
-              }),
+                  );
+                }),
+              ),
             ),
           ],
         );
