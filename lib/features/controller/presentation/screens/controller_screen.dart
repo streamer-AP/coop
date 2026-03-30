@@ -35,6 +35,7 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
 
   bool _isDeviceSheetOpen = false;
   bool _showTopGradient = false;
+  late final Future<void> _waveformConfigBootstrapFuture;
 
   @override
   void initState() {
@@ -73,27 +74,53 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
       },
     );
 
-    unawaited(_requestDefaultWaveformConfigs());
+    _waveformConfigBootstrapFuture = _requestDefaultWaveformConfigs();
   }
 
   Future<void> _requestDefaultWaveformConfigs() async {
     final apiClient = ref.read(apiClientProvider);
+    final repository = ref.read(controllerRepositoryProvider);
 
-    try {
-      await Future.wait([
-        apiClient.get(ApiEndpoints.querySwing),
-        apiClient.get(ApiEndpoints.queryVibration),
-      ]);
-    } catch (error, stackTrace) {
-      AppLogger().warning(
-        'ControllerScreen: preload default waveform configs failed',
-      );
-      AppLogger().error(
-        'ControllerScreen: preload default waveform configs error',
-        error: error,
-        stackTrace: stackTrace,
-      );
+    Future<void> syncChannel({
+      required WaveformChannel channel,
+      required String endpoint,
+    }) async {
+      var synced = false;
+      try {
+        final response = await apiClient.get(endpoint);
+        synced = await repository.syncChannelConfigFromRemoteResponse(
+          channel,
+          response,
+        );
+      } catch (error, stackTrace) {
+        AppLogger().warning(
+          'ControllerScreen: preload ${channel.name} waveform configs failed',
+        );
+        AppLogger().error(
+          'ControllerScreen: preload ${channel.name} waveform configs error',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+
+      if (!synced) {
+        await repository.ensureLocalChannelConfig(channel);
+      }
     }
+
+    await Future.wait([
+      syncChannel(
+        channel: WaveformChannel.swing,
+        endpoint: ApiEndpoints.querySwing,
+      ),
+      syncChannel(
+        channel: WaveformChannel.vibration,
+        endpoint: ApiEndpoints.queryVibration,
+      ),
+    ]);
+
+    ref.invalidate(waveformsProvider);
+    ref.invalidate(favoriteSlotsProvider);
   }
 
   void _handleContentScroll(double offset) {
@@ -109,9 +136,6 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
   @override
   Widget build(BuildContext context) {
     final connectionFlow = ref.watch(controllerConnectionFlowProvider);
-    final uiState = ref.watch(controllerStateNotifierProvider);
-    final favoriteSlotsAsync = ref.watch(favoriteSlotsProvider);
-    final waveformsAsync = ref.watch(waveformsProvider);
 
     return Scaffold(
       backgroundColor: ControllerAssets.background,
@@ -141,28 +165,40 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
                   ),
                 ),
                 Expanded(
-                  child: favoriteSlotsAsync.when(
-                    data:
-                        (slots) => waveformsAsync.when(
-                          data:
-                              (waveforms) => _buildControlContent(
-                                slots,
-                                waveforms,
-                                uiState,
-                                connectionFlow.isConnected,
-                              ),
-                          loading:
-                              () => const Center(
-                                // child: CircularProgressIndicator(),
-                              ),
-                          error:
-                              // (error, _) => Center(child: Text('波形加载失败：$error')),
-                              (error, _) => const Center(),
-                        ),
-                    loading: () => const Center(),
-                    error: (error, _) {
-                      AppLogger().debug('error=$error');
-                      return const Center();
+                  child: FutureBuilder<void>(
+                    future: _waveformConfigBootstrapFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Center();
+                      }
+
+                      final uiState = ref.watch(
+                        controllerStateNotifierProvider,
+                      );
+                      final favoriteSlotsAsync = ref.watch(
+                        favoriteSlotsProvider,
+                      );
+                      final waveformsAsync = ref.watch(waveformsProvider);
+
+                      return favoriteSlotsAsync.when(
+                        data:
+                            (slots) => waveformsAsync.when(
+                              data:
+                                  (waveforms) => _buildControlContent(
+                                    slots,
+                                    waveforms,
+                                    uiState,
+                                    connectionFlow.isConnected,
+                                  ),
+                              loading: () => const Center(),
+                              error: (error, _) => const Center(),
+                            ),
+                        loading: () => const Center(),
+                        error: (error, _) {
+                          AppLogger().debug('error=$error');
+                          return const Center();
+                        },
+                      );
                     },
                   ),
                 ),
@@ -403,15 +439,15 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
       slots: slots,
     );
     AppLogger().debug(
-      'channel=${channel.name}, pageIndex=$pageIndex, itemIndex=$itemIndex, '
-      'slots=${slots[0].toString()}, waveforms=${waveforms[0].keyframes}',
+      'ControllerScreen: select waveform '
+      'channel=${channel.name} pageIndex=$pageIndex itemIndex=$itemIndex',
     );
     if (selectedSlot == null) {
       return;
     }
 
     final waveform = _findWaveform(selectedSlot.waveformId, waveforms);
-    if (waveform == null) {
+    if (waveform == null || waveform.name.trim().isEmpty) {
       return;
     }
 
@@ -436,11 +472,18 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
               )
               .toList()
             ..sort((a, b) => a.index.compareTo(b.index));
+      final slotByIndex = {for (final slot in pageSlots) slot.index: slot};
 
-      return pageSlots.map((slot) {
+      return List.generate(4, (itemIndex) {
+        final slot = slotByIndex[itemIndex];
+        if (slot == null) {
+          return const ControllerWaveformItemData(name: '', isEmpty: true);
+        }
+
         final waveform = _findWaveform(slot.waveformId, waveforms);
-        return ControllerWaveformItemData(name: waveform?.name ?? '未命名波形');
-      }).toList();
+        final name = waveform?.name.trim() ?? '';
+        return ControllerWaveformItemData(name: name, isEmpty: name.isEmpty);
+      });
     });
   }
 

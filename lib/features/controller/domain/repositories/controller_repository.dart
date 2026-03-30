@@ -29,6 +29,11 @@ abstract class ControllerRepository {
     WaveformChannel channel,
     List<FavoriteSlot> slots,
   );
+  Future<bool> syncChannelConfigFromRemoteResponse(
+    WaveformChannel channel,
+    Map<String, dynamic> response,
+  );
+  Future<void> ensureLocalChannelConfig(WaveformChannel channel);
 
   // --- 设备绑定 ---
   Future<DeviceBinding?> getActiveDeviceBinding();

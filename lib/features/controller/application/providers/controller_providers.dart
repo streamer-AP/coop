@@ -97,36 +97,26 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
   void _syncDefaultSelections() {
     final slots = ref.read(favoriteSlotsProvider).valueOrNull;
     final allWaveforms = ref.read(waveformsProvider).valueOrNull;
-    if (slots == null || allWaveforms == null || allWaveforms.isEmpty) {
+    if (slots == null || allWaveforms == null) {
       return;
     }
 
-    var nextSwingWaveform = state.selectedSwingWaveform;
-    var nextVibrationWaveform = state.selectedVibrationWaveform;
-    var didChange = false;
+    final nextSwingWaveform = _resolveCurrentOrDefaultWaveform(
+      channel: WaveformChannel.swing,
+      currentWaveform: state.selectedSwingWaveform,
+      slots: slots,
+      waveforms: allWaveforms,
+    );
+    final nextVibrationWaveform = _resolveCurrentOrDefaultWaveform(
+      channel: WaveformChannel.vibration,
+      currentWaveform: state.selectedVibrationWaveform,
+      slots: slots,
+      waveforms: allWaveforms,
+    );
 
-    if (nextSwingWaveform == null) {
-      nextSwingWaveform = _findDefaultWaveform(
-        channel: WaveformChannel.swing,
-        slots: slots,
-        waveforms: allWaveforms,
-      );
-      if (nextSwingWaveform != null) {
-        didChange = true;
-      }
-    }
-
-    if (nextVibrationWaveform == null) {
-      nextVibrationWaveform = _findDefaultWaveform(
-        channel: WaveformChannel.vibration,
-        slots: slots,
-        waveforms: allWaveforms,
-      );
-      if (nextVibrationWaveform != null) {
-        didChange = true;
-      }
-    }
-
+    final didChange =
+        nextSwingWaveform?.id != state.selectedSwingWaveform?.id ||
+        nextVibrationWaveform?.id != state.selectedVibrationWaveform?.id;
     if (!didChange) {
       return;
     }
@@ -137,11 +127,41 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
       'vibration=${nextVibrationWaveform?.name}',
     );
 
-    state = state.copyWith(
+    state = ControllerUiState(
+      selectedPage: state.selectedPage,
+      lastSelectedPage: state.lastSelectedPage,
       selectedSwingWaveform: nextSwingWaveform,
       selectedVibrationWaveform: nextVibrationWaveform,
+      swingIntensity: state.swingIntensity,
+      vibrationIntensity: state.vibrationIntensity,
     );
     _updatePlayer();
+  }
+
+  Waveform? _resolveCurrentOrDefaultWaveform({
+    required WaveformChannel channel,
+    required Waveform? currentWaveform,
+    required List<domain.FavoriteSlot> slots,
+    required List<Waveform> waveforms,
+  }) {
+    if (currentWaveform != null) {
+      final stillExists = slots.any(
+        (slot) =>
+            slot.channel == channel && slot.waveformId == currentWaveform.id,
+      );
+      if (stillExists && currentWaveform.name.trim().isNotEmpty) {
+        return waveforms
+                .where((waveform) => waveform.id == currentWaveform.id)
+                .firstOrNull ??
+            currentWaveform;
+      }
+    }
+
+    return _findDefaultWaveform(
+      channel: channel,
+      slots: slots,
+      waveforms: waveforms,
+    );
   }
 
   Waveform? _findDefaultWaveform({
@@ -149,10 +169,11 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
     required List<domain.FavoriteSlot> slots,
     required List<Waveform> waveforms,
   }) {
-    final pageZeroSlots = slots
-        .where((slot) => slot.channel == channel && slot.page == 0)
-        .toList()
-      ..sort((a, b) => a.index.compareTo(b.index));
+    final pageZeroSlots =
+        slots
+            .where((slot) => slot.channel == channel && slot.page == 0)
+            .toList()
+          ..sort((a, b) => a.index.compareTo(b.index));
     if (pageZeroSlots.isEmpty) {
       return null;
     }

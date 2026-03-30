@@ -4,9 +4,10 @@ import '../../controller_assets.dart';
 import 'controller_strength_slider.dart';
 
 class ControllerWaveformItemData {
-  const ControllerWaveformItemData({required this.name});
+  const ControllerWaveformItemData({required this.name, this.isEmpty = false});
 
   final String name;
+  final bool isEmpty;
 }
 
 class ControllerSettingCard extends StatefulWidget {
@@ -85,7 +86,7 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
           children: [
             Row(
               children: [
-                const SizedBox(width: 26,height: 10,),
+                const SizedBox(width: 26, height: 10),
                 const Spacer(),
                 Image.asset(
                   widget.headerIconAsset,
@@ -170,15 +171,18 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                         children: List.generate(items.length, (itemIndex) {
                           final item = items[itemIndex];
                           final isSelected =
+                              !item.isEmpty &&
                               widget.selectedPageIndex == pageIndex &&
                               widget.selectedItemIndex == itemIndex;
 
                           return GestureDetector(
                             onTap:
-                                () => widget.onWaveformSelected(
-                                  pageIndex,
-                                  itemIndex,
-                                ),
+                                item.isEmpty
+                                    ? null
+                                    : () => widget.onWaveformSelected(
+                                      pageIndex,
+                                      itemIndex,
+                                    ),
                             child: Container(
                               width: itemWidth,
                               height: 44,
@@ -195,29 +199,32 @@ class _ControllerSettingCardState extends State<ControllerSettingCard> {
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                               ),
-                              child: Row(
-                                children: [
-                                  Image.asset(
-                                    widget.waveformIconAsset,
-                                    width: 20,
-                                    height: 20,
-                                    fit: BoxFit.contain,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      item.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
+                              child:
+                                  item.isEmpty
+                                      ? const SizedBox.expand()
+                                      : Row(
+                                        children: [
+                                          Image.asset(
+                                            widget.waveformIconAsset,
+                                            width: 20,
+                                            height: 20,
+                                            fit: BoxFit.contain,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              item.name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                  ),
-                                ],
-                              ),
                             ),
                           );
                         }),

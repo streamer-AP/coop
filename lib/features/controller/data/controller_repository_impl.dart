@@ -9,6 +9,7 @@ import '../domain/models/device_binding.dart';
 import '../domain/models/favorite_slot.dart';
 import '../domain/models/usage_log.dart';
 import '../domain/models/waveform.dart';
+import 'controller_waveform_config_codec.dart';
 import '../domain/repositories/controller_repository.dart';
 
 class ControllerRepositoryImpl implements ControllerRepository {
@@ -231,6 +232,91 @@ class ControllerRepositoryImpl implements ControllerRepository {
         .toList(),
   );
 
+  @override
+  Future<bool> syncChannelConfigFromRemoteResponse(
+    WaveformChannel channel,
+    Map<String, dynamic> response,
+  ) async {
+    final decodedSlots = ControllerWaveformConfigCodec.decodeRemoteSlots(
+      channel: channel,
+      response: response,
+    );
+    if (decodedSlots == null) {
+      return false;
+    }
+
+    final existingWaveforms =
+        (await _dao.getWaveformsByChannel(
+          channel.name,
+        )).map(_toWaveformDomain).toList();
+    final existingByName = <String, Waveform>{
+      for (final waveform in existingWaveforms) waveform.name.trim(): waveform,
+    };
+
+    final favoriteSlots = <FavoriteSlot>[];
+    for (final decodedSlot in decodedSlots) {
+      if (decodedSlot.isEmpty) {
+        continue;
+      }
+
+      final waveformName = decodedSlot.waveform.name.trim();
+      final existing = existingByName[waveformName];
+      final waveformId = await saveWaveform(
+        decodedSlot.waveform.copyWith(id: existing?.id ?? 0),
+      );
+      existingByName[waveformName] = decodedSlot.waveform.copyWith(
+        id: waveformId,
+      );
+      favoriteSlots.add(
+        FavoriteSlot(
+          channel: channel,
+          page: decodedSlot.page,
+          index: decodedSlot.index,
+          waveformId: waveformId,
+        ),
+      );
+    }
+
+    if (favoriteSlots.isEmpty) {
+      final blankMarker = existingByName[''];
+      await saveWaveform(
+        Waveform(
+          id: blankMarker?.id ?? 0,
+          name: '',
+          channel: channel,
+          durationMs: 0,
+          signalIntervalMs: 200,
+          signalDelayMs: 0,
+          isBuiltIn: true,
+          keyframes: const [],
+        ),
+      );
+    }
+
+    await replaceFavoriteSlotsForChannel(channel, favoriteSlots);
+    return true;
+  }
+
+  @override
+  Future<void> ensureLocalChannelConfig(WaveformChannel channel) async {
+    await _ensureLocalDebugWaveformData();
+
+    final channelSlots = await _dao.getFavoriteSlotsByChannel(channel.name);
+    if (channelSlots.isNotEmpty) {
+      return;
+    }
+
+    final channelWaveforms =
+        (await _dao.getWaveformsByChannel(
+          channel.name,
+        )).map(_toWaveformDomain).toList();
+    if (_hasBlankConfigMarker(channel, channelWaveforms)) {
+      return;
+    }
+
+    await _seedDebugFavoriteSlotsForChannel(channel, channelWaveforms);
+  }
+
   // --- 设备绑定 ---
 
   @override
@@ -370,12 +456,37 @@ class ControllerRepositoryImpl implements ControllerRepository {
   }) async {
     final channelSlots =
         existingSlots.where((slot) => slot.channel == channel.name).toList();
-    final occupiedPositions =
-        channelSlots.map((slot) => '${slot.page}:${slot.slotIndex}').toSet();
-    final usedWaveformIds = channelSlots.map((slot) => slot.waveformId).toSet();
+    if (channelSlots.isNotEmpty || _hasBlankConfigMarker(channel, waveforms)) {
+      return;
+    }
 
+    await _seedDebugFavoriteSlotsForChannel(channel, waveforms, orderedNames);
+  }
+
+  Future<void> _seedDebugFavoriteSlotsForChannel(
+    WaveformChannel channel, [
+    List<Waveform>? allWaveforms,
+    List<String>? orderedNames,
+  ]) async {
+    final waveforms =
+        allWaveforms ??
+        (await _dao.getAllWaveforms()).map(_toWaveformDomain).toList();
+    final channelSlots = await _dao.getFavoriteSlotsByChannel(channel.name);
+    if (channelSlots.isNotEmpty || _hasBlankConfigMarker(channel, waveforms)) {
+      return;
+    }
+
+    final names =
+        orderedNames ??
+        (channel == WaveformChannel.swing
+            ? _buildSwingDebugWaveforms()
+                .map((waveform) => waveform.name)
+                .toList()
+            : _buildVibrationDebugWaveforms()
+                .map((waveform) => waveform.name)
+                .toList());
     final orderedWaveforms = <Waveform>[];
-    for (final name in orderedNames) {
+    for (final name in names) {
       for (final waveform in waveforms) {
         if (waveform.channel == channel && waveform.name == name) {
           orderedWaveforms.add(waveform);
@@ -384,33 +495,38 @@ class ControllerRepositoryImpl implements ControllerRepository {
       }
     }
 
-    final availableWaveforms =
-        orderedWaveforms
-            .where((waveform) => !usedWaveformIds.contains(waveform.id))
-            .toList();
+    final favoriteSlots = <FavoriteSlot>[];
     var nextWaveformIndex = 0;
-
     for (var page = 0; page < 3; page++) {
       for (var index = 0; index < 4; index++) {
-        final positionKey = '$page:$index';
-        if (occupiedPositions.contains(positionKey)) {
-          continue;
-        }
-        if (nextWaveformIndex >= availableWaveforms.length) {
+        if (nextWaveformIndex >= orderedWaveforms.length) {
+          await replaceFavoriteSlotsForChannel(channel, favoriteSlots);
           return;
         }
-
-        final waveform = availableWaveforms[nextWaveformIndex++];
-        await setFavoriteSlot(
+        favoriteSlots.add(
           FavoriteSlot(
             channel: channel,
             page: page,
             index: index,
-            waveformId: waveform.id,
+            waveformId: orderedWaveforms[nextWaveformIndex++].id,
           ),
         );
       }
     }
+
+    await replaceFavoriteSlotsForChannel(channel, favoriteSlots);
+  }
+
+  bool _hasBlankConfigMarker(
+    WaveformChannel channel,
+    List<Waveform> waveforms,
+  ) {
+    return waveforms.any(
+      (waveform) =>
+          waveform.channel == channel &&
+          waveform.isBuiltIn &&
+          waveform.name.trim().isEmpty,
+    );
   }
 
   List<Waveform> _buildSwingDebugWaveforms() {

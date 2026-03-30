@@ -1,9 +1,8 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../controller_assets.dart';
 import '../../application/providers/controller_providers.dart';
+import '../../data/controller_waveform_config_codec.dart';
 import '../../domain/models/favorite_slot.dart';
 import '../../domain/models/waveform.dart';
 import '../../../../core/network/api_client.dart';
@@ -351,7 +350,12 @@ class _EditWaveformsMainScreenState
     List<Waveform> waveforms,
   ) {
     return waveforms
-        .where((waveform) => waveform.channel == channel && waveform.isBuiltIn)
+        .where(
+          (waveform) =>
+              waveform.channel == channel &&
+              waveform.isBuiltIn &&
+              waveform.name.trim().isNotEmpty,
+        )
         .toList();
   }
 
@@ -360,7 +364,12 @@ class _EditWaveformsMainScreenState
     List<Waveform> waveforms,
   ) {
     return waveforms
-        .where((waveform) => waveform.channel == channel && !waveform.isBuiltIn)
+        .where(
+          (waveform) =>
+              waveform.channel == channel &&
+              !waveform.isBuiltIn &&
+              waveform.name.trim().isNotEmpty,
+        )
         .toList();
   }
 
@@ -391,7 +400,7 @@ class _EditWaveformsMainScreenState
           currentChannel == WaveformChannel.swing
               ? ApiEndpoints.saveSwing
               : ApiEndpoints.saveVibration;
-      final payload = _buildWaveformSavePayload(pages);
+      final payload = ControllerWaveformConfigCodec.buildSavePayload(pages);
       final json = await apiClient.post(endpoint, data: payload);
       final code = json['code'] as int?;
       if (code != 200 && code != 0) {
@@ -430,88 +439,6 @@ class _EditWaveformsMainScreenState
         });
       }
     }
-  }
-
-  Map<String, dynamic> _buildWaveformSavePayload(List<List<Waveform>> pages) {
-    final flatWaveforms = pages.expand((page) => page).toList();
-    final payload = <String, dynamic>{};
-
-    for (var i = 0; i < 12; i++) {
-      final waveform = flatWaveforms[i];
-      payload['waveform${i + 1}'] =
-          waveform.name.trim().isEmpty ? '' : waveform.name.trim();
-    }
-
-    payload['optionalWaveformsData'] = List.generate(
-      flatWaveforms.length,
-      (index) => _buildOptionalWaveformData(flatWaveforms[index]),
-    );
-
-    return payload;
-  }
-
-  Map<String, dynamic> _buildOptionalWaveformData(Waveform waveform) {
-    final name = waveform.name.trim();
-    if (name.isEmpty) {
-      return {'waveformName': '', 'sliderValue': []};
-    }
-
-    final sliderValue =
-        List.generate(
-          4,
-          (pageIndex) => _buildSliderPageData(waveform, pageIndex),
-        ).where((page) => page.isNotEmpty).toList();
-
-    return {
-      'waveformName': name,
-      if (sliderValue.isNotEmpty) 'sliderValue': sliderValue,
-    };
-  }
-
-  Map<String, dynamic> _buildSliderPageData(Waveform waveform, int pageIndex) {
-    final enabledPages = math.max(1, (waveform.durationMs / 8000).ceil());
-    if (pageIndex >= enabledPages) {
-      return {};
-    }
-
-    final pageStartMs = pageIndex * 8000;
-    final values = List<int>.filled(8, 0);
-    var hasValue = false;
-
-    final pageKeyframes =
-        waveform.keyframes
-            .where(
-              (keyframe) =>
-                  keyframe.timeMs >= pageStartMs &&
-                  keyframe.timeMs < pageStartMs + 8000,
-            )
-            .toList()
-          ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
-
-    for (final keyframe in pageKeyframes) {
-      final relativeMs = keyframe.timeMs - pageStartMs;
-      final valueIndex = relativeMs ~/ 1000;
-      if (valueIndex < 0 || valueIndex >= values.length) {
-        continue;
-      }
-      values[valueIndex] = keyframe.value;
-      hasValue = true;
-    }
-
-    if (!hasValue) {
-      return {};
-    }
-
-    return {
-      'value1': values[0],
-      'value2': values[1],
-      'value3': values[2],
-      'value4': values[3],
-      'value5': values[4],
-      'value6': values[5],
-      'value7': values[6],
-      'value8': values[7],
-    };
   }
 
   void _addWaveformToCurrentPage({
