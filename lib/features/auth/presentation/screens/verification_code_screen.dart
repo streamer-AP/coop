@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../shared/widgets/pin_code_input.dart';
 import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../application/providers/auth_providers.dart';
@@ -116,8 +118,44 @@ class _VerificationCodeScreenState
     if (_isSubmitting) return;
 
     setState(() => _isSubmitting = true);
-    if (!mounted) return;
-    Navigator.of(context).pop(code);
+
+    try {
+      switch (widget.flow) {
+        case VerificationCodeFlow.login:
+          await ref
+              .read(authNotifierProvider.notifier)
+              .loginWithCode(phone: widget.phone, code: code);
+
+          if (!mounted) return;
+          final authState = ref.read(authNotifierProvider);
+          if (authState.hasError) {
+            TopBannerToast.show(
+              context,
+              message:
+                  authState.error is AuthException
+                      ? (authState.error as AuthException).displayMessage
+                      : '登录失败，请重试',
+            );
+            setState(() => _isSubmitting = false);
+            return;
+          }
+
+          context.goNamed(RouteNames.home);
+          return;
+        case VerificationCodeFlow.register:
+        case VerificationCodeFlow.forgotPassword:
+          if (!mounted) return;
+          Navigator.of(context).pop(code);
+          return;
+      }
+    } catch (error) {
+      if (!mounted) return;
+      TopBannerToast.show(
+        context,
+        message: error is AuthException ? error.displayMessage : '验证码校验失败',
+      );
+      setState(() => _isSubmitting = false);
+    }
   }
 
   String get _maskedPhone {

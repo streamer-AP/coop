@@ -150,11 +150,12 @@ class AuthRepositoryImpl implements AuthRepository {
       final code = json['code'] as int?;
       if (code == 200 && json['data'] != null) {
         final data = json['data'] as Map<String, dynamic>;
-        final residentStatus = data['residentStatus'] as String? ?? '0';
+        final residentStatus =
+            (_readField(data, const ['residentStatus']) as String?) ?? '0';
         final user = User(
           id: _extractUserId(data),
-          phone: data['mobile'] as String? ?? '',
-          nickname: _normalizeOptionalString(data['userName']),
+          phone: (_readField(data, const ['mobile', 'phone']) as String?) ?? '',
+          nickname: _extractNickname(data),
           token: token,
           verificationStatus: switch (residentStatus) {
             '1' => VerificationStatus.verified,
@@ -256,16 +257,20 @@ class AuthRepositoryImpl implements AuthRepository {
   User _parseUserResponse(Map<String, dynamic> json) {
     final data = json['data'] as Map<String, dynamic>? ?? {};
     final token =
-        data['token'] as String? ??
-        data['accessToken'] as String? ??
-        data['tokenValue'] as String? ??
-        data['satoken'] as String?;
-    final residentStatus = data['residentStatus'] as String? ?? '0';
+        _readField(data, const [
+              'token',
+              'accessToken',
+              'tokenValue',
+              'satoken',
+            ])
+            as String?;
+    final residentStatus =
+        (_readField(data, const ['residentStatus']) as String?) ?? '0';
 
     return User(
       id: _extractUserId(data),
-      phone: data['mobile'] as String? ?? '',
-      nickname: _normalizeOptionalString(data['userName']),
+      phone: (_readField(data, const ['mobile', 'phone']) as String?) ?? '',
+      nickname: _extractNickname(data),
       token: token,
       needsPasswordSetup: data['needsPasswordSetup'] as bool? ?? false,
       verificationStatus: switch (residentStatus) {
@@ -283,9 +288,9 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   String _extractUserId(Map<String, dynamic> data) {
-    final id = data['id'];
-    final userId = data['userId'];
-    final loginId = data['loginId'];
+    final id = _readField(data, const ['id']);
+    final userId = _readField(data, const ['userId']);
+    final loginId = _readField(data, const ['loginId']);
     AppLogger().info(
       '[Auth] _extractUserId: id=$id, userId=$userId, loginId=$loginId',
     );
@@ -301,5 +306,48 @@ class AuthRepositoryImpl implements AuthRepository {
       return null;
     }
     return normalized;
+  }
+
+  String? _extractNickname(Map<String, dynamic> data) {
+    return _normalizeOptionalString(
+      _readField(data, const [
+        'userName',
+        'username',
+        'nickName',
+        'nickname',
+        'name',
+      ]),
+    );
+  }
+
+  Object? _readField(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final direct = data[key];
+      if (direct != null) {
+        return direct;
+      }
+    }
+
+    for (final nestedKey in const [
+      'userInfo',
+      'userAccount',
+      'account',
+      'profile',
+    ]) {
+      final nested = data[nestedKey];
+      if (nested is! Map) {
+        continue;
+      }
+
+      final nestedMap = Map<String, dynamic>.from(nested);
+      for (final key in keys) {
+        final value = nestedMap[key];
+        if (value != null) {
+          return value;
+        }
+      }
+    }
+
+    return null;
   }
 }

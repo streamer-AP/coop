@@ -16,6 +16,7 @@ class ApiEndpoints {
   static const String forgotPwdSendCode = '/auth/forgot-pwd/send-code';
   static const String sendLoginCode = '/auth/sendLoginCode';
   static const String sendRegisterCode = '/auth/sendRegisterCode';
+  static const String sendCancelCode = '/auth/sendCancelCode';
   static const String logout = '/auth/logout';
   static const String deactivateAccount = '/auth/cancel';
   static const String getCurrentUserInfo = '/auth/getCurrentUserInfo';

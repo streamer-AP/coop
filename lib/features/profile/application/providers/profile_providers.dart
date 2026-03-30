@@ -24,8 +24,24 @@ ProfileRepository profileRepository(Ref ref) {
 class ProfileNotifier extends _$ProfileNotifier {
   @override
   Future<Profile> build() async {
-    ref.watch(authNotifierProvider.select((value) => value.valueOrNull?.id));
-    return ref.watch(profileRepositoryProvider).getProfile();
+    final authUser = ref.watch(authNotifierProvider).valueOrNull;
+    final profile = await ref.watch(profileRepositoryProvider).getProfile();
+
+    final authNickname = authUser?.nickname?.trim();
+    final profileNickname = profile.nickname?.trim();
+    final authUserId = authUser?.id.trim() ?? '';
+
+    return profile.copyWith(
+      userId: profile.userId.trim().isNotEmpty ? profile.userId : authUserId,
+      nickname:
+          (profileNickname?.isNotEmpty ?? false)
+              ? profile.nickname
+              : ((authNickname?.isNotEmpty ?? false) ? authNickname : null),
+      phone:
+          (profile.phone?.trim().isNotEmpty ?? false)
+              ? profile.phone
+              : authUser?.phone,
+    );
   }
 
   Future<void> updateNickname(String nickname) async {

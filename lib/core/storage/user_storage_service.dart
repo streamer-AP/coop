@@ -160,14 +160,40 @@ class UserStorageNotifier extends _$UserStorageNotifier {
     });
   }
 
-  /// 登出时清理。
-  Future<void> clear() async {
+  /// 登出时清理。账号注销场景可额外删除当前用户的本地目录。
+  Future<void> clear({bool deleteCurrentUserData = false}) async {
     await _enqueueOperation(() async {
       final previousUserId = _current?.userId;
+      final previousUserRoot = _current?._userRoot;
       await _current?.dispose();
       _current = null;
       state = const AsyncLoading();
-      _bumpEpoch('clear:${previousUserId ?? 'none'}');
+      _bumpEpoch(
+        '${deleteCurrentUserData ? 'purge' : 'clear'}:${previousUserId ?? 'none'}',
+      );
+
+      if (!deleteCurrentUserData ||
+          previousUserRoot == null ||
+          previousUserRoot.isEmpty) {
+        return;
+      }
+
+      final userRootDir = Directory(previousUserRoot);
+      try {
+        if (await userRootDir.exists()) {
+          await userRootDir.delete(recursive: true);
+          AppLogger().info(
+            '[UserStorage] deleted user root: userId=${previousUserId ?? ''}, '
+            'path=$previousUserRoot',
+          );
+        }
+      } catch (error, stackTrace) {
+        AppLogger().error(
+          '[UserStorage] failed to delete user root: path=$previousUserRoot',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
     });
   }
 }

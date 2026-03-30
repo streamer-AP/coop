@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../features/auth/domain/models/auth_exception.dart';
 
 class VerificationCodeInput extends StatefulWidget {
   const VerificationCodeInput({
@@ -49,7 +50,10 @@ class _VerificationCodeInputState extends State<VerificationCodeInput> {
       await widget.onSendCode?.call();
     } catch (error) {
       if (!mounted) return;
-      final message = '$error'.replaceFirst('Exception: ', '').trim();
+      final message =
+          error is AuthException
+              ? error.displayMessage
+              : '$error'.replaceFirst('Exception: ', '').trim();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message.isEmpty ? '验证码发送失败' : message)),
       );

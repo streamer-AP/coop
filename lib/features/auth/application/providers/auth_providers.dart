@@ -105,12 +105,14 @@ class AuthNotifier extends _$AuthNotifier {
     state = AsyncData(current.copyWith(nickname: nickname));
   }
 
-  Future<void> logout() async {
+  Future<void> logout({bool purgeLocalData = false}) async {
     // 停止播放器
     ref.read(playerStateNotifierProvider.notifier).clearPlaylist();
 
-    // 清理用户存储
-    await ref.read(userStorageNotifierProvider.notifier).clear();
+    // 清理用户存储；账号注销场景需要连同本地用户目录一起清除。
+    await ref
+        .read(userStorageNotifierProvider.notifier)
+        .clear(deleteCurrentUserData: purgeLocalData);
 
     // 调用后端登出 + 清除 token
     await ref.read(authRepositoryProvider).logout();

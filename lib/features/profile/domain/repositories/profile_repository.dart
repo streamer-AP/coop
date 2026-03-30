@@ -16,6 +16,7 @@ abstract class ProfileRepository {
     required String newPassword,
   });
   Future<void> sendPasswordResetCode(String phone);
+  Future<void> sendDeactivateCode(String phone);
   Future<void> changePhone({
     required String oldPhone,
     required String oldCode,

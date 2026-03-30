@@ -5,6 +5,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/purple_gradient_button.dart';
 import '../../../../shared/widgets/verification_code_input.dart';
 import '../../../auth/application/providers/auth_providers.dart';
+import '../../../resonance/application/providers/resonance_providers.dart';
+import '../../../resonance/application/services/export_service.dart';
 import '../../application/providers/profile_providers.dart';
 
 class DeactivateAccountScreen extends ConsumerStatefulWidget {
@@ -19,6 +21,7 @@ class _DeactivateAccountScreenState
     extends ConsumerState<DeactivateAccountScreen> {
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -52,8 +55,8 @@ class _DeactivateAccountScreenState
                 codeController: _codeController,
                 onSendCode:
                     () => ref
-                        .read(authNotifierProvider.notifier)
-                        .sendVerificationCode(_phoneController.text),
+                        .read(profileRepositoryProvider)
+                        .sendDeactivateCode(_phoneController.text),
               ),
               const SizedBox(height: 40),
               Row(
@@ -61,23 +64,31 @@ class _DeactivateAccountScreenState
                   Expanded(
                     child: PurpleGradientButton(
                       text: '取消',
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed:
+                          _isSubmitting
+                              ? null
+                              : () => Navigator.of(context).pop(),
+                      enabled: !_isSubmitting,
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => _showExportDialog(context),
+                      onTap:
+                          _isSubmitting ? null : () => _showExportDialog(context),
                       child: Container(
                         height: 48,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF5F5F5),
+                          color:
+                              _isSubmitting
+                                  ? const Color(0xFFE2E2E2)
+                                  : const Color(0xFFF5F5F5),
                           borderRadius: BorderRadius.circular(24),
                         ),
                         alignment: Alignment.center,
-                        child: const Text(
-                          '确定注销',
-                          style: TextStyle(
+                        child: Text(
+                          _isSubmitting ? '注销中...' : '确定注销',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
                             color: AppColors.textSecondary,
@@ -132,7 +143,7 @@ class _DeactivateAccountScreenState
                         child: GestureDetector(
                           onTap: () {
                             Navigator.of(ctx).pop();
-                            _doDeactivate();
+                            _runDeactivationFlow(exportBeforeDeactivate: false);
                           },
                           child: Container(
                             height: 44,
@@ -156,8 +167,7 @@ class _DeactivateAccountScreenState
                         child: GestureDetector(
                           onTap: () {
                             Navigator.of(ctx).pop();
-                            // Export then deactivate — for now just deactivate
-                            _doDeactivate();
+                            _runDeactivationFlow(exportBeforeDeactivate: true);
                           },
                           child: Container(
                             height: 44,
@@ -185,8 +195,30 @@ class _DeactivateAccountScreenState
     );
   }
 
-  void _doDeactivate() async {
+  Future<void> _runDeactivationFlow({
+    required bool exportBeforeDeactivate,
+  }) async {
+    if (_isSubmitting) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
     try {
+      if (exportBeforeDeactivate) {
+        final exportPath = await _exportAllResources();
+        if (!mounted) return;
+        if (exportPath == null) {
+          return;
+        }
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('导出成功')));
+      }
+
       await ref
           .read(profileRepositoryProvider)
           .deactivateAccount(
@@ -194,12 +226,57 @@ class _DeactivateAccountScreenState
             code: _codeController.text,
           );
       if (!mounted) return;
-      await ref.read(authNotifierProvider.notifier).logout();
+      await ref
+          .read(authNotifierProvider.notifier)
+          .logout(purgeLocalData: true);
     } catch (e) {
       if (!mounted) return;
+      final message = '$e'.replaceFirst('Exception: ', '').trim();
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('注销失败，请重试')));
+      ).showSnackBar(
+        SnackBar(content: Text(message.isEmpty ? '注销失败，请重试' : message)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<String?> _exportAllResources() async {
+    final repo = ref.read(resonanceRepositoryProvider);
+    final exportService = ExportService(repo);
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (_) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('正在打包导出...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+    );
+
+    try {
+      return await exportService.exportAll();
+    } finally {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
     }
   }
 }

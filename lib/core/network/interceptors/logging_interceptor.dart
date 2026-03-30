@@ -8,7 +8,8 @@ class LoggingInterceptor extends Interceptor {
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     _logger.d('''
     ${options.method} ${options.uri}
-    ${options.queryParameters}
+    query=${options.queryParameters}
+    data=${options.data}
         ''');
     handler.next(options);
   }
@@ -24,7 +25,14 @@ class LoggingInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    _logger.e('${err.message}', error: err);
+    _logger.e('''
+    ${err.message}
+    ${err.requestOptions.method} ${err.requestOptions.uri}
+    query=${err.requestOptions.queryParameters}
+    data=${err.requestOptions.data}
+    status=${err.response?.statusCode}
+    response=${err.response?.data}
+    ''', error: err);
     handler.next(err);
   }
 }

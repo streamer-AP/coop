@@ -9,7 +9,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/omao_toast.dart';
 import '../../../auth/application/services/verification_guard.dart';
+import '../../../controller/application/providers/controller_providers.dart';
 import '../../../profile/application/providers/profile_providers.dart';
 
 class HomePage extends ConsumerWidget {
@@ -80,12 +82,7 @@ class HomePage extends ConsumerWidget {
                           subtitleAsset: _HomeAssets.subtitleController,
                           subtitleWidth: 105,
                           sticker: _ControllerSticker(scale: scale),
-                          onTap:
-                              () => _handleProtectedFeature(
-                                context,
-                                ref,
-                                RouteNames.controller,
-                              ),
+                          onTap: () => context.pushNamed(RouteNames.controller),
                         ),
                       ),
                       Positioned(
@@ -97,12 +94,7 @@ class HomePage extends ConsumerWidget {
                           subtitleAsset: _HomeAssets.subtitleWatchPlot,
                           subtitleWidth: 125,
                           sticker: _StorySticker(scale: scale),
-                          onTap:
-                              () => _handleProtectedFeature(
-                                context,
-                                ref,
-                                RouteNames.story,
-                              ),
+                          onTap: () => _handleStoryFeature(context, ref),
                         ),
                       ),
                     ],
@@ -116,14 +108,23 @@ class HomePage extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleProtectedFeature(
+  Future<void> _handleStoryFeature(
     BuildContext context,
     WidgetRef ref,
-    String routeName,
   ) async {
+    final binding = await ref.read(activeDeviceBindingProvider.future);
+    if (!context.mounted) {
+      return;
+    }
+
+    if (binding == null) {
+      OmaoToast.show(context, '剧情体验请启用过设备后体验', isSuccess: false);
+      return;
+    }
+
     final passed = await VerificationGuard.check(context, ref);
     if (passed && context.mounted) {
-      context.pushNamed(routeName);
+      context.pushNamed(RouteNames.story);
     }
   }
 }
