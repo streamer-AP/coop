@@ -42,7 +42,7 @@ class UsageLogs extends Table {
   IntColumn get id => integer().autoIncrement()();
   DateTimeColumn get startTime => dateTime()();
   TextColumn get signalMode => text()();
-  IntColumn get waveformId => integer()();
+  TextColumn get waveformId => text()();
   IntColumn get intensityLevel => integer()();
   IntColumn get durationMs => integer()();
   TextColumn get deviceModel => text().nullable()();

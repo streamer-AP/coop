@@ -76,12 +76,12 @@ class BleSignalSender {
     _hasLoggedDisconnectedSkip = false;
     final payload = _protocol.encodeSignal(signal);
     _lastPayload = payload;
-    AppLogger().debug(
-      '$_tag: sending signal '
-      'swing=${signal.swing} vibration=${signal.vibration} '
-      'durationMs=${signal.durationMs} delayMs=${signal.delayMs} '
-      'payload=${payload.toList()}',
-    );
+    // AppLogger().debug(
+    //   '$_tag: sending signal '
+    //   'swing=${signal.swing} vibration=${signal.vibration} '
+    //   'durationMs=${signal.durationMs} delayMs=${signal.delayMs} '
+    //   'payload=${payload.toList()}',
+    // );
     await _connectionManager.writePayload(payload);
 
     if (_stopAfterCurrentSend && _isIdleSignal(signal)) {

@@ -190,7 +190,8 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
     List<FavoriteSlotsCompanion> slots,
   ) async {
     await transaction(() async {
-      await (delete(favoriteSlots)..where((t) => t.channel.equals(channel))).go();
+      await (delete(favoriteSlots)
+        ..where((t) => t.channel.equals(channel))).go();
       if (slots.isEmpty) return;
       await batch((b) {
         b.insertAll(favoriteSlots, slots);
@@ -215,5 +216,11 @@ class ControllerDao extends DatabaseAccessor<AppDatabase>
     await (update(usageLogs)..where(
       (t) => t.id.isIn(ids),
     )).write(const UsageLogsCompanion(isSynced: Value(true)));
+  }
+
+  Future<void> deleteUsageLogs(List<int> ids) async {
+    if (ids.isEmpty) return;
+
+    await (delete(usageLogs)..where((t) => t.id.isIn(ids))).go();
   }
 }

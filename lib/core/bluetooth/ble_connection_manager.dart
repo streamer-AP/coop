@@ -272,11 +272,11 @@ class BleConnectionManager {
   /// 写入原始蓝牙负载
   Future<void> writePayload(Uint8List payload) async {
     if (_connectedDevice == null || _writeCharacteristic == null) {
-      AppLogger().warning(
-        '$_tag: skip write payload=${payload.toList()} '
-        'connected=${_connectedDevice != null} '
-        'hasWriteCharacteristic=${_writeCharacteristic != null}',
-      );
+      // AppLogger().warning(
+      //   '$_tag: skip write payload=${payload.toList()} '
+      //   'connected=${_connectedDevice != null} '
+      //   'hasWriteCharacteristic=${_writeCharacteristic != null}',
+      // );
       return;
     }
 
@@ -284,13 +284,13 @@ class BleConnectionManager {
       final writeCharacteristic = _writeCharacteristic!;
       final withoutResponse =
           writeCharacteristic.properties.writeWithoutResponse;
-      AppLogger().debug(
-        '$_tag: write payload=${payload.toList()} '
-        'char=${writeCharacteristic.uuid.str} '
-        'withoutResponse=$withoutResponse '
-        'write=${writeCharacteristic.properties.write} '
-        'writeWithoutResponse=${writeCharacteristic.properties.writeWithoutResponse}',
-      );
+      // AppLogger().debug(
+      //   '$_tag: write payload=${payload.toList()} '
+      //   'char=${writeCharacteristic.uuid.str} '
+      //   'withoutResponse=$withoutResponse '
+      //   'write=${writeCharacteristic.properties.write} '
+      //   'writeWithoutResponse=${writeCharacteristic.properties.writeWithoutResponse}',
+      // );
       await writeCharacteristic.write(
         payload.toList(),
         withoutResponse: withoutResponse,

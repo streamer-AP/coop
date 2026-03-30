@@ -5,6 +5,7 @@ import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/bluetooth/ble_connection_manager.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/bluetooth/ble_signal_arbitrator.dart';
 import '../../data/controller_repository_impl.dart' as controller_data;
@@ -13,6 +14,7 @@ import '../../domain/models/favorite_slot.dart' as domain;
 import '../../domain/models/waveform.dart';
 import '../../domain/repositories/controller_repository.dart';
 import '../services/waveform_player_service.dart';
+import '../services/waveform_usage_log_service.dart';
 import '../../../../core/database/app_database.dart'
     hide Waveform, DeviceBinding, FavoriteSlot;
 
@@ -23,6 +25,16 @@ ControllerRepository controllerRepository(Ref ref) {
   final db = ref.watch(appDatabaseProvider);
   return controller_data.ControllerRepositoryImpl(db.controllerDao, db.userDao);
 }
+
+final waveformUsageLogServiceProvider = Provider<WaveformUsageLogService>((
+  ref,
+) {
+  return WaveformUsageLogService(
+    repository: ref.watch(controllerRepositoryProvider),
+    apiClient: ref.watch(apiClientProvider),
+    bleConnectionManager: ref.watch(bleConnectionManagerProvider),
+  );
+});
 
 @riverpod
 Future<List<Waveform>> waveforms(Ref ref) {
@@ -228,6 +240,16 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
   void resetIntensities() {
     state = state.copyWith(swingIntensity: 0, vibrationIntensity: 0);
     ref.read(waveformPlayerServiceProvider).stop();
+    unawaited(
+      ref
+          .read(waveformUsageLogServiceProvider)
+          .syncState(
+            swingWaveform: state.selectedSwingWaveform,
+            swingIntensity: state.swingIntensity,
+            vibrationWaveform: state.selectedVibrationWaveform,
+            vibrationIntensity: state.vibrationIntensity,
+          ),
+    );
   }
 
   void _updatePlayer() {
@@ -245,11 +267,31 @@ class ControllerStateNotifier extends _$ControllerStateNotifier {
       swingIntensity: state.swingIntensity,
       vibrationIntensity: state.vibrationIntensity,
     );
+    unawaited(
+      ref
+          .read(waveformUsageLogServiceProvider)
+          .syncState(
+            swingWaveform: state.selectedSwingWaveform,
+            swingIntensity: state.swingIntensity,
+            vibrationWaveform: state.selectedVibrationWaveform,
+            vibrationIntensity: state.vibrationIntensity,
+          ),
+    );
   }
 
   void _onDisconnected() {
     state = state.copyWith(swingIntensity: 0, vibrationIntensity: 0);
     ref.read(waveformPlayerServiceProvider).stop();
+    unawaited(
+      ref
+          .read(waveformUsageLogServiceProvider)
+          .syncState(
+            swingWaveform: state.selectedSwingWaveform,
+            swingIntensity: state.swingIntensity,
+            vibrationWaveform: state.selectedVibrationWaveform,
+            vibrationIntensity: state.vibrationIntensity,
+          ),
+    );
   }
 }
 

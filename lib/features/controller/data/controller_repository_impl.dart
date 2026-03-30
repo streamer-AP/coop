@@ -578,6 +578,9 @@ class ControllerRepositoryImpl implements ControllerRepository {
   @override
   Future<void> markSynced(List<int> ids) => _dao.markLogsSynced(ids);
 
+  @override
+  Future<void> deleteUsageLogs(List<int> ids) => _dao.deleteUsageLogs(ids);
+
   // --- 云同步 ---
 
   @override

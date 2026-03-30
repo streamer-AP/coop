@@ -75,6 +75,7 @@ class _ControllerScreenState extends ConsumerState<ControllerScreen> {
     );
 
     _waveformConfigBootstrapFuture = _requestDefaultWaveformConfigs();
+    unawaited(ref.read(waveformUsageLogServiceProvider).flushPendingLogs());
   }
 
   Future<void> _requestDefaultWaveformConfigs() async {

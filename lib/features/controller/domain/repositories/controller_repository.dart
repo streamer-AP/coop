@@ -45,6 +45,7 @@ abstract class ControllerRepository {
   Future<void> insertUsageLog(UsageLog log);
   Future<List<UsageLog>> getUnsynced();
   Future<void> markSynced(List<int> ids);
+  Future<void> deleteUsageLogs(List<int> ids);
 
   // --- 云同步 ---
   Future<void> syncToCloud();
