@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:omao_app/core/router/route_names.dart';
 import '../../controller_assets.dart';
 import '../../application/providers/controller_providers.dart';
 import '../../data/controller_waveform_config_codec.dart';
@@ -540,14 +542,14 @@ class _EditWaveformsMainScreenState
     required WaveformChannel channel,
     Waveform? existingWaveform,
   }) async {
-    // await context.pushNamed(
-    //   RouteNames.newWaveform,
-    //   extra: {
-    //     'initialName': initialName,
-    //     'channel': channel.name,
-    //     if (existingWaveform != null) 'existingWaveform': existingWaveform,
-    //   },
-    // );
+    await context.pushNamed(
+      RouteNames.newWaveform,
+      extra: {
+        'initialName': initialName,
+        'channel': channel.name,
+        if (existingWaveform != null) 'existingWaveform': existingWaveform,
+      },
+    );
   }
 }
 
