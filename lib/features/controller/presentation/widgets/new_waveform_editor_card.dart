@@ -47,7 +47,7 @@ class NewWaveformEditorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 425,
+      // height: 425,
       decoration: BoxDecoration(
         color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(28),
@@ -64,7 +64,7 @@ class NewWaveformEditorCard extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 18),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 6),
               child: SizedBox(
                 height: 32,
                 child: Stack(
