@@ -12,6 +12,13 @@ class ControllerDebugWaveformPresets {
       channel,
     ).map((waveform) => waveform.name).toList(growable: false);
   }
+  static bool isBuiltIn(Waveform data) {
+    final name = data.name.trim();
+    if (name.isEmpty) {
+      return false;
+    }
+    return buildForChannel(data.channel).any((waveform) => waveform.name == name);
+  }
 
   static List<Waveform> buildSwingWaveforms() {
     return [

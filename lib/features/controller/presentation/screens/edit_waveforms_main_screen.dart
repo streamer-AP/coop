@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:omao_app/core/router/route_names.dart';
+import 'package:omao_app/features/controller/data/controller_debug_waveform_presets.dart';
 import '../../controller_assets.dart';
 import '../../application/providers/controller_providers.dart';
 import '../../data/controller_waveform_config_codec.dart';
@@ -354,7 +357,7 @@ class _EditWaveformsMainScreenState
           (waveform) =>
               waveform.channel == channel &&
               waveform.isBuiltIn &&
-              waveform.name.trim().isNotEmpty,
+              waveform.name.trim().isNotEmpty && ControllerDebugWaveformPresets.isBuiltIn(waveform),
         )
         .toList();
   }
@@ -540,14 +543,14 @@ class _EditWaveformsMainScreenState
     required WaveformChannel channel,
     Waveform? existingWaveform,
   }) async {
-    // await context.pushNamed(
-    //   RouteNames.newWaveform,
-    //   extra: {
-    //     'initialName': initialName,
-    //     'channel': channel.name,
-    //     if (existingWaveform != null) 'existingWaveform': existingWaveform,
-    //   },
-    // );
+    await context.pushNamed(
+      RouteNames.newWaveform,
+      extra: {
+        'initialName': initialName,
+        'channel': channel.name,
+        if (existingWaveform != null) 'existingWaveform': existingWaveform,
+      },
+    );
   }
 }
 

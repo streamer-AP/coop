@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../controller_assets.dart';
+import '../../application/providers/controller_providers.dart';
+import '../../domain/models/waveform.dart';
 
-class NewWaveformDialog extends StatefulWidget {
+class NewWaveformDialog extends ConsumerStatefulWidget {
   const NewWaveformDialog({super.key});
 
   static Future<String?> show(BuildContext context) {
@@ -15,11 +18,11 @@ class NewWaveformDialog extends StatefulWidget {
   }
 
   @override
-  State<NewWaveformDialog> createState() => _NewWaveformDialogState();
+  ConsumerState<NewWaveformDialog> createState() => _NewWaveformDialogState();
   
 }
 
-class _NewWaveformDialogState extends State<NewWaveformDialog> {
+class _NewWaveformDialogState extends ConsumerState<NewWaveformDialog> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
 
@@ -59,6 +62,9 @@ class _NewWaveformDialogState extends State<NewWaveformDialog> {
   @override
   Widget build(BuildContext context) {
     final canSubmit = _controller.text.trim().isNotEmpty;
+    final waveforms = ref.watch(waveformsProvider).valueOrNull ?? const <Waveform>[];
+    final duplicateName = _isDuplicateName(_controller.text.trim(), waveforms);
+    final canConfirm = canSubmit && !duplicateName;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -89,7 +95,25 @@ class _NewWaveformDialogState extends State<NewWaveformDialog> {
               controller: _controller,
               focusNode: _focusNode,
             ),
-            const SizedBox(height: 36),
+            const SizedBox(height: 10),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: duplicateName
+                  ? const SizedBox(
+                      key: ValueKey('duplicate-name-warning'),
+                      height: 18,
+                      child: Text(
+                        '名称已存在',
+                        style: TextStyle(
+                          color: Color(0xFFD94B4B),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    )
+                  : const SizedBox(key: ValueKey('duplicate-name-empty'), height: 18),
+            ),
+            const SizedBox(height: 18),
             Row(
               children: [
                 Expanded(
@@ -104,11 +128,11 @@ class _NewWaveformDialogState extends State<NewWaveformDialog> {
                 Expanded(
                   child: _DialogButton(
                     label: '确定',
-                    backgroundColor: canSubmit
+                    backgroundColor: canConfirm
                         ? const Color(0xFF6A53A7)
                         : const Color(0xFF797979),
                     textColor: Colors.white,
-                    onTap: canSubmit ? _submit : null,
+                    onTap: canConfirm ? _submit : null,
                   ),
                 ),
               ],
@@ -124,7 +148,21 @@ class _NewWaveformDialogState extends State<NewWaveformDialog> {
     if (name.isEmpty) {
       return;
     }
+    final waveforms = ref.read(waveformsProvider).valueOrNull ?? const <Waveform>[];
+    if (_isDuplicateName(name, waveforms)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('名称已存在，请换一个名字')),
+      );
+      return;
+    }
     Navigator.of(context).pop(name);
+  }
+
+  bool _isDuplicateName(String name, List<Waveform> waveforms) {
+    if (name.isEmpty) {
+      return false;
+    }
+    return waveforms.any((waveform) => waveform.name.trim() == name);
   }
 }
 

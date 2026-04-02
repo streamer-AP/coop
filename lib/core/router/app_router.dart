@@ -14,7 +14,7 @@ import '../../features/auth/presentation/screens/verification_code_screen.dart';
 import '../../features/controller/domain/models/waveform.dart';
 import '../../features/controller/presentation/screens/edit_waveforms_main_screen.dart';
 import '../../features/controller/presentation/screens/controller_entry_screen.dart';
-// import '../../features/controller/presentation/screens/new_waveform_screen.dart';
+import '../../features/controller/presentation/screens/new_waveform_screen.dart';
 import '../../features/controller/presentation/screens/waveform_editor_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/message/presentation/screens/message_detail_screen.dart';
@@ -183,26 +183,26 @@ GoRouter appRouter(Ref ref) {
           return EditWaveformsMainScreen(initialChannel: initialChannel);
         },
       ),
-      // GoRoute(
-      //   path: '/new-waveform',
-      //   name: RouteNames.newWaveform,
-      //   builder: (context, state) {
-      //     final extra = state.extra as Map<String, dynamic>?;
-      //     final initialName = extra?['initialName'] as String? ?? '';
-      //     final channelExtra = extra?['channel'];
-      //     final channel = channelExtra is WaveformChannel
-      //         ? channelExtra
-      //         : WaveformChannel.values.byName(
-      //             channelExtra as String? ?? 'swing',
-      //           );
-      //     final existingWaveform = extra?['existingWaveform'] as Waveform?;
-      //     return NewWaveformScreen(
-      //       initialName: initialName,
-      //       channel: channel,
-      //       existingWaveform: existingWaveform,
-      //     );
-      //   },
-      // ),
+      GoRoute(
+        path: '/new-waveform',
+        name: RouteNames.newWaveform,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final initialName = extra?['initialName'] as String? ?? '';
+          final channelExtra = extra?['channel'];
+          final channel = channelExtra is WaveformChannel
+              ? channelExtra
+              : WaveformChannel.values.byName(
+                  channelExtra as String? ?? 'swing',
+                );
+          final existingWaveform = extra?['existingWaveform'] as Waveform?;
+          return NewWaveformScreen(
+            initialName: initialName,
+            channel: channel,
+            existingWaveform: existingWaveform,
+          );
+        },
+      ),
       GoRoute(
         path: '/waveform-editor',
         name: RouteNames.waveformEditor,
