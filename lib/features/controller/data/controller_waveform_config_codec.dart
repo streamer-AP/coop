@@ -1,4 +1,5 @@
 import '../domain/models/waveform.dart';
+import 'controller_debug_waveform_presets.dart';
 
 class ControllerWaveformConfigCodec {
   static const int totalPages = 3;
@@ -79,7 +80,13 @@ class ControllerWaveformConfigCodec {
           durationMs: durationMs,
           signalIntervalMs: 200,
           signalDelayMs: 0,
-          isBuiltIn: true,
+          isBuiltIn: ControllerDebugWaveformPresets.isBuiltIn(
+            Waveform(
+              id: 0,
+              name: name,
+              channel: channel,
+            ),
+          ),
           keyframes: keyframes,
         ),
       );

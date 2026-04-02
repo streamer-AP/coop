@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omao_app/features/controller/controller_assets.dart';
+import 'package:omao_app/shared/widgets/omao_toast.dart';
 
 import '../../application/providers/controller_providers.dart';
 import '../../domain/models/waveform.dart';
@@ -55,8 +56,12 @@ class _NewWaveformScreenState extends ConsumerState<NewWaveformScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final allWaveforms =
+        ref.watch(waveformsProvider).valueOrNull ?? const <Waveform>[];
+    final name = _nameController.text.trim();
+    final duplicateName = _isDuplicateName(name, allWaveforms);
 
+    return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
       body: Container(
@@ -76,6 +81,23 @@ class _NewWaveformScreenState extends ConsumerState<NewWaveformScreen> {
               _buildTopBar(context),
               const SizedBox(height: 10),
               _buildNameField(),
+              if (duplicateName) ...[
+                const SizedBox(height: 8),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '名称已存在',
+                      style: TextStyle(
+                        color: Color(0xFFD94B4B),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
@@ -90,7 +112,6 @@ class _NewWaveformScreenState extends ConsumerState<NewWaveformScreen> {
                   onValueChanged: (index, value) {
                     setState(() {
                       _pageValues[_currentPage][index] = value;
-                      
                     });
                   },
                 ),
@@ -296,9 +317,14 @@ class _NewWaveformScreenState extends ConsumerState<NewWaveformScreen> {
   Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入波形名称')));
+      OmaoToast.show(context, '请输入波形名称', isSuccess: false);
+      return;
+    }
+
+    final waveforms =
+        ref.read(waveformsProvider).valueOrNull ?? const <Waveform>[];
+    if (_isDuplicateName(name, waveforms)) {
+      _showDuplicateNameSnackBar();
       return;
     }
 
@@ -330,6 +356,22 @@ class _NewWaveformScreenState extends ConsumerState<NewWaveformScreen> {
     if (mounted) {
       Navigator.of(context).pop();
     }
+  }
+
+  bool _isDuplicateName(String name, List<Waveform> waveforms) {
+    if (name.isEmpty) {
+      return false;
+    }
+
+    return waveforms.any(
+      (waveform) =>
+          waveform.name.trim() == name && waveform.channel == widget.channel &&
+          waveform.id != (widget.existingWaveform?.id ?? 0),
+    );
+  }
+
+  void _showDuplicateNameSnackBar() {
+    OmaoToast.show(context, '名称已存在，请换一个名字', isSuccess: false);
   }
 
   void _restoreExistingWaveform(Waveform waveform) {
@@ -408,7 +450,10 @@ class _NewWaveformScreenState extends ConsumerState<NewWaveformScreen> {
       barrierDismissible: false,
       builder: (dialogContext) {
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 20,
+          ),
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           child: Container(
@@ -458,7 +503,9 @@ class _NewWaveformScreenState extends ConsumerState<NewWaveformScreen> {
                         label: confirmLabel,
                         backgroundColor: const Color(0xFF6A53A7),
                         textColor: Colors.white,
-                        onTap: () => Navigator.of(dialogContext).pop(confirmResult),
+                        onTap:
+                            () =>
+                                Navigator.of(dialogContext).pop(confirmResult),
                       ),
                     ),
                   ],
@@ -490,10 +537,7 @@ class _NewWaveformScreenState extends ConsumerState<NewWaveformScreen> {
           child: Center(
             child: Text(
               label,
-              style: TextStyle(
-                color: textColor,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: textColor, fontSize: 14),
             ),
           ),
         ),
