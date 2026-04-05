@@ -69,7 +69,7 @@ class AppColors {
   static const purpleButtonGradient = LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
-    colors: [Color(0xFF7B61A0), Color(0xFF9B85C0)],
+    colors: [Color(0xFFEFECFD), Color(0xFF533A99)],
   );
 }
 

@@ -73,48 +73,75 @@ object MediaExtractionHost {
                     ?.lowercase()
                     ?.trim()
                     .orEmpty()
-                val extractionTarget = resolveExtractionTarget(mimeType)
-                val actualOutputPath = buildOutputPath(outputPath, extractionTarget.extension)
-                val outputFile = File(actualOutputPath)
-                outputFile.parentFile?.mkdirs()
-                if (outputFile.exists()) {
-                    outputFile.delete()
-                }
+                val isPcm = mimeType == "audio/raw" ||
+                    mimeType.startsWith("audio/pcm") ||
+                    mimeType == "audio/l16"
 
-                muxer = MediaMuxer(actualOutputPath, extractionTarget.muxerOutputFormat)
-                val outputTrackIndex = muxer.addTrack(inputFormat)
-
-                val maxInputSize = if (inputFormat.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
-                    inputFormat.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
+                if (isPcm) {
+                    val actualOutputPath = buildOutputPath(outputPath, ".wav")
+                    val outputFile = File(actualOutputPath)
+                    outputFile.parentFile?.mkdirs()
+                    if (outputFile.exists()) {
+                        outputFile.delete()
+                    }
+                    writePcmAsWav(mediaExtractor, inputFormat, actualOutputPath)
+                    result.success(actualOutputPath)
                 } else {
-                    defaultBufferSize
-                }
-                val buffer = ByteBuffer.allocateDirect(maxInputSize.coerceAtLeast(defaultBufferSize))
-                val bufferInfo = MediaCodec.BufferInfo()
-
-                muxer.start()
-                muxerStarted = true
-                while (true) {
-                    val sampleSize = mediaExtractor.readSampleData(buffer, 0)
-                    if (sampleSize < 0) {
-                        break
+                    val extractionTarget = resolveExtractionTarget(mimeType)
+                    val actualOutputPath = buildOutputPath(outputPath, extractionTarget.extension)
+                    val outputFile = File(actualOutputPath)
+                    outputFile.parentFile?.mkdirs()
+                    if (outputFile.exists()) {
+                        outputFile.delete()
                     }
 
-                    bufferInfo.offset = 0
-                    bufferInfo.size = sampleSize
-                    bufferInfo.presentationTimeUs = mediaExtractor.sampleTime
-                    bufferInfo.flags = mediaExtractor.sampleFlags
+                    muxer = MediaMuxer(actualOutputPath, extractionTarget.muxerOutputFormat)
+                    val outputTrackIndex = muxer.addTrack(inputFormat)
 
-                    muxer.writeSampleData(outputTrackIndex, buffer, bufferInfo)
-                    mediaExtractor.advance()
-                    buffer.clear()
+                    val maxInputSize = if (inputFormat.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                        inputFormat.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
+                    } else {
+                        defaultBufferSize
+                    }
+                    val buffer = ByteBuffer.allocateDirect(maxInputSize.coerceAtLeast(defaultBufferSize))
+                    val bufferInfo = MediaCodec.BufferInfo()
+
+                    muxer.start()
+                    muxerStarted = true
+                    while (true) {
+                        val sampleSize = mediaExtractor.readSampleData(buffer, 0)
+                        if (sampleSize < 0) {
+                            break
+                        }
+
+                        bufferInfo.offset = 0
+                        bufferInfo.size = sampleSize
+                        bufferInfo.presentationTimeUs = mediaExtractor.sampleTime
+                        bufferInfo.flags = mediaExtractor.sampleFlags
+
+                        muxer.writeSampleData(outputTrackIndex, buffer, bufferInfo)
+                        mediaExtractor.advance()
+                        buffer.clear()
+                    }
+
+                    result.success(actualOutputPath)
                 }
-
-                result.success(actualOutputPath)
             } catch (error: UnsupportedAudioCodecException) {
                 result.error("unsupported_audio_codec", error.message, error.mimeType)
             } catch (error: Exception) {
-                result.error("extract_audio_failed", error.message, null)
+                val msg = error.message ?: ""
+                val isExtractorError = msg.contains("instantiate") ||
+                    msg.contains("Failed to") ||
+                    msg.contains("setDataSource")
+                val ext = inputPath.substringAfterLast('.', "").lowercase()
+                val userMessage = if (isExtractorError && ext == "avi") {
+                    "当前设备不支持 AVI 格式，请将文件转换为 MP4 或 MKV 后重试"
+                } else if (isExtractorError) {
+                    "当前设备不支持该视频格式，请将文件转换为 MP4 后重试"
+                } else {
+                    msg
+                }
+                result.error("extract_audio_failed", userMessage, null)
             } finally {
                 if (muxerStarted) {
                     runCatching { muxer?.stop() }
@@ -205,6 +232,68 @@ object MediaExtractionHost {
             counter++
         }
         return candidate.absolutePath
+    }
+
+    private fun writePcmAsWav(
+        extractor: MediaExtractor,
+        format: MediaFormat,
+        outputPath: String,
+    ) {
+        val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+        val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+        val bitsPerSample = if (format.containsKey("bits-per-sample")) {
+            format.getInteger("bits-per-sample")
+        } else {
+            16
+        }
+        val byteRate = sampleRate * channelCount * (bitsPerSample / 8)
+        val blockAlign = channelCount * (bitsPerSample / 8)
+
+        val maxInputSize = if (format.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+            format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
+        } else {
+            defaultBufferSize
+        }
+        val buffer = java.nio.ByteBuffer.allocateDirect(maxInputSize.coerceAtLeast(defaultBufferSize))
+
+        // Collect all PCM data first
+        val pcmData = java.io.ByteArrayOutputStream()
+        while (true) {
+            val sampleSize = extractor.readSampleData(buffer, 0)
+            if (sampleSize < 0) break
+            val bytes = ByteArray(sampleSize)
+            buffer.get(bytes, 0, sampleSize)
+            pcmData.write(bytes)
+            extractor.advance()
+            buffer.clear()
+        }
+
+        val pcmBytes = pcmData.toByteArray()
+        val dataSize = pcmBytes.size
+
+        java.io.FileOutputStream(outputPath).use { fos ->
+            val header = java.nio.ByteBuffer.allocate(44).apply {
+                order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                // RIFF header
+                put("RIFF".toByteArray())
+                putInt(36 + dataSize)
+                put("WAVE".toByteArray())
+                // fmt sub-chunk
+                put("fmt ".toByteArray())
+                putInt(16) // PCM format chunk size
+                putShort(1) // Audio format: PCM
+                putShort(channelCount.toShort())
+                putInt(sampleRate)
+                putInt(byteRate)
+                putShort(blockAlign.toShort())
+                putShort(bitsPerSample.toShort())
+                // data sub-chunk
+                put("data".toByteArray())
+                putInt(dataSize)
+            }
+            fos.write(header.array())
+            fos.write(pcmBytes)
+        }
     }
 
     private fun describeMimeType(mimeType: String): String {

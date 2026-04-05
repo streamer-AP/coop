@@ -21,9 +21,13 @@ class MainActivity : AudioServiceActivity() {
         TextTranslationHost.attach(
             messenger = flutterEngine.dartExecutor.binaryMessenger,
         )
+        AudioAnalysisHost.attach(
+            messenger = flutterEngine.dartExecutor.binaryMessenger,
+        )
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        AudioAnalysisHost.detach()
         TextTranslationHost.detach()
         AudioMetadataHost.detach()
         AudioArtworkHost.detach()

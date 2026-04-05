@@ -19,6 +19,7 @@ class ImportPreviewItem {
     required this.type,
     required this.selected,
     required this.selectable,
+    this.matchedTo,
   });
 
   final String path;
@@ -26,6 +27,9 @@ class ImportPreviewItem {
   final ImportPreviewItemType type;
   final bool selected;
   final bool selectable;
+
+  /// For subtitle/cover/script items: the name of the media file they matched to.
+  final String? matchedTo;
 
   bool get isMedia =>
       type == ImportPreviewItemType.audio ||
@@ -39,6 +43,7 @@ class ImportPreviewItem {
     ImportPreviewItemType? type,
     bool? selected,
     bool? selectable,
+    String? matchedTo,
   }) {
     return ImportPreviewItem(
       path: path ?? this.path,
@@ -46,6 +51,7 @@ class ImportPreviewItem {
       type: type ?? this.type,
       selected: selected ?? this.selected,
       selectable: selectable ?? this.selectable,
+      matchedTo: matchedTo ?? this.matchedTo,
     );
   }
 }

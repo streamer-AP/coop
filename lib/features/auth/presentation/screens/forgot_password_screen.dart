@@ -52,12 +52,29 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await ref
+      final json = await ref
           .read(apiClientProvider)
           .post(
             ApiEndpoints.forgotPwdSendCode,
             queryParameters: {'mobile': _phoneDigits},
           );
+      final respCode = json['code'] as int?;
+      if (respCode != 200 && respCode != 0) {
+        final msg = json['message'] as String? ?? '';
+        // 未注册手机号或系统异常，统一提示手机号错误
+        if (msg.contains('系统异常') ||
+            msg.contains('未注册') ||
+            respCode == 500) {
+          throw const AuthException(
+            code: AuthErrorCode.invalidPhone,
+            message: '手机号码错误，请重新输入',
+          );
+        }
+        throw AuthException(
+          code: AuthErrorCode.unknown,
+          message: msg.isNotEmpty ? msg : '验证码发送失败',
+        );
+      }
     } catch (e) {
       if (mounted) {
         TopBannerToast.show(

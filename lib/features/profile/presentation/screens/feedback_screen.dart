@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/omao_page_background.dart';
 import '../../../../shared/widgets/purple_gradient_button.dart';
 import '../../application/providers/feedback_providers.dart';
 
@@ -23,10 +24,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.profileBackgroundGradient,
-      ),
+    return OmaoPageBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(

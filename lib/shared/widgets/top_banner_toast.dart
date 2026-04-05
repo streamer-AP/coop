@@ -105,10 +105,10 @@ class _TopBannerState extends State<_TopBanner>
           child: Container(
             constraints: const BoxConstraints(maxWidth: 320),
             margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xE02D2D33),
-              borderRadius: BorderRadius.circular(22),
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(200),
               boxShadow: const [
                 BoxShadow(
                   color: Color(0x26000000),
@@ -117,18 +117,54 @@ class _TopBannerState extends State<_TopBanner>
                 ),
               ],
             ),
-            child: Text(
-              widget.message,
-              style: const TextStyle(
-                inherit: false,
-                fontSize: 14,
-                color: Colors.white,
-                fontWeight: FontWeight.w500,
-                decoration: TextDecoration.none,
-                decorationColor: Colors.transparent,
-                textBaseline: TextBaseline.alphabetic,
-              ),
-              textAlign: TextAlign.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.isError)
+                  Container(
+                    width: 24,
+                    height: 24,
+                    margin: const EdgeInsets.only(right: 8),
+                    child: const Icon(
+                      Icons.warning_rounded,
+                      color: Color(0xFFDD4040),
+                      size: 20,
+                    ),
+                  )
+                else
+                  Container(
+                    width: 24,
+                    height: 24,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF6A53A7),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                  ),
+                Flexible(
+                  child: Text(
+                    widget.message,
+                    style: TextStyle(
+                      inherit: false,
+                      fontSize: 14,
+                      color:
+                          widget.isError
+                              ? const Color(0xFFDD4040)
+                              : Colors.white,
+                      fontWeight: FontWeight.w400,
+                      decoration: TextDecoration.none,
+                      decorationColor: Colors.transparent,
+                      textBaseline: TextBaseline.alphabetic,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

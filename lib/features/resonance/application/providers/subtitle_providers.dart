@@ -4,6 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../../core/logging/app_logger.dart';
 import '../../../../core/storage/file_manager.dart';
 import '../../domain/models/subtitle.dart';
 import '../services/subtitle_service.dart';
@@ -72,6 +73,10 @@ class CurrentSubtitleNotifier extends _$CurrentSubtitleNotifier {
     final subtitleSvc = ref.read(subtitleServiceProvider);
 
     final subtitleRefs = await repo.getSubtitlesForEntry(entryId);
+    AppLogger().debug(
+      'SubtitleLoad: entryId=$entryId refs=${subtitleRefs.length}'
+      '${subtitleRefs.isNotEmpty ? " path=${subtitleRefs.first.filePath}" : ""}',
+    );
     if (_isStaleLoad(entryId, generation)) {
       return;
     }
@@ -86,8 +91,18 @@ class CurrentSubtitleNotifier extends _$CurrentSubtitleNotifier {
       if (_isStaleLoad(entryId, generation)) {
         return;
       }
-      state = subtitleSvc.parse(subtitleRef, content);
-    } catch (_) {
+      AppLogger().debug(
+        'SubtitleLoad: content length=${content.length}'
+        ' first100=${content.substring(0, content.length > 100 ? 100 : content.length).replaceAll('\n', '\\n')}',
+      );
+      final parsed = subtitleSvc.parse(subtitleRef, content);
+      AppLogger().debug(
+        'SubtitleLoad: parsed cues=${parsed.cues.length}'
+        ' format=${subtitleRef.format}',
+      );
+      state = parsed;
+    } catch (e) {
+      AppLogger().error('SubtitleLoad: parse error', error: e);
       if (_isStaleLoad(entryId, generation)) {
         return;
       }

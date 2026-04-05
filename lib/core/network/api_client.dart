@@ -3,6 +3,7 @@ import 'package:omao_app/core/network/interceptors/logging_interceptor.dart';
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../features/auth/application/providers/auth_providers.dart';
 import '../storage/token_storage.dart';
 import 'api_endpoints.dart';
 import 'interceptors/auth_interceptor.dart';
@@ -78,7 +79,15 @@ Dio dio(Ref ref) {
       headers: {'Content-Type': 'application/json'},
     ),
   );
-  dio.interceptors.add(AuthInterceptor(TokenStorage()));
+  dio.interceptors.add(
+    AuthInterceptor(
+      TokenStorage(),
+      onForceLogout: () {
+        // Invalidate auth state → router redirects to login
+        ref.read(authNotifierProvider.notifier).forceLogout();
+      },
+    ),
+  );
   dio.interceptors.add(LoggingInterceptor());
   return dio;
 }

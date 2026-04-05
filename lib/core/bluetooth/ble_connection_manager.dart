@@ -39,6 +39,7 @@ class BleConnectionManager {
   StreamSubscription<List<int>>? _notifySub;
 
   BleDevice? _currentDevice;
+  String? _deviceSerialNumber;
   Map<String, dynamic> _lastDeviceInfo = <String, dynamic>{};
 
   Stream<BleConnectionState> get connectionStateStream =>
@@ -49,6 +50,9 @@ class BleConnectionManager {
       _deviceInfoController.stream;
 
   BleDevice? get connectedDevice => _currentDevice;
+
+  /// 已连接设备的序列号（如 DVS251NRWWST20250930001）
+  String? get deviceSerialNumber => _deviceSerialNumber;
 
   bool get isConnected => _connectedDevice != null;
 
@@ -383,6 +387,26 @@ class BleConnectionManager {
       for (final char in service.characteristics) {
         final uuid = char.uuid.str128.toUpperCase();
 
+        // Read serial number from Device Information Service
+        if (_matchesUuid(
+          uuid,
+          BleDeviceProtocol.serialNumberCharacteristicUuid,
+        )) {
+          if (char.properties.read) {
+            char
+                .read()
+                .then((value) {
+                  if (value.isNotEmpty) {
+                    _deviceSerialNumber = String.fromCharCodes(value).trim();
+                    AppLogger().info(
+                      '$_tag: device serial number: $_deviceSerialNumber',
+                    );
+                  }
+                })
+                .catchError((_) {});
+          }
+        }
+
         if (_matchesUuid(uuid, BleDeviceProtocol.batteryCharacteristicUuid) ||
             _matchesUuid(
               uuid,
@@ -464,6 +488,7 @@ class BleConnectionManager {
     _connectedDevice = null;
     _writeCharacteristic = null;
     _notifyCharacteristic = null;
+    _deviceSerialNumber = null;
     _currentDevice = _currentDevice?.copyWith(isConnected: false);
     _connectionSub?.cancel();
     _connectionSub = null;

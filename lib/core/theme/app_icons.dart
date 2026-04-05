@@ -63,6 +63,9 @@ class AppIcons {
   static const swing = '$_base/摇摆.svg';
   static const vibration = '$_base/震动.svg';
   static const deviceLink = '$_base/验证激活.svg';
+  static const linkBroken = '$_base/Frame-427320904.svg';
+  static const tripleArrowRight = '$_base/Frame-427320905.svg';
+  static const switchPreset = '$_base/switch-preset.svg';
 
   // Profile
   static const album = '$_base/相册.svg';

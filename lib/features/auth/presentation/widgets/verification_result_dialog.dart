@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_icons.dart';
 
 class VerificationResultDialog extends StatelessWidget {
   const VerificationResultDialog._({
     required this.svgPath,
-    required this.iconColor,
+    required this.iconGradientColors,
     required this.title,
     this.subtitle,
   });
 
   final String svgPath;
-  final Color iconColor;
+  final List<Color> iconGradientColors;
   final String title;
   final String? subtitle;
 
@@ -20,9 +19,10 @@ class VerificationResultDialog extends StatelessWidget {
     return showDialog(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (_) => const VerificationResultDialog._(
         svgPath: AppIcons.success,
-        iconColor: AppColors.success,
+        iconGradientColors: [Color(0xFFECF9FD), Color(0xFF533A99)],
         title: '年龄认证通过，欢迎体验',
       ),
     );
@@ -32,9 +32,10 @@ class VerificationResultDialog extends StatelessWidget {
     return showDialog(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (_) => const VerificationResultDialog._(
         svgPath: AppIcons.fail,
-        iconColor: AppColors.error,
+        iconGradientColors: [Color(0xFFFDECEC), Color(0xFF993A3A)],
         title: '实名不匹配or信息有误',
       ),
     );
@@ -44,9 +45,10 @@ class VerificationResultDialog extends StatelessWidget {
     return showDialog(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (_) => const VerificationResultDialog._(
         svgPath: AppIcons.fail,
-        iconColor: AppColors.error,
+        iconGradientColors: [Color(0xFFFDECEC), Color(0xFF993A3A)],
         title: '年龄验证不通过',
         subtitle: '很抱歉，根据相关法律法规要求，此功能仅面对成年用户开放。',
       ),
@@ -55,72 +57,97 @@ class VerificationResultDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return Center(
       child: Container(
-        padding: const EdgeInsets.all(24),
+        width: 344,
+        padding: const EdgeInsets.symmetric(horizontal: 38, vertical: 38),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(34),
+          border: Border.all(
+            color: Colors.black.withValues(alpha: 0.9),
+            width: 1,
+          ),
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              AppColors.primary.withValues(alpha: 0.08),
-              Colors.white,
+              const Color(0xFFEAEAEA).withValues(alpha: 0.95),
+              const Color(0xFFEAEAEA).withValues(alpha: 0.7),
+              const Color(0xFF634D83).withValues(alpha: 0.8),
             ],
+            stops: const [0.02, 0.27, 1.0],
           ),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcons.icon(svgPath, size: 48, color: iconColor),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+        child: Material(
+          color: Colors.transparent,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: iconGradientColors,
+                  ),
+                ),
+                child: Center(
+                  child: AppIcons.icon(svgPath, size: 16, color: Colors.white),
+                ),
               ),
-              textAlign: TextAlign.center,
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               Text(
-                subtitle!,
+                title,
                 style: const TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                  height: 1.5,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 1.6,
+                  color: Color(0xFF5B5561),
+                  decoration: TextDecoration.none,
                 ),
                 textAlign: TextAlign.center,
               ),
-            ],
-            const SizedBox(height: 24),
-            GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              child: Container(
-                width: 160,
-                height: 44,
-                decoration: BoxDecoration(
-                  gradient: AppColors.purpleButtonGradient,
-                  borderRadius: BorderRadius.circular(22),
+              if (subtitle != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  subtitle!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w300,
+                    color: Color(0xFF5B5561),
+                    height: 1.5,
+                    decoration: TextDecoration.none,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                alignment: Alignment.center,
-                child: const Text(
-                  '确定',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
+              ],
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
+                  width: 128,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6A53A7),
+                    borderRadius: BorderRadius.circular(32),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    '确定',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      color: Colors.white,
+                      decoration: TextDecoration.none,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

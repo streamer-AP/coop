@@ -1,3 +1,4 @@
+import '../../../core/bluetooth/ble_connection_manager.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../domain/models/permission_code.dart';
@@ -5,8 +6,10 @@ import '../domain/repositories/permission_repository.dart';
 
 class PermissionRepositoryImpl implements PermissionRepository {
   final ApiClient _apiClient;
+  final BleConnectionManager? _bleConnectionManager;
 
-  PermissionRepositoryImpl(this._apiClient);
+  PermissionRepositoryImpl(this._apiClient, {BleConnectionManager? bleManager})
+      : _bleConnectionManager = bleManager;
 
   @override
   Future<List<PermissionCode>> getPermissions() async {
@@ -27,9 +30,29 @@ class PermissionRepositoryImpl implements PermissionRepository {
 
   @override
   Future<void> activatePermission(String code) async {
+    // 获取当前用户 omaoId，服务端创建设备关联时需要该字段。
+    String? omaoId;
+    try {
+      final userJson = await _apiClient.get(ApiEndpoints.getCurrentUserInfo);
+      final userData = userJson['data'] as Map<String, dynamic>?;
+      if (userData != null) {
+        omaoId = userData['omaoId'] as String?;
+      }
+    } catch (_) {}
+
+    final data = <String, dynamic>{'redeemCode': code};
+    if (omaoId != null && omaoId.isNotEmpty) {
+      data['omaoId'] = omaoId;
+    }
+    // 服务端需要 deviceSn 字段，从已连接蓝牙设备读取序列号
+    final deviceSn = _bleConnectionManager?.deviceSerialNumber;
+    if (deviceSn != null && deviceSn.isNotEmpty) {
+      data['deviceSn'] = deviceSn;
+    }
+
     final json = await _apiClient.post(
       ApiEndpoints.redeemCode,
-      data: {'redeemCode': code},
+      data: data,
     );
     final respCode = json['code'] as int?;
     if (respCode != 200) {

@@ -119,6 +119,11 @@ class _PasswordLoginScreenState extends ConsumerState<PasswordLoginScreen> {
                                 controller: _phoneController,
                                 hintText: '请输入手机号码',
                                 leadingText: '+86 |',
+                                textStyle: AuthFonts.chineseTextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w400,
+                                  color: AuthPalette.title,
+                                ),
                                 keyboardType: TextInputType.phone,
                                 inputFormatters: [
                                   FilteringTextInputFormatter.digitsOnly,

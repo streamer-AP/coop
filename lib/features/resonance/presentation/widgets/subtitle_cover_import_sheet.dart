@@ -45,6 +45,108 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
     );
   }
 
+  /// Directly opens file picker for subtitle import without showing the
+  /// bottom sheet. Used by the no-subtitle placeholder's import button.
+  static Future<void> pickAndImportSubtitle({
+    required BuildContext context,
+    required WidgetRef ref,
+    required int entryId,
+  }) async {
+    final importService = await ref.read(importServiceProvider.future);
+    final allowedExtensions = importService.subtitleExtensions.toList();
+
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.any,
+      withData: true,
+      withReadStream: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final pickedFile = result.files.first;
+    final ext =
+        pickedFile.extension?.toLowerCase() ??
+        pickedFile.name.split('.').last.toLowerCase();
+    if (!allowedExtensions.contains(ext)) {
+      if (context.mounted) {
+        TopBannerToast.show(context, message: '不支持的文件格式: .$ext');
+      }
+      return;
+    }
+
+    try {
+      final fileManager = ref.read(fileManagerProvider);
+      final importDir = fileManager.getImportDirectory();
+      final destPath = await _copyFileToImportDir(importDir, pickedFile);
+      final repo = ref.read(resonanceRepositoryProvider);
+      final subtitleService = ref.read(subtitleServiceProvider);
+
+      // Validate
+      final content = await subtitleService.readTextFile(destPath);
+      if (content.trim().isEmpty) {
+        throw Exception('字幕文件为空');
+      }
+
+      // Delete existing subtitles
+      final existing = await repo.getSubtitlesForEntry(entryId);
+      for (final sub in existing) {
+        final f = File(sub.filePath);
+        if (await f.exists()) await f.delete();
+      }
+      await repo.deleteSubtitlesForEntry(entryId);
+
+      // Insert new subtitle
+      final subtitleExt =
+          p.extension(destPath).toLowerCase().replaceFirst('.', '');
+      final format =
+          SubtitleFormat.values.where((f) => f.name == subtitleExt).firstOrNull ??
+          SubtitleFormat.srt;
+      await repo.insertSubtitle(
+        SubtitleRef(
+          id: 0,
+          entryId: entryId,
+          language: 'default',
+          filePath: destPath,
+          format: format,
+        ),
+      );
+
+      // Refresh subtitle in player
+      ref.invalidate(currentSubtitleNotifierProvider);
+
+      if (context.mounted) {
+        TopBannerToast.show(
+          context,
+          message: '字幕导入成功',
+          isError: false,
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        final msg = '$e'.replaceFirst('Exception: ', '').trim();
+        TopBannerToast.show(
+          context,
+          message: msg.isEmpty ? '字幕导入失败' : msg,
+        );
+      }
+    }
+  }
+
+  static Future<String> _copyFileToImportDir(
+    String importDir,
+    PlatformFile file,
+  ) async {
+    final destPath = p.join(importDir, file.name);
+    final destFile = File(destPath);
+    await destFile.parent.create(recursive: true);
+    if (file.path != null) {
+      await File(file.path!).copy(destPath);
+    } else if (file.bytes != null) {
+      await destFile.writeAsBytes(file.bytes!);
+    }
+    return destPath;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SafeArea(
@@ -154,8 +256,7 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
 
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
-      type: FileType.custom,
-      allowedExtensions: allowedExtensions,
+      type: FileType.any,
       withData: true,
       withReadStream: true,
     );
@@ -170,6 +271,23 @@ class SubtitleCoverImportSheet extends ConsumerWidget {
     try {
       final importDir = fileManager.getImportDirectory();
       final pickedFile = result.files.first;
+      final ext =
+          pickedFile.extension?.toLowerCase() ??
+          pickedFile.name.split('.').last.toLowerCase();
+      if (!allowedExtensions.contains(ext)) {
+        if (feedbackOverlay != null) {
+          TopBannerToast.showOnOverlay(
+            feedbackOverlay,
+            topPadding: feedbackTopPadding,
+            message: '不支持的文件格式: .$ext',
+          );
+        }
+        await _resumePlaybackIfNeeded(
+          playerNotifier,
+          shouldResume: resumePlaybackAfterPicker,
+        );
+        return;
+      }
       final destPath = await _copyIntoImportDirectory(importDir, pickedFile);
 
       switch (type) {

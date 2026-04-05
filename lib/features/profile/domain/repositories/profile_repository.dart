@@ -1,4 +1,5 @@
 import '../models/app_version.dart';
+import '../models/cancellation_session.dart';
 import '../models/profile.dart';
 
 abstract class ProfileRepository {
@@ -16,7 +17,7 @@ abstract class ProfileRepository {
     required String newPassword,
   });
   Future<void> sendPasswordResetCode(String phone);
-  Future<void> sendDeactivateCode(String phone);
+  Future<CancellationSession> sendDeactivateCode(String phone);
   Future<void> changePhone({
     required String oldPhone,
     required String oldCode,
@@ -25,5 +26,8 @@ abstract class ProfileRepository {
   });
   Future<void> submitFeedback(String content);
   Future<AppVersion> checkForUpdate();
-  Future<void> deactivateAccount({required String phone, required String code});
+  Future<void> deactivateAccount({
+    required CancellationSession session,
+    required String code,
+  });
 }

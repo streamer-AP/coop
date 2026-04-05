@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/local_music_providers.dart';
+import '../../application/providers/player_providers.dart';
 import '../widgets/audio_entry_tile.dart';
 
 class LocalMusicScreen extends ConsumerWidget {
@@ -44,7 +45,13 @@ class LocalMusicScreen extends ConsumerWidget {
                   return AudioEntryTile(
                     entry: song,
                     onTap: () {
-                      // TODO: Play song
+                      ref
+                          .read(playerStateNotifierProvider.notifier)
+                          .playCollectionEntry(
+                            song,
+                            context: songs,
+                            playlistTitle: '本地音乐',
+                          );
                     },
                   );
                 },

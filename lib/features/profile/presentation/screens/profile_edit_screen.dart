@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/omao_page_background.dart';
 import '../../application/providers/profile_providers.dart';
 import '../widgets/avatar_picker_sheet.dart';
 import '../widgets/glowing_avatar.dart';
@@ -55,10 +56,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
       });
     }
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.profileBackgroundGradient,
-      ),
+    return OmaoPageBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(

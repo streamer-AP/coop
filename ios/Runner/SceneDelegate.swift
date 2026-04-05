@@ -15,10 +15,12 @@ class SceneDelegate: FlutterSceneDelegate {
       AudioArtworkBridge.shared.attach(to: controller.binaryMessenger)
       AudioMetadataBridge.shared.attach(to: controller.binaryMessenger)
       TextTranslationBridge.shared.attach(to: controller)
+      AudioAnalysisBridge.shared.attach(to: controller.binaryMessenger)
     }
   }
 
   override func sceneDidDisconnect(_ scene: UIScene) {
+    AudioAnalysisBridge.shared.detach()
     TextTranslationBridge.shared.detach()
     AudioMetadataBridge.shared.detach()
     AudioArtworkBridge.shared.detach()

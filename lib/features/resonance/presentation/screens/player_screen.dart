@@ -15,6 +15,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../../controller/application/providers/controller_providers.dart';
+import '../../../controller/domain/models/waveform.dart';
 import '../../application/providers/player_providers.dart';
 import '../../application/providers/signal_providers.dart';
 import '../../application/providers/subtitle_providers.dart';
@@ -148,7 +149,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       expandedHeight: expandedPanelHeight,
     );
     final showPanelScrim = panelProgress > 0.18;
-    final contentBottomPadding = collapsedPanelHeight + 12;
+    final contentBottomPadding = collapsedPanelHeight + 70;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -161,53 +162,166 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               padding: EdgeInsets.only(bottom: contentBottomPadding),
               child: Column(
                 children: [
-                  // Top bar — only back button
+                  // Top bar — back button + title
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-                    child: Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => Navigator.of(context).pop(),
-                          child: AppIcons.asset(
-                            AppIcons.arrowLeft,
-                            width: 40,
-                            height: 40,
-                          ),
-                        ),
-                        const Spacer(),
-                      ],
-                    ),
-                  ),
-                  // Song title + author (or playlist title on cover page)
-                  _buildSongMeta(
-                    title:
-                        _displayMode == 0
-                            ? playlistTitle
-                            : (currentEntry?.title ?? '无播放'),
-                    artist:
-                        _displayMode == 0
-                            ? (currentEntry?.title ?? '')
-                            : (currentEntry?.artist?.trim().isNotEmpty ?? false)
-                            ? currentEntry!.artist!
-                            : 'Unknown Artist',
-                  ),
-                  const SizedBox(height: 8),
-                  // Main content area
-                  Expanded(
-                    child:
-                        showSubtitleStage
-                            ? _buildSubtitleStage()
-                            : showScriptStage
-                            ? const ScriptView()
-                            : Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                              ),
-                              child: _buildDiscStage(
-                                coverPath: currentEntry?.coverPath,
-                                onTap: hasEntry ? _cycleDisplayMode : null,
+                    child: SizedBox(
+                      height: _displayMode != 0 ? 52 : 40,
+                      child: Stack(
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: GestureDetector(
+                              onTap: () => Navigator.of(context).pop(),
+                              child: AppIcons.asset(
+                                AppIcons.arrowLeft,
+                                width: 40,
+                                height: 40,
                               ),
                             ),
+                          ),
+                          if (_displayMode != 0)
+                            // Lyrics/script mode: song name + author
+                            Center(
+                              child: SizedBox(
+                                width: 256,
+                                child: ShaderMask(
+                                  shaderCallback: (bounds) {
+                                    return const LinearGradient(
+                                      begin: Alignment(0.85, 0),
+                                      end: Alignment.centerRight,
+                                      colors: [
+                                        Colors.white,
+                                        Colors.transparent,
+                                      ],
+                                    ).createShader(bounds);
+                                  },
+                                  blendMode: BlendMode.dstIn,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        currentEntry?.title ?? '无播放',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.clip,
+                                        softWrap: false,
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.black,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        (currentEntry?.artist
+                                                    ?.trim()
+                                                    .isNotEmpty ??
+                                                false)
+                                            ? currentEntry!.artist!
+                                            : 'Unknown Artist',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.clip,
+                                        softWrap: false,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: Color(0xFF9E9E9E),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            // Cover mode: collection name
+                            Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 48,
+                                ),
+                                child: Text(
+                                  playlistTitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w400,
+                                    fontFamily: _collapsedTitleFontFamily,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Main content area — swipe left/right to switch modes
+                  // Disable horizontal swipe in script mode (displayMode==2)
+                  // to avoid conflicting with PDF scroll.
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onHorizontalDragEnd:
+                          hasEntry && _displayMode != 2
+                              ? (details) {
+                                final velocity =
+                                    details.primaryVelocity ?? 0;
+                                if (velocity < -300) {
+                                  // Swipe left → next mode
+                                  setState(
+                                    () =>
+                                        _displayMode =
+                                            (_displayMode + 1) % 3,
+                                  );
+                                } else if (velocity > 300) {
+                                  // Swipe right → previous mode
+                                  setState(
+                                    () =>
+                                        _displayMode =
+                                            (_displayMode + 2) % 3,
+                                  );
+                                }
+                              }
+                              : null,
+                      child:
+                          showSubtitleStage
+                              ? _buildSubtitleStage()
+                              : showScriptStage
+                              ? const ScriptView()
+                              : Column(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: Padding(
+                                      padding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 20,
+                                          ),
+                                      child: _buildDiscStage(
+                                        coverPath:
+                                            currentEntry?.coverPath,
+                                        onTap: null,
+                                      ),
+                                    ),
+                                  ),
+                                  // Song name + artist below cover
+                                  _buildSongMeta(
+                                    title:
+                                        currentEntry?.title ?? '无播放',
+                                    artist:
+                                        (currentEntry?.artist
+                                                    ?.trim()
+                                                    .isNotEmpty ??
+                                                false)
+                                            ? currentEntry!.artist!
+                                            : 'Unknown Artist',
+                                  ),
+                                  const SizedBox(height: 4),
+                                ],
+                              ),
+                    ),
                   ),
                   // More + Translate buttons (below lyrics)
                   if (hasEntry)
@@ -293,7 +407,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   const SizedBox(height: 8),
                   // Player controls
                   PlayerControls(onPlaylistTap: _showPlaylist),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                 ],
               ),
             ),
@@ -420,7 +534,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           width: 260,
           height: 260,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.18),
@@ -430,7 +544,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(30),
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -485,6 +599,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
   }
 
+  // Pivot alignment calculated from image pixel analysis:
+  // Circle center at pixel (258, 645) in 451x800 image
+  // Alignment = (258/(451/2) - 1, 645/(800/2) - 1) = (0.146, 0.613)
+  static const _tonearmPivot = Alignment(0.146, 0.43);
+
   Widget _buildTonearm() {
     return AnimatedBuilder(
       animation: _tonearmController,
@@ -497,7 +616,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             )!;
         return Transform.rotate(
           angle: angle,
-          alignment: Alignment.bottomCenter,
+          alignment: _tonearmPivot,
           child: child,
         );
       },
@@ -510,7 +629,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 
   Widget _buildSubtitleStage() {
-    return const SubtitleView();
+    return SubtitleView(onImportTap: _importSubtitleDirectly);
+  }
+
+  Future<void> _importSubtitleDirectly() async {
+    if (!mounted) return;
+    final currentEntry = ref.read(
+      playerStateNotifierProvider.select((s) => s.currentEntry),
+    );
+    if (currentEntry == null) return;
+
+    SubtitleCoverImportSheet.pickAndImportSubtitle(
+      context: context,
+      ref: ref,
+      entryId: currentEntry.id,
+    );
   }
 
   void _syncPlaybackAnimations(PlayerState playerState) {
@@ -610,7 +743,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   Widget _buildSongMeta({required String title, required String artist}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
+      padding: const EdgeInsets.symmetric(horizontal: 64),
       child: Column(
         children: [
           Text(
@@ -619,20 +752,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 18,
+              fontSize: 24,
               fontWeight: FontWeight.w500,
               color: Colors.black,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 5),
           Text(
             artist,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 14,
-              color: Colors.white.withValues(alpha: 0.7),
+              color: Color(0xFF787878),
             ),
           ),
         ],
@@ -651,7 +784,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     required String? deviceName,
   }) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    final showPreview = panelHeight >= previewHeight - 8;
     final showExpanded = panelHeight > previewHeight + 36;
     final actionEnabled = hasEntry;
     final actionLabel =
@@ -661,6 +793,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             ? '连接设备'
             : '暂无设备';
 
+
     return AnimatedContainer(
       duration:
           _isDraggingDevicePanel
@@ -669,6 +802,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       curve: Curves.easeOutCubic,
       height: panelHeight,
       width: double.infinity,
+      clipBehavior: Clip.hardEdge,
       decoration: const BoxDecoration(
         color: Color(0xFFF5F5F5),
         borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
@@ -676,18 +810,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       child: SafeArea(
         top: false,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap:
-                  () => _snapDevicePanel(
-                    showExpanded
-                        ? _DevicePanelSnap.preview
-                        : showPreview
-                        ? _DevicePanelSnap.expanded
-                        : _DevicePanelSnap.preview,
-                    bottomInset: bottomInset,
-                  ),
+              onTap: () {
+                if (showExpanded) {
+                  _closeControlPanel();
+                } else {
+                  _openControlPanel();
+                }
+              },
               onVerticalDragUpdate:
                   (details) => _handleDevicePanelDragUpdate(
                     details,
@@ -711,92 +844,56 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                         borderRadius: BorderRadius.circular(6),
                       ),
                     ),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 180),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeOutCubic,
-                      child:
-                          showExpanded
-                              ? Padding(
-                                key: const ValueKey('expanded-header'),
-                                padding: const EdgeInsets.only(top: 14),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      deviceName?.trim().isNotEmpty == true
-                                          ? deviceName!
-                                          : '控制面板',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                        color: Color(0xFF1C1B1F),
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    Text(
-                                      isDeviceConnected ? '设备已连接' : '未连接设备',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color:
-                                            isDeviceConnected
-                                                ? const Color(0xFF6A53A7)
-                                                : const Color(0xFF979797),
-                                      ),
-                                    ),
-                                    IconButton(
-                                      onPressed: _closeControlPanel,
-                                      icon: const Icon(
-                                        Icons.expand_more_rounded,
-                                        color: Color(0xFF8A8A8A),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                              : showPreview
-                              ? Padding(
-                                key: const ValueKey('preview-button'),
-                                padding: const EdgeInsets.only(top: 21),
-                                child: _buildDevicePanelButton(
-                                  label: actionLabel,
-                                  enabled: actionEnabled,
-                                  onTap:
-                                      actionEnabled
-                                          ? () {
-                                            if (isDeviceConnected) {
-                                              _openControlPanel();
-                                              return;
-                                            }
-                                            context.pushNamed(
-                                              RouteNames.controller,
-                                            );
-                                          }
-                                          : null,
-                                ),
-                              )
-                              : Padding(
-                                key: const ValueKey('collapsed-title'),
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  'OMAO WITH YOU',
-                                  style: TextStyle(
-                                    fontFamily: _collapsedTitleFontFamily,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(
-                                      0xFF6A53A7,
-                                    ).withValues(alpha: 0.20),
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
+                    if (showExpanded)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: Row(
+                          children: [
+                            const Text(
+                              '收起控制',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF1C1B1F),
                               ),
-                    ),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              onPressed: _closeControlPanel,
+                              icon: const Icon(
+                                Icons.expand_more_rounded,
+                                color: Color(0xFF8A8A8A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: _buildDevicePanelButton(
+                          label: actionLabel,
+                          enabled: actionEnabled,
+                          onTap:
+                              actionEnabled
+                                  ? () {
+                                    if (isDeviceConnected) {
+                                      _openControlPanel();
+                                      return;
+                                    }
+                                    context.pushNamed(
+                                      RouteNames.controller,
+                                    );
+                                  }
+                                  : null,
+                        ),
+                      ),
                   ],
                 ),
               ),
             ),
             if (showExpanded)
-              Expanded(
+              Flexible(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                   child: _buildControlPanelContent(signalMode),
@@ -815,8 +912,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }) {
     final contentColor =
         enabled ? const Color(0xFF6A53A7) : const Color(0xFF9E9E9E);
-    final iconBackground =
-        enabled ? const Color(0xFFECE5FF) : const Color(0xFFE8E8E8);
 
     return GestureDetector(
       onTap: onTap,
@@ -832,9 +927,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                     colors: [
-                      Color(0xFFECE5FF),
-                      Color(0xFFFBF9FF),
-                      Colors.white,
+                      Color(0xFFEBE4FF),
+                      Color(0xFFFAF9FF),
+                      Color(0xFFFFFFFF),
                     ],
                     stops: [0.0, 0.53, 0.98],
                   )
@@ -853,50 +948,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         ),
         child: Row(
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: iconBackground,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Center(
-                child: AppIcons.icon(
-                  AppIcons.deviceLink,
-                  size: 18,
-                  color: contentColor,
-                ),
+            AppIcons.asset(AppIcons.linkBroken, width: 24, height: 24),
+            const Spacer(),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: contentColor,
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: contentColor,
-                ),
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Transform.translate(
-                  offset: const Offset(6, 0),
-                  child: AppIcons.icon(
-                    AppIcons.arrowRight,
-                    size: 16,
-                    color: contentColor.withValues(alpha: enabled ? 0.55 : 0.7),
-                  ),
-                ),
-                AppIcons.icon(
-                  AppIcons.arrowRight,
-                  size: 16,
-                  color: contentColor.withValues(alpha: enabled ? 0.85 : 0.9),
-                ),
-              ],
+            const Spacer(),
+            AppIcons.asset(
+              AppIcons.tripleArrowRight,
+              width: 24,
+              height: 24,
             ),
           ],
         ),
@@ -907,138 +973,182 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   Widget _buildControlPanelContent(SignalMode signalMode) {
     final isResonanceMode = signalMode == SignalMode.resonance;
     final isPresetMode = signalMode == SignalMode.preset;
+    final controllerState = ref.watch(controllerStateNotifierProvider);
+    final swingName =
+        controllerState.selectedSwingWaveform?.name ?? '预设名1';
+    final vibrationName =
+        controllerState.selectedVibrationWaveform?.name ?? '预设名1';
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const fixedHeaderHeight = 68.0;
-        final cardMinHeight = math.max(
-          0.0,
-          constraints.maxHeight - fixedHeaderHeight,
-        );
-
-        return SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Column(
-              children: [
-                _buildSignalToggleCard(
-                  label: '同步共鸣',
-                  selected: isResonanceMode,
-                  onChanged: (enabled) async {
-                    if (enabled) {
-                      await ref
-                          .read(signalModeNotifierProvider.notifier)
-                          .setMode(SignalMode.resonance);
-                      ref
-                          .read(bleSignalArbitratorProvider)
-                          .releaseSource(SignalSource.preset);
-                    } else {
-                      await ref
-                          .read(signalModeNotifierProvider.notifier)
-                          .setMode(SignalMode.off);
-                    }
-                  },
-                ),
-                const SizedBox(height: 8),
-                ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: cardMinHeight),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(26, 16, 26, 18),
-                    child: Column(
-                      children: [
-                        _buildPresetModeHeader(
-                          selected: isPresetMode,
-                          onChanged: (enabled) async {
-                            if (enabled) {
-                              await ref
-                                  .read(signalModeNotifierProvider.notifier)
-                                  .setMode(SignalMode.preset);
-                              _sendPresetSignal();
-                            } else {
-                              await ref
-                                  .read(signalModeNotifierProvider.notifier)
-                                  .setMode(SignalMode.off);
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        _buildPresetSection(
-                          title: '摇摆',
-                          svgPath: AppIcons.swing,
-                          value: _swingLevel,
-                          enabled: isPresetMode,
-                          onChanged: (value) {
-                            setState(() => _swingLevel = value);
-                            _sendPresetSignal();
-                          },
-                        ),
-                        const SizedBox(height: 26),
-                        _buildPresetSection(
-                          title: '震动',
-                          svgPath: AppIcons.vibration,
-                          value: _vibrationLevel,
-                          enabled: isPresetMode,
-                          onChanged: (value) {
-                            setState(() => _vibrationLevel = value);
-                            _sendPresetSignal();
-                          },
-                        ),
-                      ],
+    return SingleChildScrollView(
+      physics: const ClampingScrollPhysics(),
+      child: Column(
+        children: [
+          // — 同步共鸣 card —
+          if (isResonanceMode)
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              padding: const EdgeInsets.fromLTRB(26, 16, 26, 18),
+              child: Column(
+                children: [
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '同步共鸣',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 14),
+                  _buildPresetSection(
+                    title: '摇摆',
+                    svgPath: AppIcons.swing,
+                    value: _swingLevel,
+                    enabled: true,
+                    onChanged: (value) {
+                      setState(() => _swingLevel = value);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  _buildPresetSection(
+                    title: '震动',
+                    svgPath: AppIcons.vibration,
+                    value: _vibrationLevel,
+                    enabled: true,
+                    onChanged: (value) {
+                      setState(() => _vibrationLevel = value);
+                    },
+                  ),
+                ],
+              ),
+            )
+          else
+            _buildModeCard(
+              label: '同步共鸣',
+              onTap: () async {
+                await ref
+                    .read(signalModeNotifierProvider.notifier)
+                    .setMode(SignalMode.resonance);
+                ref
+                    .read(bleSignalArbitratorProvider)
+                    .releaseSource(SignalSource.preset);
+              },
             ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildSignalToggleCard({
-    required String label,
-    required bool selected,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 26),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Text(label, style: const TextStyle(fontSize: 16)),
-          const Spacer(),
-          Switch.adaptive(
-            value: selected,
-            activeThumbColor: const Color(0xFF6A53A7),
-            activeTrackColor: const Color(0xFFBBAFE1),
-            onChanged: onChanged,
-          ),
+          const SizedBox(height: 8),
+          // — 使用预设 card —
+          if (isPresetMode)
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              padding: const EdgeInsets.fromLTRB(26, 16, 26, 18),
+              child: Column(
+                children: [
+                  _buildPresetSectionWithName(
+                    presetName: swingName,
+                    title: '摇摆',
+                    svgPath: AppIcons.swing,
+                    value: _swingLevel,
+                    onChanged: (value) {
+                      setState(() => _swingLevel = value);
+                      _sendPresetSignal();
+                    },
+                    onSettingsTap: _showPresetSelection,
+                  ),
+                  const SizedBox(height: 20),
+                  _buildPresetSectionWithName(
+                    presetName: vibrationName,
+                    title: '震动',
+                    svgPath: AppIcons.vibration,
+                    value: _vibrationLevel,
+                    onChanged: (value) {
+                      setState(() => _vibrationLevel = value);
+                      _sendPresetSignal();
+                    },
+                    onSettingsTap: _showPresetSelection,
+                  ),
+                ],
+              ),
+            )
+          else
+            _buildModeCard(
+              label: '使用预设',
+              onTap: _showPresetSelection,
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildPresetModeHeader({
-    required bool selected,
-    required ValueChanged<bool> onChanged,
+  Widget _buildModeCard({
+    required String label,
+    required VoidCallback onTap,
   }) {
-    return Row(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 26),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 16),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPresetSectionWithName({
+    required String presetName,
+    required String title,
+    required String svgPath,
+    required double value,
+    required ValueChanged<double> onChanged,
+    required VoidCallback onSettingsTap,
+  }) {
+    return Column(
       children: [
-        const Text('使用预设', style: TextStyle(fontSize: 16, color: Colors.black)),
-        const Spacer(),
-        Switch.adaptive(
-          value: selected,
-          activeThumbColor: const Color(0xFF6A53A7),
-          activeTrackColor: const Color(0xFFBBAFE1),
+        Row(
+          children: [
+            Text(
+              presetName,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: onSettingsTap,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: AppIcons.asset(
+                  AppIcons.switchPreset,
+                  width: 24,
+                  height: 24,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildPresetSection(
+          title: title,
+          svgPath: svgPath,
+          value: value,
+          enabled: true,
           onChanged: onChanged,
         ),
       ],
@@ -1145,6 +1255,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 
   void _openControlPanel() {
+    final signalMode = ref.read(signalModeNotifierProvider);
+    if (signalMode == SignalMode.off) {
+      ref
+          .read(signalModeNotifierProvider.notifier)
+          .setMode(SignalMode.resonance);
+    }
     _snapDevicePanel(
       _DevicePanelSnap.expanded,
       bottomInset: MediaQuery.of(context).padding.bottom,
@@ -1158,12 +1274,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
   }
 
-  double _collapsedPanelHeight(double bottomInset) => 63 + bottomInset;
+  double _collapsedPanelHeight(double bottomInset) => 78 + bottomInset;
 
-  double _previewPanelHeight(double bottomInset) => 130 + bottomInset;
+  double _previewPanelHeight(double bottomInset) => 90 + bottomInset;
 
   double _expandedPanelHeight(double bottomInset) =>
-      math.min(MediaQuery.of(context).size.height * 0.66, 541).toDouble() +
+      math.min(MediaQuery.of(context).size.height * 0.52, 445).toDouble() +
       bottomInset;
 
   double _resolvedDevicePanelHeight({
@@ -1191,6 +1307,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       _DevicePanelSnap.preview => _previewPanelHeight(bottomInset),
       _DevicePanelSnap.expanded => _expandedPanelHeight(bottomInset),
     };
+
+    if (snap == _DevicePanelSnap.expanded) {
+      final signalMode = ref.read(signalModeNotifierProvider);
+      if (signalMode == SignalMode.off) {
+        ref
+            .read(signalModeNotifierProvider.notifier)
+            .setMode(SignalMode.resonance);
+      }
+    }
 
     setState(() {
       _isDraggingDevicePanel = false;
@@ -1285,6 +1410,207 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         vibration: vibration,
         source: SignalSource.preset,
       ),
+    );
+  }
+
+  void _showPresetSelection() {
+    final allWaveforms = ref.read(waveformsProvider).valueOrNull ?? [];
+    final swingPresets =
+        allWaveforms.where((w) => w.channel == WaveformChannel.swing).toList();
+    final vibrationPresets =
+        allWaveforms
+            .where((w) => w.channel == WaveformChannel.vibration)
+            .toList();
+    final controllerNotifier = ref.read(
+      controllerStateNotifierProvider.notifier,
+    );
+    final currentState = ref.read(controllerStateNotifierProvider);
+
+    Waveform? selectedSwing = currentState.selectedSwingWaveform;
+    Waveform? selectedVibration = currentState.selectedVibrationWaveform;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFFF4F4F4),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.55,
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDBD4EE),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Text(
+                        '使用预设',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          if (selectedSwing != null) {
+                            controllerNotifier.selectSwingWaveform(
+                              selectedSwing!,
+                            );
+                          }
+                          if (selectedVibration != null) {
+                            controllerNotifier.selectVibrationWaveform(
+                              selectedVibration!,
+                            );
+                          }
+                          ref
+                              .read(signalModeNotifierProvider.notifier)
+                              .setMode(SignalMode.preset);
+                          _sendPresetSignal();
+                        },
+                        child: const Text(
+                          '完成',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF6A53A7),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '摇摆预设',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF797979),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children:
+                                swingPresets.map((w) {
+                                  final isSelected =
+                                      selectedSwing?.id == w.id;
+                                  return GestureDetector(
+                                    onTap:
+                                        () => setSheetState(
+                                          () => selectedSwing = w,
+                                        ),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            isSelected
+                                                ? const Color(0xFF6A53A7)
+                                                : Colors.white,
+                                        borderRadius: BorderRadius.circular(
+                                          20,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        w.name,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color:
+                                              isSelected
+                                                  ? Colors.white
+                                                  : const Color(0xFF333333),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            '震动预设',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF797979),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children:
+                                vibrationPresets.map((w) {
+                                  final isSelected =
+                                      selectedVibration?.id == w.id;
+                                  return GestureDetector(
+                                    onTap:
+                                        () => setSheetState(
+                                          () => selectedVibration = w,
+                                        ),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            isSelected
+                                                ? const Color(0xFF6A53A7)
+                                                : Colors.white,
+                                        borderRadius: BorderRadius.circular(
+                                          20,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        w.name,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color:
+                                              isSelected
+                                                  ? Colors.white
+                                                  : const Color(0xFF333333),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

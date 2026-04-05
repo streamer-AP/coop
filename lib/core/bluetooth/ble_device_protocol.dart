@@ -34,6 +34,10 @@ class BleDeviceProtocol {
   static const controlSourceCharacteristicUuid =
       '0000F260-0000-1000-8000-00805F9B34FB';
 
+  /// 设备序列号特征（Device Information Service）
+  static const serialNumberCharacteristicUuid =
+      '00002A25-0000-1000-8000-00805F9B34FB';
+
   /// 设备所需的全部服务 UUID
   static const requiredServiceUuids = [
     '0000180A-0000-1000-8000-00805F9B34FB',

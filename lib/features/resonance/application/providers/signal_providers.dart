@@ -5,8 +5,10 @@ import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/bluetooth/ble_signal_arbitrator.dart';
+import '../../../../core/storage/file_manager.dart';
 import '../../domain/models/player_state.dart';
 import '../../domain/models/signal_timeline.dart';
+import '../services/audio_analysis_service.dart';
 import '../services/signal_sync_service.dart';
 import 'player_providers.dart';
 import 'resonance_providers.dart';
@@ -59,8 +61,28 @@ class SignalModeNotifier extends _$SignalModeNotifier {
     final repo = ref.read(resonanceRepositoryProvider);
     final syncService = ref.read(signalSyncServiceProvider);
 
-    final signalPath = await repo.getSignalFilePathForEntry(entryId);
-    if (signalPath == null) return;
+    var signalPath = await repo.getSignalFilePathForEntry(entryId);
+
+    // Auto-generate signal file if none exists
+    if (signalPath == null) {
+      final entry = await repo.getEntry(entryId);
+      if (entry == null) return;
+
+      try {
+        final analysisService = AudioAnalysisService();
+        final fileManager = ref.read(fileManagerProvider);
+        final generatedPath = await analysisService.analyzeAndSave(
+          audioFilePath: entry.filePath,
+          entryId: entryId,
+          importDir: fileManager.getImportDirectory(),
+        );
+        await repo.insertSignalFile(entryId, generatedPath);
+        signalPath = generatedPath;
+      } catch (_) {
+        // Analysis failed, continue without signal
+        return;
+      }
+    }
 
     try {
       final content = await File(signalPath).readAsString();

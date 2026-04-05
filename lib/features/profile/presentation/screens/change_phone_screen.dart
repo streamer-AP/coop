@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
+import '../../../../shared/widgets/omao_page_background.dart';
 import '../../../../shared/widgets/purple_gradient_button.dart';
 import '../../../../shared/widgets/verification_code_input.dart';
 import '../../../auth/application/providers/auth_providers.dart';
@@ -34,29 +35,56 @@ class _ChangePhoneScreenState extends ConsumerState<ChangePhoneScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.profileBackgroundGradient,
-      ),
+    return OmaoPageBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
-          title: Text(_currentStep == 0 ? '验证原手机号' : '输入新手机号'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, size: 20),
-            onPressed: () {
-              if (_currentStep > 0) {
-                _pageController.previousPage(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                );
-                setState(() => _currentStep--);
-              } else {
-                Navigator.of(context).pop();
-              }
-            },
+          elevation: 0,
+          centerTitle: true,
+          title: Text(
+            _currentStep == 0 ? '验证原手机号' : '输入新手机号',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 1.8,
+              color: Color(0xFF000000),
+            ),
           ),
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: GestureDetector(
+              onTap: () {
+                if (_currentStep > 0) {
+                  _pageController.previousPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                  setState(() => _currentStep--);
+                } else {
+                  Navigator.of(context).pop();
+                }
+              },
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: AppIcons.icon(
+                      AppIcons.arrowLeft,
+                      size: 20,
+                      color: const Color(0xFF000000),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          leadingWidth: 56,
         ),
         body: PageView(
           controller: _pageController,

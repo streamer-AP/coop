@@ -420,6 +420,7 @@ class AuthUnderlineField extends StatelessWidget {
     this.inputFormatters,
     this.obscureText = false,
     this.onChanged,
+    this.textStyle,
   });
 
   final String? label;
@@ -431,6 +432,7 @@ class AuthUnderlineField extends StatelessWidget {
   final List<TextInputFormatter>? inputFormatters;
   final bool obscureText;
   final ValueChanged<String>? onChanged;
+  final TextStyle? textStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -474,10 +476,12 @@ class AuthUnderlineField extends StatelessWidget {
                   inputFormatters: inputFormatters,
                   obscureText: obscureText,
                   cursorColor: AuthPalette.link,
-                  style: AuthFonts.englishTextStyle(
-                    fontSize: 16,
-                    color: AuthPalette.title,
-                  ),
+                  style:
+                      textStyle ??
+                      AuthFonts.englishTextStyle(
+                        fontSize: 16,
+                        color: AuthPalette.title,
+                      ),
                   decoration: InputDecoration(
                     isDense: true,
                     hintText: hintText,
@@ -628,8 +632,12 @@ class AuthAgreementRow extends StatelessWidget {
             ),
             child:
                 agreed
-                    ? Center(
-                      child: AppIcons.icon(AppIcons.check, size: 10, color: Colors.white),
+                    ? const Center(
+                      child: Icon(
+                        Icons.check_rounded,
+                        size: 11,
+                        color: Colors.white,
+                      ),
                     )
                     : null,
           ),

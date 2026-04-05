@@ -1,5 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../domain/models/cancellation_session.dart';
 import 'profile_providers.dart';
 
 part 'account_providers.g.dart';
@@ -15,10 +16,9 @@ class ChangePasswordNotifier extends _$ChangePasswordNotifier {
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      await ref.read(profileRepositoryProvider).changePassword(
-            oldPassword: oldPassword,
-            newPassword: newPassword,
-          );
+      await ref
+          .read(profileRepositoryProvider)
+          .changePassword(oldPassword: oldPassword, newPassword: newPassword);
     });
     return !state.hasError;
   }
@@ -30,7 +30,9 @@ class ChangePasswordNotifier extends _$ChangePasswordNotifier {
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      await ref.read(profileRepositoryProvider).changePasswordByCode(
+      await ref
+          .read(profileRepositoryProvider)
+          .changePasswordByCode(
             phone: phone,
             code: code,
             newPassword: newPassword,
@@ -53,7 +55,9 @@ class ChangePhoneNotifier extends _$ChangePhoneNotifier {
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      await ref.read(profileRepositoryProvider).changePhone(
+      await ref
+          .read(profileRepositoryProvider)
+          .changePhone(
             oldPhone: oldPhone,
             oldCode: oldCode,
             newPhone: newPhone,
@@ -70,15 +74,14 @@ class DeactivateAccountNotifier extends _$DeactivateAccountNotifier {
   FutureOr<void> build() {}
 
   Future<bool> deactivate({
-    required String phone,
+    required CancellationSession session,
     required String code,
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      await ref.read(profileRepositoryProvider).deactivateAccount(
-            phone: phone,
-            code: code,
-          );
+      await ref
+          .read(profileRepositoryProvider)
+          .deactivateAccount(session: session, code: code);
     });
     return !state.hasError;
   }

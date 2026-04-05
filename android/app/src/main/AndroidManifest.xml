@@ -56,6 +56,11 @@
             </intent-filter>
         </service>
 
+        <!-- audio_service 通知小图标 -->
+        <meta-data
+            android:name="com.ryanheise.audioservice.NOTIFICATION_ICON"
+            android:resource="@drawable/ic_stat_omao"/>
+
         <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver"
             android:exported="true">
             <intent-filter>

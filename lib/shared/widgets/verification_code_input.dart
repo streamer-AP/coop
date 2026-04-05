@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../core/theme/app_colors.dart';
 import '../../features/auth/domain/models/auth_exception.dart';
 
 class VerificationCodeInput extends StatefulWidget {
@@ -30,6 +29,9 @@ class _VerificationCodeInputState extends State<VerificationCodeInput> {
   Timer? _timer;
   int _remaining = 0;
   bool _isSending = false;
+
+  static const _labelColor = Color(0xFF000000);
+  static const _dividerColor = Color(0x668988AB); // #8988AB @ 0.4
 
   bool get _canSend =>
       !_isSending &&
@@ -88,7 +90,11 @@ class _VerificationCodeInputState extends State<VerificationCodeInput> {
       children: [
         const Text(
           '输入手机号码',
-          style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w300,
+            color: _labelColor,
+          ),
         ),
         const SizedBox(height: 8),
         TextField(
@@ -98,25 +104,55 @@ class _VerificationCodeInputState extends State<VerificationCodeInput> {
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(11),
           ],
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w300,
+            color: _labelColor,
+          ),
           decoration: InputDecoration(
+            hintText: '请输入手机号码',
+            hintStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w300,
+              color: Color(0xFF787878),
+            ),
             prefixText: '${widget.phonePrefix} | ',
             prefixStyle: const TextStyle(
               fontSize: 16,
-              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w300,
+              color: _labelColor,
             ),
             suffixIcon:
                 widget.phoneController.text.isNotEmpty
-                    ? IconButton(
-                      icon: const Icon(Icons.cancel, size: 20),
-                      onPressed: () {
+                    ? GestureDetector(
+                      onTap: () {
                         widget.phoneController.clear();
                         setState(() {});
                       },
+                      child: Center(
+                        widthFactor: 1,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF000000).withValues(alpha: 0.3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
                     )
                     : null,
             border: const UnderlineInputBorder(),
             enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+              borderSide: BorderSide(color: _dividerColor),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: _dividerColor),
             ),
           ),
           onChanged: (_) => setState(() {}),
@@ -124,7 +160,11 @@ class _VerificationCodeInputState extends State<VerificationCodeInput> {
         const SizedBox(height: 24),
         const Text(
           '输入验证码',
-          style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w300,
+            color: _labelColor,
+          ),
         ),
         const SizedBox(height: 8),
         Row(
@@ -133,14 +173,28 @@ class _VerificationCodeInputState extends State<VerificationCodeInput> {
               child: TextField(
                 controller: widget.codeController,
                 keyboardType: TextInputType.number,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w300,
+                  color: _labelColor,
+                ),
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(6),
                 ],
                 decoration: const InputDecoration(
+                  hintText: '请输入验证码',
+                  hintStyle: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w300,
+                    color: Color(0xFF787878),
+                  ),
                   border: UnderlineInputBorder(),
                   enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+                    borderSide: BorderSide(color: _dividerColor),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: _dividerColor),
                   ),
                 ),
               ),
@@ -149,17 +203,15 @@ class _VerificationCodeInputState extends State<VerificationCodeInput> {
             GestureDetector(
               onTap: _canSend ? () => _startCountdown() : null,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
+                height: 32,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
-                  color:
-                      _canSend
-                          ? AppColors.primary.withValues(alpha: 0.1)
-                          : const Color(0xFFF0F0F0),
-                  borderRadius: BorderRadius.circular(20),
+                  color: _remaining > 0
+                      ? const Color(0xFF6A53A7).withValues(alpha: 0.4)
+                      : const Color(0xFFA299C8),
+                  borderRadius: BorderRadius.circular(200),
                 ),
+                alignment: Alignment.center,
                 child: Text(
                   _isSending
                       ? '发送中...'
@@ -167,8 +219,10 @@ class _VerificationCodeInputState extends State<VerificationCodeInput> {
                       ? '已发送(${_remaining}s)'
                       : '获取验证码',
                   style: TextStyle(
-                    fontSize: 14,
-                    color: _canSend ? AppColors.primary : AppColors.textHint,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 1.2,
+                    color: Colors.white.withValues(alpha: 0.8),
                   ),
                 ),
               ),

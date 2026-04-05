@@ -99,9 +99,43 @@ class SubtitleService {
 
   // --- VTT Parser ---
   List<SubtitleCue> _parseVtt(String content) {
-    // VTT is very similar to SRT but may have header line "WEBVTT"
-    final stripped = content.replaceFirst(RegExp(r'^WEBVTT[^\n]*\n?'), '');
-    return _parseSrt(stripped);
+    final cues = <SubtitleCue>[];
+    // Strip WEBVTT header and any metadata lines before the first blank line
+    final stripped = content.replaceFirst(
+      RegExp(r'^WEBVTT[^\n]*\n(?:[^\n]+\n)*\n?'),
+      '',
+    );
+    final blocks = stripped.trim().split(RegExp(r'\n\s*\n'));
+    final timePattern = RegExp(
+      r'(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})',
+    );
+
+    for (final block in blocks) {
+      final lines = block.trim().split('\n');
+      if (lines.isEmpty) continue;
+
+      // Find the line with the timestamp (could be first or second line)
+      int timeLineIndex = -1;
+      RegExpMatch? match;
+      for (var i = 0; i < lines.length; i++) {
+        match = timePattern.firstMatch(lines[i]);
+        if (match != null) {
+          timeLineIndex = i;
+          break;
+        }
+      }
+      if (match == null || timeLineIndex < 0) continue;
+
+      final start = _parseSrtTime(match, 1);
+      final end = _parseSrtTime(match, 5);
+      final textLines = lines.sublist(timeLineIndex + 1);
+      if (textLines.isEmpty) continue;
+      final text = textLines.join('\n').replaceAll(RegExp(r'<[^>]+>'), '');
+
+      cues.add(SubtitleCue(start: start, end: end, text: text));
+    }
+
+    return cues;
   }
 
   // --- LRC Parser ---

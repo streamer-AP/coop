@@ -15,11 +15,19 @@ final class TextTranslationBridge: NSObject {
   private weak var rootViewController: UIViewController?
 
   #if canImport(Translation)
+  private var _coordinator: Any?
   @available(iOS 18.0, *)
-  private let coordinator = TranslationCoordinator()
+  private var coordinator: TranslationCoordinator {
+    if _coordinator == nil { _coordinator = TranslationCoordinator() }
+    return _coordinator as! TranslationCoordinator
+  }
 
+  private var _hostingController: Any?
   @available(iOS 18.0, *)
-  private var hostingController: UIHostingController<HiddenTranslationView>?
+  private var hostingController: UIHostingController<HiddenTranslationView>? {
+    get { _hostingController as? UIHostingController<HiddenTranslationView> }
+    set { _hostingController = newValue }
+  }
   #endif
 
   private override init() {}
@@ -251,7 +259,7 @@ private struct HiddenTranslationView: View {
           let translatedByIndex = Dictionary(
             uniqueKeysWithValues: responses.map { response in
               (
-                Int(response.clientIdentifier) ?? 0,
+                Int(response.clientIdentifier ?? "") ?? 0,
                 response.targetText
               )
             }

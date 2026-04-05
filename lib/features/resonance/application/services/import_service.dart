@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
@@ -122,13 +122,43 @@ class ImportService {
     String zipPath, {
     String? password,
   }) async {
-    final extracted = await _extractZip(zipPath, password: password);
+    // Read only the ZIP central directory (file names) without loading
+    // any compressed data into memory. This keeps memory usage minimal
+    // even for multi-GB archives.
+    List<String> entryNames;
+    try {
+      final inputStream = InputFileStream(zipPath);
+      final directory = ZipDirectory();
+      directory.read(inputStream, password: password);
+      entryNames =
+          directory.fileHeaders
+              .where((h) => !h.filename.endsWith('/'))
+              .map((h) => _repairZipEntryName(h.filename))
+              .toList();
+      inputStream.close();
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('filter') ||
+          msg.contains('bad data') ||
+          msg.contains('password') ||
+          msg.contains('encrypted')) {
+        if (password == null || password.isEmpty) {
+          throw Exception('该压缩包可能有密码保护，请输入密码后重试');
+        }
+        throw Exception('密码错误或压缩包损坏，请检查密码后重试');
+      }
+      rethrow;
+    }
 
+    if (entryNames.isEmpty) {
+      throw Exception('压缩包为空或密码错误');
+    }
+
+    // Build preview from entry names (no real paths on disk yet)
     return _buildPreview(
-      extracted.paths,
+      entryNames,
       sourceType: ImportSourceType.zip,
       archivePath: zipPath,
-      extractedDir: extracted.directory,
     );
   }
 
@@ -146,14 +176,37 @@ class ImportService {
     ImportPreview preview, {
     ImportProgressCallback? onProgress,
     List<String>? existingTitles,
+    String? password,
   }) async {
-    final paths = preview.selectedPaths;
-    if (paths.isEmpty) {
+    if (preview.selectedPaths.isEmpty) {
       throw Exception('请先选择需要导入的文件');
     }
 
     if (!preview.hasSelectedMedia) {
       throw Exception('请至少选择一个音频或视频文件');
+    }
+
+    // For ZIP imports: extract now (deferred from preview stage)
+    List<String> paths;
+    String? tempDir;
+    if (preview.sourceType == ImportSourceType.zip &&
+        preview.extractedDir == null &&
+        preview.archivePath != null) {
+      // Report extraction phase
+      onProgress?.call(-1, 0); // -1 signals "extracting"
+      final extracted = await _extractZip(
+        preview.archivePath!,
+        password: password,
+      );
+      tempDir = extracted.directory;
+
+      // Use all extracted files — the import categorization step will
+      // handle which files are media, subtitles, covers, etc.
+      // User deselections are rare for ZIP imports; the main use case is
+      // selecting everything and importing.
+      paths = extracted.paths;
+    } else {
+      paths = preview.selectedPaths;
     }
 
     final succeeded = <ImportedItem>[];
@@ -190,12 +243,22 @@ class ImportService {
     final remainingScripts = List<String>.of(scriptFiles);
     final remainingSignals = List<String>.of(signalFiles);
 
+    AppLogger().debug(
+      'Import: ${mediaFiles.length} media, '
+      '${subtitleFiles.length} subtitles, '
+      '${coverFiles.length} covers',
+    );
+    for (final s in subtitleFiles) {
+      AppLogger().debug('  subtitle: ${p.basename(s)} baseName=${_baseName(s)}');
+    }
+
     for (var i = 0; i < mediaFiles.length; i++) {
       final mediaPath = mediaFiles[i];
       onProgress?.call(i + 1, mediaFiles.length);
 
       try {
         final rawTitle = _baseName(mediaPath);
+        AppLogger().debug('  media[$i]: baseName=$rawTitle');
         final title = _deduplicateTitle(rawTitle, usedTitles);
         usedTitles.add(title);
 
@@ -206,6 +269,10 @@ class ImportService {
           rawTitle,
           remainingSubtitles,
           _subtitlePriority,
+        );
+        AppLogger().debug(
+          '  match result: subtitle=${matchedSubtitle != null ? p.basename(matchedSubtitle) : "NONE"}'
+          ' (remaining=${remainingSubtitles.length})',
         );
         final matchedCover = _takeBestMatch(
           rawTitle,
@@ -330,6 +397,13 @@ class ImportService {
       'Import complete: ${succeeded.length} succeeded, ${failed.length} failed',
     );
 
+    // Clean up temp extraction directory for deferred ZIP imports
+    if (tempDir != null) {
+      try {
+        await Directory(tempDir).delete(recursive: true);
+      } catch (_) {}
+    }
+
     return ImportResult(succeeded: succeeded, failed: failed);
   }
 
@@ -401,7 +475,17 @@ class ImportService {
   }
 
   String _baseName(String path) {
-    return p.basenameWithoutExtension(path);
+    var name = p.basenameWithoutExtension(path);
+    // Strip additional known media extensions (e.g. "song.wav.vtt" → "song")
+    final knownExts = {
+      ...ResonanceMediaSupport.audioExtensions,
+      ...ResonanceMediaSupport.videoExtensions,
+    };
+    final trailing = p.extension(name).toLowerCase().replaceFirst('.', '');
+    if (knownExts.contains(trailing)) {
+      name = p.withoutExtension(name);
+    }
+    return name;
   }
 
   Future<String> _importMediaFile(String mediaPath, String rawTitle) async {
@@ -548,12 +632,21 @@ class ImportService {
     String zipPath, {
     String? password,
   }) async {
-    final bytes = await File(zipPath).readAsBytes();
+    // Check file size — warn for very large archives
+    final zipFileSize = await File(zipPath).length();
+    if (zipFileSize > 2 * 1024 * 1024 * 1024) {
+      // > 2GB: likely to cause OOM
+      throw Exception('压缩包过大（${(zipFileSize / 1024 / 1024 / 1024).toStringAsFixed(1)}GB），'
+          '请拆分后导入或直接导入文件');
+    }
+
+    final inputStream = InputFileStream(zipPath);
 
     Archive archive;
     try {
-      archive = ZipDecoder().decodeBytes(bytes, password: password);
+      archive = ZipDecoder().decodeStream(inputStream, password: password);
     } catch (e) {
+      inputStream.close();
       final msg = e.toString().toLowerCase();
       if (msg.contains('filter') ||
           msg.contains('bad data') ||
@@ -568,6 +661,7 @@ class ImportService {
     }
 
     if (archive.isEmpty) {
+      inputStream.close();
       throw Exception('压缩包为空或密码错误');
     }
 
@@ -578,14 +672,20 @@ class ImportService {
     final extractedPaths = <String>[];
 
     for (final file in archive) {
-      if (file.isFile) {
-        final repairedEntryName = _repairZipEntryName(file.name);
-        final outPath = p.join(extractDir.path, repairedEntryName);
-        final outFile = File(outPath);
-        await outFile.parent.create(recursive: true);
-        await outFile.writeAsBytes(file.content as List<int>);
-        extractedPaths.add(outPath);
-      }
+      if (!file.isFile) continue;
+      final repairedEntryName = _repairZipEntryName(file.name);
+      final outPath = p.join(extractDir.path, repairedEntryName);
+      await File(outPath).parent.create(recursive: true);
+      final outStream = OutputFileStream(outPath);
+      file.writeContent(outStream);
+      outStream.close();
+      extractedPaths.add(outPath);
+    }
+
+    inputStream.close();
+
+    if (extractedPaths.isEmpty) {
+      throw Exception('压缩包为空或密码错误');
     }
 
     return (directory: extractDir.path, paths: extractedPaths);
@@ -597,24 +697,27 @@ class ImportService {
     String? archivePath,
     String? extractedDir,
   }) {
-    final items = paths
-        .map((path) {
-          final type = _classifyFile(path);
+    var items = paths
+        .map((filePath) {
+          final type = _classifyFile(filePath);
           final selectable = type != ImportPreviewItemType.unsupported;
           final name =
               extractedDir == null
-                  ? p.basename(path)
-                  : p.relative(path, from: extractedDir);
+                  ? p.basename(filePath)
+                  : p.relative(filePath, from: extractedDir);
 
           return ImportPreviewItem(
-            path: path,
+            path: filePath,
             name: name,
             type: type,
             selected: selectable,
             selectable: selectable,
           );
         })
-        .toList(growable: false);
+        .toList();
+
+    // Pre-match subtitles/covers/scripts to media files for preview display
+    items = _matchPreviewItems(items);
 
     return ImportPreview(
       sourceType: sourceType,
@@ -622,6 +725,32 @@ class ImportService {
       archivePath: archivePath,
       extractedDir: extractedDir,
     );
+  }
+
+  List<ImportPreviewItem> _matchPreviewItems(List<ImportPreviewItem> items) {
+    final mediaItems =
+        items.where((item) => item.isMedia).toList();
+    if (mediaItems.isEmpty) return items;
+
+    final mediaBaseNames =
+        mediaItems.map((item) => _baseName(item.path)).toList();
+
+    return items.map((item) {
+      if (item.isMedia ||
+          item.type == ImportPreviewItemType.unsupported) {
+        return item;
+      }
+      final itemBaseName = _baseName(item.path);
+      for (var i = 0; i < mediaBaseNames.length; i++) {
+        final priority = _matchRulePriority(mediaBaseNames[i], itemBaseName);
+        if (priority != null) {
+          return item.copyWith(
+            matchedTo: mediaItems[i].name,
+          );
+        }
+      }
+      return item;
+    }).toList();
   }
 
   ImportPreviewItemType _classifyFile(String path) {

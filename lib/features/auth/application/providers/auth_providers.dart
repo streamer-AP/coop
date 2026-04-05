@@ -1,6 +1,7 @@
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../../core/logging/app_logger.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/storage/token_storage.dart';
 import '../../../../core/storage/user_storage_service.dart';
@@ -106,17 +107,58 @@ class AuthNotifier extends _$AuthNotifier {
   }
 
   Future<void> logout({bool purgeLocalData = false}) async {
-    // 停止播放器
-    ref.read(playerStateNotifierProvider.notifier).clearPlaylist();
+    try {
+      // 先等待播放器清理完成，避免用户存储切换后仍有异步播放状态回写。
+      await ref.read(playerStateNotifierProvider.notifier).clearPlaylist();
+    } catch (error, stackTrace) {
+      AppLogger().error(
+        '[Auth] clearPlaylist failed during logout',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
 
-    // 清理用户存储；账号注销场景需要连同本地用户目录一起清除。
-    await ref
-        .read(userStorageNotifierProvider.notifier)
-        .clear(deleteCurrentUserData: purgeLocalData);
+    try {
+      // 清理用户存储；账号注销场景需要连同本地用户目录一起清除。
+      await ref
+          .read(userStorageNotifierProvider.notifier)
+          .clear(deleteCurrentUserData: purgeLocalData);
+    } catch (error, stackTrace) {
+      AppLogger().error(
+        '[Auth] user storage clear failed during logout',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
 
-    // 调用后端登出 + 清除 token
-    await ref.read(authRepositoryProvider).logout();
+    try {
+      // 调用后端登出 + 清除 token。账号已注销时，即便后端返回 token 失效，也不应阻断本地退出。
+      await ref.read(authRepositoryProvider).logout();
+    } catch (error, stackTrace) {
+      AppLogger().error(
+        '[Auth] repository logout failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
 
+    state = const AsyncData(null);
+  }
+
+  /// Called by the network interceptor when the server returns 401 or
+  /// a business code indicating the session was invalidated (e.g. logged
+  /// in on another device). Clears local state without calling the logout
+  /// API (token is already invalid on the server).
+  void forceLogout() {
+    if (state.valueOrNull == null) return; // already logged out
+    try {
+      ref.read(playerStateNotifierProvider.notifier).clearPlaylist();
+    } catch (_) {}
+    try {
+      ref
+          .read(userStorageNotifierProvider.notifier)
+          .clear(deleteCurrentUserData: false);
+    } catch (_) {}
     state = const AsyncData(null);
   }
 

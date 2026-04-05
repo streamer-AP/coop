@@ -167,11 +167,8 @@ class _HomeBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final contentWidth = math.min(
-          HomePage._designWidth,
-          constraints.maxWidth,
-        );
-        final scale = contentWidth / HomePage._designWidth;
+        final screenWidth = constraints.maxWidth;
+        final scale = screenWidth / HomePage._designWidth;
         final backgroundHeight = math.max(
           874 * scale,
           constraints.maxHeight + 24 * scale,
@@ -185,53 +182,46 @@ class _HomeBackdrop extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             const ColoredBox(color: AppColors.background),
-            Align(
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                width: contentWidth,
-                height: constraints.maxHeight,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned(
-                      left: -48 * scale,
-                      top: -10 * scale,
-                      width: 490 * scale,
-                      height: backgroundHeight,
-                      child: Image.asset(
-                        _HomeAssets.background,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
-                        filterQuality: FilterQuality.high,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  left: -48 * scale,
+                  top: -10 * scale,
+                  width: 490 * scale,
+                  height: backgroundHeight,
+                  child: Image.asset(
+                    _HomeAssets.background,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    filterQuality: FilterQuality.high,
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  top: -1 * scale,
+                  width: screenWidth,
+                  height: overlayHeight,
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(
+                        sigmaX: 0.5 * scale,
+                        sigmaY: 0.5 * scale,
                       ),
-                    ),
-                    Positioned(
-                      left: 0,
-                      top: -1 * scale,
-                      width: HomePage._designWidth * scale,
-                      height: overlayHeight,
-                      child: ClipRect(
-                        child: BackdropFilter(
-                          filter: ui.ImageFilter.blur(
-                            sigmaX: 0.5 * scale,
-                            sigmaY: 0.5 * scale,
-                          ),
-                          child: const DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Color(0x5C28307C), Color(0x5CE7EAFF)],
-                                stops: [0.10659, 0.69387],
-                              ),
-                            ),
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0x5C28307C), Color(0x5CE7EAFF)],
+                            stops: [0.10659, 0.69387],
                           ),
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         );

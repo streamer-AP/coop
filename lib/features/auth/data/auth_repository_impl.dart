@@ -132,7 +132,12 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> logout() async {
     try {
-      await _postWithQuery(ApiEndpoints.logout, {});
+      final userId = await _tokenStorage.getCurrentUserId();
+      await _apiClient.get(
+        ApiEndpoints.logout,
+        queryParameters:
+            userId != null ? {'userId': userId} : null,
+      );
     } catch (_) {
       // Logout locally even if server call fails
     }

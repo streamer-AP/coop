@@ -8,7 +8,7 @@ class PurpleGradientButton extends StatelessWidget {
     required this.text,
     required this.onPressed,
     this.width,
-    this.height = 48,
+    this.height = 42,
     this.enabled = true,
   });
 
@@ -23,7 +23,7 @@ class PurpleGradientButton extends StatelessWidget {
     return GestureDetector(
       onTap: enabled ? onPressed : null,
       child: Container(
-        width: width,
+        width: width ?? 253,
         height: height,
         decoration: BoxDecoration(
           gradient: enabled
@@ -31,14 +31,14 @@ class PurpleGradientButton extends StatelessWidget {
               : const LinearGradient(
                   colors: [Color(0xFFBBBBBB), Color(0xFFCCCCCC)],
                 ),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(25),
         ),
         alignment: Alignment.center,
         child: Text(
           text,
           style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
             color: Colors.white,
           ),
         ),

@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_icons.dart';
+import '../../../../shared/widgets/omao_page_background.dart';
 import '../../../auth/application/providers/auth_providers.dart';
 import '../../application/providers/profile_providers.dart';
 import '../widgets/profile_menu_item.dart';
@@ -17,19 +17,46 @@ class AccountSecurityScreen extends ConsumerWidget {
     final profileAsync = ref.watch(profileNotifierProvider);
     final maskedPhone = profileAsync.valueOrNull?.phone ?? '';
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.profileBackgroundGradient,
-      ),
+    return OmaoPageBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
-          title: const Text('账号与安全'),
-          leading: IconButton(
-            icon: AppIcons.icon(AppIcons.arrowLeft, size: 20),
-            onPressed: () => Navigator.of(context).pop(),
+          elevation: 0,
+          centerTitle: true,
+          title: const Text(
+            '账号与安全',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 1.8,
+              color: Color(0xFF000000),
+            ),
           ),
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: AppIcons.icon(
+                      AppIcons.arrowLeft,
+                      size: 20,
+                      color: const Color(0xFF000000),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          leadingWidth: 56,
         ),
         body: Column(
           children: [
@@ -40,9 +67,10 @@ class AccountSecurityScreen extends ConsumerWidget {
               title: '手机号',
               trailing: Text(
                 maskedPhone,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textHint,
+                  fontWeight: FontWeight.w300,
+                  color: const Color(0xFF000000).withValues(alpha: 0.5),
                 ),
               ),
               onTap: () => context.pushNamed(RouteNames.changePhone),
@@ -54,7 +82,14 @@ class AccountSecurityScreen extends ConsumerWidget {
               onTap: () => context.pushNamed(RouteNames.changePassword),
               showDivider: false,
             ),
-            const Divider(height: 24, thickness: 1, color: Color(0xFFE8E8E8)),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Divider(
+                height: 24,
+                thickness: 0.5,
+                color: Color(0x668988AB),
+              ),
+            ),
             ProfileMenuItem(
               icon: Icons.exit_to_app,
               svgPath: AppIcons.logout,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/omao_toast.dart';
+import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../application/providers/player_providers.dart';
 import '../../application/providers/resonance_providers.dart';
@@ -156,8 +157,10 @@ class AudioEntryActionSheet extends ConsumerWidget {
   }
 
   void _showExportDialog(BuildContext context, WidgetRef ref) {
+    final repo = ref.read(resonanceRepositoryProvider);
     showDialog(
       context: context,
+      useRootNavigator: true,
       builder:
           (ctx) => AlertDialog(
             shape: RoundedRectangleBorder(
@@ -204,8 +207,9 @@ class AudioEntryActionSheet extends ConsumerWidget {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () async {
-                          Navigator.of(ctx).pop();
-                          await _doExport(context, ref);
+                          final navContext = ctx;
+                          Navigator.of(navContext).pop();
+                          await _doExportWithRepo(navContext, repo);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
@@ -226,13 +230,19 @@ class AudioEntryActionSheet extends ConsumerWidget {
     );
   }
 
-  Future<void> _doExport(BuildContext context, WidgetRef ref) async {
+  Future<void> _doExportWithRepo(
+    BuildContext context,
+    ResonanceRepository repo,
+  ) async {
     try {
-      final repo = ref.read(resonanceRepositoryProvider);
       final exportService = ExportService(repo);
       final exportPath = await exportService.exportEntry(entry);
       if (exportPath != null && context.mounted) {
-        OmaoToast.show(context, '导出成功');
+        TopBannerToast.show(
+          context,
+          message: '导出成功：$exportPath',
+          isError: false,
+        );
       }
     } catch (e) {
       if (context.mounted) {

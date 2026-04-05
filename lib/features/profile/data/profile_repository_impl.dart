@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -8,6 +9,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/storage/token_storage.dart';
 import '../domain/models/app_version.dart';
+import '../domain/models/cancellation_session.dart';
 import '../domain/models/profile.dart';
 import '../domain/repositories/profile_repository.dart';
 
@@ -66,7 +68,14 @@ class ProfileRepositoryImpl implements ProfileRepository {
 
   @override
   Future<void> updateProfile(Profile profile) async {
-    // TODO: implement
+    final nickname = profile.nickname?.trim();
+    if (nickname != null && nickname.isNotEmpty) {
+      await updateNickname(nickname);
+    }
+    final avatarUrl = profile.avatarUrl?.trim();
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      await updateAvatar(avatarUrl);
+    }
   }
 
   @override
@@ -138,6 +147,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
 
     final json = await _apiClient.post(
       ApiEndpoints.updatePwd,
+      queryParameters: {'oldPwd': previousValue},
       data: {
         'oldPwd': previousValue,
         'newPwd': nextValue,
@@ -192,36 +202,45 @@ class ProfileRepositoryImpl implements ProfileRepository {
   }
 
   @override
-  Future<void> sendDeactivateCode(String phone) async {
+  Future<CancellationSession> sendDeactivateCode(String phone) async {
     final phoneValue = phone.trim();
     if (phoneValue.isEmpty) {
       throw Exception('手机号不能为空');
     }
 
-    final auditContext = await _loadCancellationAuditContext(
-      fallbackPhone: phoneValue,
-    );
-    final timestamp = _formatBackendTimestamp(DateTime.now());
-
     try {
       final json = await _apiClient.post(
         ApiEndpoints.sendCancelCode,
-        data: {
-          ..._buildCancellationAuditPayload(
-            context: auditContext,
-            timestamp: timestamp,
-          ),
-          'success': 0,
-          'verifiedStatus': auditContext.verifiedStatus,
-          'operationDetail': 'send_cancel_code',
-        },
+        data: _buildSimpleCancelPayload(mobile: phoneValue),
       );
-      _ensureSuccess(json, fallbackMessage: '验证码发送失败');
+      final code = json['code'] as int?;
+      final msg = json['message'] as String? ?? '';
+      if (code != 200 && code != 0) {
+        throw Exception(msg.isNotEmpty ? msg : '验证码发送失败');
+      }
     } on DioException catch (error) {
-      throw Exception(
-        _extractDioMessage(error) ?? '验证码发送失败，请检查网络后重试',
-      );
+      throw Exception(_extractDioMessage(error) ?? '验证码发送失败，请检查网络后重试');
     }
+
+    // 返回简单 session，用于后续 cancel 调用
+    return CancellationSession(
+      id: 0,
+      logId: 0,
+      userId: 0,
+      mobile: phoneValue,
+      accountStatus: 0,
+      accountDeletedTimestamp: '',
+      operator: '',
+      verifiedStatus: 0,
+      ipAddress: '',
+      ipInfo: '',
+      deviceModel: '',
+      deviceOs: Platform.operatingSystem,
+      deviceType: _resolveDeviceType(),
+      deviceInfo: _buildDeviceInfoJson(),
+      appInfo: _buildAppInfoJson(),
+      createdAt: '',
+    );
   }
 
   @override
@@ -231,154 +250,168 @@ class ProfileRepositoryImpl implements ProfileRepository {
     required String newPhone,
     required String newCode,
   }) async {
-    // TODO: implement
+    final oldPhoneVal = oldPhone.trim();
+    final oldCodeVal = oldCode.trim();
+    final newPhoneVal = newPhone.trim();
+    final newCodeVal = newCode.trim();
+    if (oldPhoneVal.isEmpty || oldCodeVal.isEmpty) {
+      throw Exception('请先验证原手机号');
+    }
+    if (newPhoneVal.isEmpty || newCodeVal.isEmpty) {
+      throw Exception('请输入新手机号和验证码');
+    }
+
+    final json = await _apiClient.post(
+      ApiEndpoints.changePhone,
+      data: {
+        'oldMobile': oldPhoneVal,
+        'oldCode': oldCodeVal,
+        'newMobile': newPhoneVal,
+        'newCode': newCodeVal,
+      },
+    );
+    _ensureSuccess(json, fallbackMessage: '修改手机号失败');
   }
 
   @override
   Future<void> submitFeedback(String content) async {
-    // TODO: implement
+    if (content.trim().isEmpty) {
+      throw Exception('反馈内容不能为空');
+    }
+
+    // 获取用户信息
+    String omaoId = '';
+    int userId = 0;
+    try {
+      final userJson = await _apiClient.get(ApiEndpoints.getCurrentUserInfo);
+      final userData = userJson['data'] as Map<String, dynamic>?;
+      if (userData != null) {
+        omaoId = (userData['omaoId'] as String?) ?? '';
+        userId =
+            int.tryParse('${userData['userId'] ?? userData['id'] ?? 0}') ?? 0;
+      }
+    } catch (_) {}
+
+    final json = await _apiClient.post(
+      ApiEndpoints.feedback,
+      data: {
+        'id': 0,
+        'userId': userId,
+        'omaoId': omaoId,
+        'content': content.trim(),
+        'deviceModel': '',
+        'deviceOs': Platform.operatingSystem,
+        'deviceType': _resolveDeviceType(),
+        'deviceInfo': _buildDeviceInfoJson(),
+        'ipAddress': '',
+        'ipInfo': '',
+        'networkType': '',
+        'appInfo': _buildAppInfoJson(),
+        'opStatus': 0,
+        'opTags': '',
+        'opRemark': '',
+        'operator': '',
+        'createdAt': _formatBackendTimestamp(DateTime.now()),
+        'updatedAt': _formatBackendTimestamp(DateTime.now()),
+      },
+    );
+    final code = json['code'] as int?;
+    if (code != 200 && code != 0) {
+      final msg = json['message'] as String? ?? '反馈提交失败';
+      throw Exception(msg);
+    }
   }
 
   @override
   Future<AppVersion> checkForUpdate() async {
-    // TODO: implement
-    return const AppVersion(version: '1.2.96');
+    // 读取当前 app 版本号
+    const currentVersion = '1.0.0'; // 与 pubspec.yaml version 保持同步
+
+    try {
+      final json = await _apiClient.get(ApiEndpoints.checkUpdate);
+      final code = json['code'] as int?;
+      final data = json['data'] as Map<String, dynamic>?;
+
+      if (code == 200 && data != null) {
+        final latestVersion =
+            (data['version'] as String?)?.trim() ?? currentVersion;
+        final downloadUrl = data['downloadUrl'] as String?;
+        final changelog = data['changelog'] as String?;
+        final hasUpdate = _isNewerVersion(latestVersion, currentVersion);
+        return AppVersion(
+          version: currentVersion,
+          hasUpdate: hasUpdate,
+          downloadUrl: downloadUrl,
+          changelog: changelog,
+        );
+      }
+    } catch (_) {
+      // 网络异常时返回当前版本，不阻塞 UI
+    }
+
+    return const AppVersion(version: currentVersion);
+  }
+
+  /// 比较语义版本号，latestVersion > currentVersion 时返回 true
+  bool _isNewerVersion(String latest, String current) {
+    final latestParts = latest.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final currentParts = current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final length = latestParts.length > currentParts.length
+        ? latestParts.length
+        : currentParts.length;
+    for (var i = 0; i < length; i++) {
+      final l = i < latestParts.length ? latestParts[i] : 0;
+      final c = i < currentParts.length ? currentParts[i] : 0;
+      if (l > c) return true;
+      if (l < c) return false;
+    }
+    return false;
   }
 
   @override
   Future<void> deactivateAccount({
-    required String phone,
+    required CancellationSession session,
     required String code,
   }) async {
-    final phoneValue = phone.trim();
     final codeValue = code.trim();
-    if (phoneValue.isEmpty) {
-      throw Exception('手机号不能为空');
-    }
     if (codeValue.isEmpty) {
       throw Exception('验证码不能为空');
     }
-
-    final auditContext = await _loadCancellationAuditContext(
-      fallbackPhone: phoneValue,
-    );
-    final timestamp = _formatBackendTimestamp(DateTime.now());
+    if (session.mobile.trim().isEmpty) {
+      throw Exception('请先获取验证码');
+    }
 
     try {
+      final payload = _buildSimpleCancelPayload(mobile: session.mobile);
+      payload['verificationCode'] = codeValue;
+
       final json = await _apiClient.post(
         ApiEndpoints.deactivateAccount,
-        queryParameters: {'code': codeValue},
-        data: {
-          ..._buildCancellationAuditPayload(
-            context: auditContext,
-            timestamp: timestamp,
-          ),
-          'verificationCode': codeValue,
-          'updatedAt': timestamp,
-          'deletedAt': timestamp,
-          'deletedReason': 'user_requested',
-        },
+        data: payload,
       );
-      _ensureSuccess(json, fallbackMessage: '注销失败，请重试');
-    } on DioException catch (error) {
-      throw Exception(
-        _extractDioMessage(error) ?? '注销失败，请检查网络后重试',
-      );
-    }
-  }
-
-  Map<String, dynamic> _buildCancellationAuditPayload({
-    required _CancellationAuditContext context,
-    required String timestamp,
-  }) {
-    return {
-      'id': context.id,
-      'logId': 0,
-      'userId': context.userId,
-      'mobile': context.mobile,
-      'accountStatus': context.accountStatus,
-      'accountDeletedTimestamp': timestamp,
-      'operator': context.operator,
-      'ipAddress': '',
-      'ipInfo': '',
-      'deviceModel': '',
-      'deviceOs': Platform.operatingSystem,
-      'deviceType': _resolveDeviceType(),
-      'deviceInfo': Platform.operatingSystemVersion,
-      'appInfo': _appInfo,
-      'createdAt': timestamp,
-    };
-  }
-
-  Future<_CancellationAuditContext> _loadCancellationAuditContext({
-    required String fallbackPhone,
-  }) async {
-    final normalizedPhone = fallbackPhone.trim();
-    var id = 0;
-    var userId = 0;
-    var accountStatus = 0;
-    var verifiedStatus = 0;
-    var operator = '';
-    var mobile = normalizedPhone;
-
-    try {
-      final json = await _apiClient.get(ApiEndpoints.getCurrentUserInfo);
-      final code = json['code'] as int?;
-      final data = json['data'] as Map<String, dynamic>?;
-      if (code == 200 && data != null) {
-        id = int.tryParse('${_readField(data, const ['id']) ?? 0}') ?? 0;
-        userId =
-            int.tryParse(
-              '${_readField(data, const ['userId', 'loginId', 'id']) ?? 0}',
-            ) ??
-            0;
-        accountStatus =
-            int.tryParse('${_readField(data, const ['status']) ?? 0}') ?? 0;
-        verifiedStatus =
-            int.tryParse(
-              '${_readField(data, const ['residentStatus']) ?? 0}',
-            ) ??
-            0;
-        mobile =
-            _normalizeOptionalString(
-              _readField(data, const ['mobile', 'phone']),
-            ) ??
-            normalizedPhone;
-        operator =
-            _extractNickname(data) ??
-            _normalizeOptionalString(
-              _readField(data, const ['mobile', 'phone']),
-            ) ??
-            'user';
+      final respCode = json['code'] as int?;
+      final msg = json['message'] as String? ?? json['msg'] as String? ?? '';
+      if (respCode != 200 && respCode != 0) {
+        throw Exception(msg.isNotEmpty ? msg : '注销失败，请重试');
       }
-    } catch (_) {}
-
-    if (mobile.isNotEmpty &&
-        normalizedPhone.isNotEmpty &&
-        mobile != normalizedPhone) {
-      throw Exception('请输入当前登录手机号');
+    } on DioException catch (error) {
+      throw Exception(_extractDioMessage(error) ?? '注销失败，请检查网络后重试');
     }
-
-    if (userId == 0) {
-      userId = int.tryParse(await _resolveCurrentUserId()) ?? 0;
-    }
-
-    if (operator.trim().isEmpty) {
-      operator = mobile.isNotEmpty ? mobile : 'user';
-    }
-
-    return _CancellationAuditContext(
-      id: id,
-      userId: userId,
-      mobile: mobile.isNotEmpty ? mobile : normalizedPhone,
-      accountStatus: accountStatus,
-      verifiedStatus: verifiedStatus,
-      operator: operator,
-    );
   }
 
   String _formatBackendTimestamp(DateTime value) {
     return _backendDateTimeFormat.format(value);
+  }
+
+  Map<String, dynamic> _buildSimpleCancelPayload({required String mobile}) {
+    return {
+      'mobile': mobile,
+      'appInfo': _buildAppInfoJson(),
+      'deviceInfo': _buildDeviceInfoJson(),
+      'deviceModel': '',
+      'deviceOs': Platform.operatingSystem,
+      'deviceType': _resolveDeviceType(),
+    };
   }
 
   String _resolveDeviceType() {
@@ -416,7 +449,20 @@ class ProfileRepositoryImpl implements ProfileRepository {
     return message;
   }
 
-  static const String _appInfo = 'omao_app/1.0.0+1';
+  static String _buildDeviceInfoJson() {
+    return json.encode({
+      'platform': Platform.operatingSystem,
+      'osVersion': Platform.operatingSystemVersion,
+    });
+  }
+
+  static String _buildAppInfoJson() {
+    return json.encode({
+      'version': '1.0.0',
+      'package': 'com.example.omao_app',
+      'platform': Platform.operatingSystem,
+    });
+  }
   static final DateFormat _backendDateTimeFormat = DateFormat(
     'yyyy-MM-dd HH:mm:ss',
   );
@@ -606,20 +652,3 @@ class ProfileRepositoryImpl implements ProfileRepository {
   }
 }
 
-class _CancellationAuditContext {
-  const _CancellationAuditContext({
-    required this.id,
-    required this.userId,
-    required this.mobile,
-    required this.accountStatus,
-    required this.verifiedStatus,
-    required this.operator,
-  });
-
-  final int id;
-  final int userId;
-  final String mobile;
-  final int accountStatus;
-  final int verifiedStatus;
-  final String operator;
-}

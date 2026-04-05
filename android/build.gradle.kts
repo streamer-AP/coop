@@ -1,7 +1,20 @@
+fun org.gradle.api.artifacts.dsl.RepositoryHandler.omaoMirrorRepos() {
+    maven("https://maven.aliyun.com/repository/google")
+    maven("https://maven.aliyun.com/repository/public")
+    maven("https://maven.aliyun.com/repository/gradle-plugin")
+    google()
+    mavenCentral()
+}
+
+gradle.beforeProject {
+    buildscript.repositories.apply {
+        omaoMirrorRepos()
+    }
+}
+
 allprojects {
     repositories {
-        google()
-        mavenCentral()
+        omaoMirrorRepos()
     }
 }
 

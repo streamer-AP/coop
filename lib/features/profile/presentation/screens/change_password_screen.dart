@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
+import '../../../../shared/widgets/omao_page_background.dart';
 import '../../application/providers/profile_providers.dart';
 
 class ChangePasswordScreen extends ConsumerWidget {
@@ -11,19 +13,46 @@ class ChangePasswordScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.profileBackgroundGradient,
-      ),
+    return OmaoPageBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
-          title: const Text('修改方式'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, size: 20),
-            onPressed: () => Navigator.of(context).pop(),
+          elevation: 0,
+          centerTitle: true,
+          title: const Text(
+            '修改方式',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 1.8,
+              color: Color(0xFF000000),
+            ),
           ),
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: AppIcons.icon(
+                      AppIcons.arrowLeft,
+                      size: 20,
+                      color: const Color(0xFF000000),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          leadingWidth: 56,
         ),
         body: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -111,19 +140,46 @@ class _OriginalPasswordScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.profileBackgroundGradient,
-      ),
+    return OmaoPageBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
-          title: const Text('原密码修改'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, size: 20),
-            onPressed: () => Navigator.of(context).pop(),
+          elevation: 0,
+          centerTitle: true,
+          title: const Text(
+            '原密码修改',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 1.8,
+              color: Color(0xFF000000),
+            ),
           ),
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: AppIcons.icon(
+                      AppIcons.arrowLeft,
+                      size: 20,
+                      color: const Color(0xFF000000),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          leadingWidth: 56,
         ),
         body: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -132,21 +188,33 @@ class _OriginalPasswordScreenState
             children: [
               const Text(
                 '输入原密码',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w300,
+                  color: Color(0xFF000000),
+                ),
               ),
               const SizedBox(height: 8),
               _buildPasswordField(_oldPasswordController),
               const SizedBox(height: 24),
               const Text(
                 '输入新密码',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w300,
+                  color: Color(0xFF000000),
+                ),
               ),
               const SizedBox(height: 8),
               _buildPasswordField(_newPasswordController),
               const SizedBox(height: 24),
               const Text(
                 '再次输入新密码',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w300,
+                  color: Color(0xFF000000),
+                ),
               ),
               const SizedBox(height: 8),
               _buildPasswordField(_confirmPasswordController),
@@ -162,22 +230,22 @@ class _OriginalPasswordScreenState
                   ),
                 ),
               const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
+              Center(
                 child: GestureDetector(
                   onTap: _submit,
                   child: Container(
-                    height: 48,
+                    width: 253,
+                    height: 42,
                     decoration: BoxDecoration(
                       gradient: AppColors.purpleButtonGradient,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(25),
                     ),
                     alignment: Alignment.center,
                     child: const Text(
                       '确认',
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
                         color: Colors.white,
                       ),
                     ),
@@ -208,7 +276,10 @@ class _OriginalPasswordScreenState
                 : null,
         border: const UnderlineInputBorder(),
         enabledBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+          borderSide: BorderSide(color: Color(0x668988AB)),
+        ),
+        focusedBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: Color(0x668988AB)),
         ),
       ),
       onChanged: (_) => setState(() => _errorText = null),

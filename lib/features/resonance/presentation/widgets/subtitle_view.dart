@@ -2,12 +2,15 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../application/providers/player_providers.dart';
 import '../../application/providers/subtitle_providers.dart';
 
 class SubtitleView extends ConsumerStatefulWidget {
-  const SubtitleView({super.key});
+  const SubtitleView({super.key, this.onImportTap});
+
+  final VoidCallback? onImportTap;
 
   @override
   ConsumerState<SubtitleView> createState() => _SubtitleViewState();
@@ -67,15 +70,62 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
       _cueCount = 0;
       return Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Text(
-            '暂无歌词\n可从右上角更多中导入字幕或台本',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              height: 1.45,
-              color: const Color(0xFF4A4A4A).withValues(alpha: 0.45),
-            ),
+          padding: const EdgeInsets.symmetric(horizontal: 48),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Folder icon from Figma
+              SvgPicture.asset(
+                'assets/figma/icons/no-subtitle-folder.svg',
+                width: 80,
+                height: 80,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '抱歉，未找到字幕',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: const Color(0xFF4A4A4A).withValues(alpha: 0.5),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Import button — gradient from deep purple to light purple
+              if (widget.onImportTap != null)
+                GestureDetector(
+                  onTap: widget.onImportTap,
+                  child: Container(
+                    height: 44,
+                    width: 170,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      gradient: const LinearGradient(
+                        begin: Alignment.centerRight,
+                        end: Alignment.centerLeft,
+                        colors: [Color(0xFFA89AE9), Color(0xFF543A99)],
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.file_download_outlined,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          '导入',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       );
@@ -83,7 +133,7 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
 
     _cueCount = subtitle.cues.length;
     _estimatedItemHeight =
-        translationEnabled && translatedSubtitle != null ? 88.0 : 56.0;
+        translationEnabled && translatedSubtitle != null ? 78.0 : 42.0;
 
     if (_wasFollowEnabled && !followEnabled) {
       _scrollToTop();
@@ -96,6 +146,7 @@ class _SubtitleViewState extends ConsumerState<SubtitleView> {
       // Timer restored followMode → reset user scroll state
       _userScrolledAway = false;
       _seekTargetIndex = null;
+      _lastScrolledCueIndex = -1;
     }
 
     if (shouldAutoFollow &&

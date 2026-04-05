@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
+import '../../../../shared/widgets/top_banner_toast.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../resonance/application/providers/resonance_providers.dart';
@@ -45,15 +46,18 @@ class ProfileScreen extends ConsumerWidget {
                         borderRadius: const BorderRadius.vertical(
                           top: Radius.circular(30),
                         ),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.42),
+                        border: const Border(
+                          top: BorderSide(
+                            color: Color(0x19000000),
+                            width: 0.5,
+                          ),
                         ),
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Colors.white.withValues(alpha: 0.90),
-                            const Color(0xFFE6E7F6).withValues(alpha: 0.18),
+                            const Color(0xFFCCCCF0).withValues(alpha: 0.2),
+                            Colors.white,
                           ],
                           stops: const [0.0, 1.0],
                         ),
@@ -91,6 +95,15 @@ class ProfileScreen extends ConsumerWidget {
                             svgPath: AppIcons.phoneCall,
                             title: '联系我们',
                             onTap: () => context.pushNamed(RouteNames.contact),
+                            showDivider: false,
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 20),
+                            child: Divider(
+                              height: 24,
+                              thickness: 0.5,
+                              color: Color(0x668988AB),
+                            ),
                           ),
                           ProfileMenuItem(
                             icon: Icons.description_outlined,
@@ -105,6 +118,12 @@ class ProfileScreen extends ConsumerWidget {
                             onTap: () => context.pushNamed(RouteNames.privacyPolicy),
                           ),
                           ProfileMenuItem(
+                            icon: Icons.info_outline,
+                            svgPath: AppIcons.infoCircle,
+                            title: 'app信息和备案信息',
+                            onTap: () {},
+                          ),
+                          ProfileMenuItem(
                             icon: Icons.system_update_outlined,
                             svgPath: AppIcons.send01,
                             title: '版本信息&检查更新',
@@ -113,28 +132,12 @@ class ProfileScreen extends ConsumerWidget {
                                   (v) => Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 3,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(20),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(alpha: 0.06),
-                                              blurRadius: 12,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Text(
-                                          v.version,
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            color: AppColors.primary,
-                                          ),
+                                      Text(
+                                        v.version,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w400,
+                                          color: Color(0xFF000000),
                                         ),
                                       ),
                                       if (v.hasUpdate)
@@ -224,22 +227,56 @@ class ProfileScreen extends ConsumerWidget {
     final repo = ref.read(resonanceRepositoryProvider);
     final exportService = ExportService(repo);
 
-    // Show progress dialog
+    final progressNotifier = ValueNotifier<(int, int)>((0, 0));
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder:
-          (_) => const Center(
+          (_) => Center(
             child: Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text('正在打包导出...'),
-                  ],
+                padding: const EdgeInsets.all(24),
+                child: ValueListenableBuilder<(int, int)>(
+                  valueListenable: progressNotifier,
+                  builder: (_, progress, __) {
+                    final current = progress.$1;
+                    final total = progress.$2;
+                    final ratio = total > 0 ? current / total : 0.0;
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          '正在打包导出...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        LinearProgressIndicator(
+                          value: total > 0 ? ratio : null,
+                          backgroundColor: const Color(0xFFE0E0E0),
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            Color(0xFF6A53A7),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          total > 0
+                              ? '$current / $total'
+                              : '准备中...',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF797979),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -247,21 +284,29 @@ class ProfileScreen extends ConsumerWidget {
     );
 
     try {
-      final path = await exportService.exportAll();
+      final path = await exportService.exportAll(
+        onProgress: (current, total) {
+          progressNotifier.value = (current, total);
+        },
+      );
       if (!context.mounted) return;
-      Navigator.of(context).pop(); // close progress dialog
+      Navigator.of(context).pop();
       if (path != null) {
-        ScaffoldMessenger.of(
+        TopBannerToast.show(
           context,
-        ).showSnackBar(const SnackBar(content: Text('导出成功')));
+          message: '导出成功：$path',
+          isError: false,
+        );
       }
     } catch (e) {
       if (!context.mounted) return;
-      Navigator.of(context).pop(); // close progress dialog
+      Navigator.of(context).pop();
       final message = '$e'.replaceFirst('Exception: ', '').trim();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message.isEmpty ? '导出失败' : message)),
       );
+    } finally {
+      progressNotifier.dispose();
     }
   }
 }

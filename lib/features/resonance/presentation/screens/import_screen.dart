@@ -366,7 +366,10 @@ class _ImportPreviewView extends StatelessWidget {
               if (importing) ...[
                 const SizedBox(height: 16),
                 LinearProgressIndicator(
-                  value: state.total == 0 ? null : state.current / state.total,
+                  value:
+                      state.current < 0 || state.total == 0
+                          ? null
+                          : state.current / state.total,
                   minHeight: 8,
                   borderRadius: BorderRadius.circular(10),
                   color: AppColors.primary,
@@ -374,7 +377,11 @@ class _ImportPreviewView extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '正在导入 ${state.current}/${state.total}',
+                  state.current < 0
+                      ? '正在解压...'
+                      : state.total == 0
+                      ? '准备中...'
+                      : '正在导入 ${state.current}/${state.total}',
                   style: const TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
@@ -702,7 +709,9 @@ class _PreviewFileTile extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          _typeLabel(item.type),
+          item.matchedTo != null
+              ? '${_typeLabel(item.type)} → ${item.matchedTo}'
+              : _typeLabel(item.type),
           style: const TextStyle(color: AppColors.textSecondary),
         ),
       ),

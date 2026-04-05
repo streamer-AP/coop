@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/bluetooth/ble_connection_manager.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../permission/application/providers/permission_providers.dart';
 
@@ -176,6 +177,14 @@ class _DeviceActivationDialogState
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('请输入设备号')));
+      return;
+    }
+
+    final bleManager = ref.read(bleConnectionManagerProvider);
+    if (!bleManager.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先连接蓝牙设备')),
+      );
       return;
     }
 
