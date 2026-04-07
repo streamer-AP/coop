@@ -80,6 +80,7 @@ class _DeactivateAccountScreenState
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
+          automaticallyImplyLeading: false,
           title: const Text(
             '注销账号',
             style: TextStyle(

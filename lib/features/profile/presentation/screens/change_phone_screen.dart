@@ -42,6 +42,7 @@ class _ChangePhoneScreenState extends ConsumerState<ChangePhoneScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
+          automaticallyImplyLeading: false,
           title: Text(
             _currentStep == 0 ? '验证原手机号' : '输入新手机号',
             style: const TextStyle(
@@ -109,8 +110,7 @@ class _ChangePhoneScreenState extends ConsumerState<ChangePhoneScreen> {
                     .sendVerificationCode(_oldPhoneController.text),
           ),
           const SizedBox(height: 40),
-          SizedBox(
-            width: double.infinity,
+          Center(
             child: PurpleGradientButton(
               text: '下一步',
               onPressed: () {
@@ -141,8 +141,7 @@ class _ChangePhoneScreenState extends ConsumerState<ChangePhoneScreen> {
                     .sendVerificationCode(_newPhoneController.text),
           ),
           const SizedBox(height: 40),
-          SizedBox(
-            width: double.infinity,
+          Center(
             child: PurpleGradientButton(
               text: '确定修改',
               onPressed: () async {

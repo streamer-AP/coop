@@ -43,6 +43,7 @@ class _ChangePasswordCodeScreenState
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
+          automaticallyImplyLeading: false,
           title: const Text(
             '验证码修改',
             style: TextStyle(

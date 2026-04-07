@@ -144,8 +144,8 @@ class ResonanceScreen extends ConsumerWidget {
                                         final currentIndex =
                                             tabController.index;
                                         return Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 80,
+                                          padding: EdgeInsets.only(
+                                            bottom: 68 + MediaQuery.of(context).padding.bottom + 12,
                                           ),
                                           child:
                                               currentIndex == 0
@@ -163,15 +163,32 @@ class ResonanceScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  // Mini player floats at bottom
+                  // Mini player background + widget
                   Positioned(
                     left: 0,
                     right: 0,
-                    bottom: MediaQuery.of(context).padding.bottom,
-                    child: MiniPlayerBar(
-                      onTap:
-                          () => context.pushNamed(RouteNames.resonancePlayer),
-                      onPlaylistTap: () => _showPlaylist(context),
+                    bottom: 0,
+                    child: Container(
+                      padding: EdgeInsets.only(
+                        bottom: MediaQuery.of(context).padding.bottom,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            const Color(0xFFEAEAEA).withValues(alpha: 0.0),
+                            const Color(0xFFEAEAEA).withValues(alpha: 0.6),
+                            const Color(0xFFEAEAEA),
+                          ],
+                          stops: const [0.0, 0.35, 1.0],
+                        ),
+                      ),
+                      child: MiniPlayerBar(
+                        onTap:
+                            () => context.pushNamed(RouteNames.resonancePlayer),
+                        onPlaylistTap: () => _showPlaylist(context),
+                      ),
                     ),
                   ),
                 ],

@@ -1,7 +1,8 @@
-package com.example.omao_app
+package com.erotouch.omao
 
 import android.os.Build
 import android.media.MediaCodec
+import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
@@ -15,6 +16,7 @@ import kotlin.concurrent.thread
 object MediaExtractionHost {
     private const val channelName = "com.omao/media_extraction"
     private const val defaultBufferSize = 1024 * 1024
+    private const val transcodeTimeoutUs = 30_000_000L // 30s
 
     private var channel: MethodChannel? = null
 
@@ -127,21 +129,55 @@ object MediaExtractionHost {
                     result.success(actualOutputPath)
                 }
             } catch (error: UnsupportedAudioCodecException) {
-                result.error("unsupported_audio_codec", error.message, error.mimeType)
+                // Direct mux not supported for this codec, try fallbacks
+                extractor?.release()
+                extractor = null
+                if (muxerStarted) { runCatching { muxer?.stop() } }
+                runCatching { muxer?.release() }
+                muxer = null
+                muxerStarted = false
+
+                try {
+                    val path = if (AviAudioExtractor.isAviFile(inputPath)) {
+                        AviAudioExtractor.extract(inputPath, outputPath)
+                    } else {
+                        transcodeToAac(inputPath, outputPath)
+                    }
+                    result.success(path)
+                } catch (te: Exception) {
+                    result.error("extract_audio_failed", te.message ?: "转码失败", null)
+                }
+                return@thread
             } catch (error: Exception) {
                 val msg = error.message ?: ""
                 val isExtractorError = msg.contains("instantiate") ||
                     msg.contains("Failed to") ||
                     msg.contains("setDataSource")
-                val ext = inputPath.substringAfterLast('.', "").lowercase()
-                val userMessage = if (isExtractorError && ext == "avi") {
-                    "当前设备不支持 AVI 格式，请将文件转换为 MP4 或 MKV 后重试"
-                } else if (isExtractorError) {
-                    "当前设备不支持该视频格式，请将文件转换为 MP4 后重试"
-                } else {
-                    msg
+
+                if (isExtractorError) {
+                    // MediaExtractor can't parse the container – try AVI demuxer or transcode
+                    extractor?.release()
+                    extractor = null
+                    if (muxerStarted) { runCatching { muxer?.stop() } }
+                    runCatching { muxer?.release() }
+                    muxer = null
+                    muxerStarted = false
+
+                    try {
+                        val path = if (AviAudioExtractor.isAviFile(inputPath)) {
+                            AviAudioExtractor.extract(inputPath, outputPath)
+                        } else {
+                            transcodeToAac(inputPath, outputPath)
+                        }
+                        result.success(path)
+                    } catch (te: Exception) {
+                        result.error("extract_audio_failed",
+                            te.message ?: "当前设备不支持该视频格式的音频提取", null)
+                    }
+                    return@thread
                 }
-                result.error("extract_audio_failed", userMessage, null)
+
+                result.error("extract_audio_failed", msg, null)
             } finally {
                 if (muxerStarted) {
                     runCatching { muxer?.stop() }
@@ -306,6 +342,155 @@ object MediaExtractionHost {
             "audio/amr", "audio/amr-nb", "audio/amr-wb", "audio/3gpp" -> "AMR"
             else -> mimeType
         }
+    }
+
+    /**
+     * Decode audio from any format MediaExtractor can read, then re-encode as
+     * AAC and mux into an M4A container. This handles codecs that MediaMuxer
+     * cannot directly remux (e.g. FLAC, MP3, WMA inside AVI, etc.).
+     */
+    private fun transcodeToAac(inputPath: String, outputPath: String): String {
+        val actualOutputPath = buildOutputPath(outputPath, ".m4a")
+        val outputFile = File(actualOutputPath)
+        outputFile.parentFile?.mkdirs()
+        if (outputFile.exists()) outputFile.delete()
+
+        val extractor = MediaExtractor().apply { setDataSource(inputPath) }
+        try {
+            val audioTrackIndex = findAudioTrackIndex(extractor)
+            if (audioTrackIndex == -1) {
+                throw Exception("视频中不包含音频轨道")
+            }
+
+            extractor.selectTrack(audioTrackIndex)
+            val inputFormat = extractor.getTrackFormat(audioTrackIndex)
+            val sampleRate = inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            val channelCount = inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            val inputMime = inputFormat.getString(MediaFormat.KEY_MIME) ?: ""
+
+            // --- Set up decoder ---
+            val decoder = MediaCodec.createDecoderByType(inputMime)
+            decoder.configure(inputFormat, null, null, 0)
+            decoder.start()
+
+            // --- Set up encoder (AAC-LC) ---
+            val encoderFormat = MediaFormat.createAudioFormat(
+                MediaFormat.MIMETYPE_AUDIO_AAC,
+                sampleRate,
+                channelCount,
+            ).apply {
+                setInteger(MediaFormat.KEY_BIT_RATE, 192_000)
+                setInteger(MediaFormat.KEY_AAC_PROFILE,
+                    MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+                setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, defaultBufferSize)
+            }
+            val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+            encoder.configure(encoderFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            encoder.start()
+
+            // --- Set up muxer (deferred until encoder output format is available) ---
+            var muxer: MediaMuxer? = null
+            var muxerTrackIndex = -1
+            var muxerStarted = false
+
+            val bufferInfo = MediaCodec.BufferInfo()
+            var inputDone = false
+            var decoderDone = false
+            var allDone = false
+
+            try {
+                while (!allDone) {
+                    // Feed data into decoder
+                    if (!inputDone) {
+                        val inIdx = decoder.dequeueInputBuffer(10_000)
+                        if (inIdx >= 0) {
+                            val buf = decoder.getInputBuffer(inIdx)!!
+                            val sampleSize = extractor.readSampleData(buf, 0)
+                            if (sampleSize < 0) {
+                                decoder.queueInputBuffer(inIdx, 0, 0, 0,
+                                    MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                inputDone = true
+                            } else {
+                                decoder.queueInputBuffer(inIdx, 0, sampleSize,
+                                    extractor.sampleTime, 0)
+                                extractor.advance()
+                            }
+                        }
+                    }
+
+                    // Drain decoder output → feed into encoder
+                    if (!decoderDone) {
+                        val outIdx = decoder.dequeueOutputBuffer(bufferInfo, 10_000)
+                        if (outIdx >= 0) {
+                            val decoded = decoder.getOutputBuffer(outIdx)!!
+                            val isEos = bufferInfo.flags and
+                                MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+
+                            if (bufferInfo.size > 0) {
+                                val encInIdx = encoder.dequeueInputBuffer(10_000)
+                                if (encInIdx >= 0) {
+                                    val encBuf = encoder.getInputBuffer(encInIdx)!!
+                                    encBuf.clear()
+                                    val limit = minOf(bufferInfo.size, encBuf.capacity())
+                                    decoded.limit(bufferInfo.offset + limit)
+                                    decoded.position(bufferInfo.offset)
+                                    encBuf.put(decoded)
+                                    encoder.queueInputBuffer(encInIdx, 0, limit,
+                                        bufferInfo.presentationTimeUs, 0)
+                                }
+                            }
+
+                            decoder.releaseOutputBuffer(outIdx, false)
+
+                            if (isEos) {
+                                val encInIdx = encoder.dequeueInputBuffer(10_000)
+                                if (encInIdx >= 0) {
+                                    encoder.queueInputBuffer(encInIdx, 0, 0, 0,
+                                        MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                }
+                                decoderDone = true
+                            }
+                        }
+                    }
+
+                    // Drain encoder output → write to muxer
+                    val encOutIdx = encoder.dequeueOutputBuffer(bufferInfo, 10_000)
+                    if (encOutIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                        val newFormat = encoder.outputFormat
+                        muxer = MediaMuxer(actualOutputPath,
+                            MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+                        muxerTrackIndex = muxer.addTrack(newFormat)
+                        muxer.start()
+                        muxerStarted = true
+                    } else if (encOutIdx >= 0) {
+                        val encoded = encoder.getOutputBuffer(encOutIdx)!!
+                        if (bufferInfo.size > 0 && muxerStarted) {
+                            encoded.position(bufferInfo.offset)
+                            encoded.limit(bufferInfo.offset + bufferInfo.size)
+                            muxer!!.writeSampleData(muxerTrackIndex, encoded, bufferInfo)
+                        }
+                        val isEos = bufferInfo.flags and
+                            MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+                        encoder.releaseOutputBuffer(encOutIdx, false)
+                        if (isEos) allDone = true
+                    }
+                }
+            } finally {
+                runCatching { decoder.stop() }
+                runCatching { decoder.release() }
+                runCatching { encoder.stop() }
+                runCatching { encoder.release() }
+                if (muxerStarted) { runCatching { muxer?.stop() } }
+                runCatching { muxer?.release() }
+            }
+        } finally {
+            extractor.release()
+        }
+
+        if (!File(actualOutputPath).exists()) {
+            throw Exception("音频转码失败")
+        }
+        return actualOutputPath
     }
 
     private class UnsupportedAudioCodecException(

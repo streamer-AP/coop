@@ -100,7 +100,7 @@ class ProfileScreen extends ConsumerWidget {
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 20),
                             child: Divider(
-                              height: 24,
+                              height: 1,
                               thickness: 0.5,
                               color: Color(0x668988AB),
                             ),

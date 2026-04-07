@@ -1,4 +1,4 @@
-package com.example.omao_app
+package com.erotouch.omao
 
 import android.media.MediaMetadataRetriever
 import io.flutter.plugin.common.BinaryMessenger

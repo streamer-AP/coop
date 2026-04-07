@@ -69,7 +69,6 @@ dependencies:
 
   # Storage
   shared_preferences: ^2.3.4
-  ffmpeg_kit_flutter_new: ^4.1.0
 
 dev_dependencies:
   flutter_test:

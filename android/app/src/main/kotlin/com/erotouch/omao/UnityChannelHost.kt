@@ -1,4 +1,4 @@
-package com.example.omao_app
+package com.erotouch.omao
 
 import android.os.Handler
 import android.os.Looper

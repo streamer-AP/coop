@@ -198,7 +198,12 @@ class ProfileRepositoryImpl implements ProfileRepository {
       ApiEndpoints.forgotPwdSendCode,
       queryParameters: {'mobile': phoneValue},
     );
-    _ensureSuccess(json, fallbackMessage: '验证码发送失败');
+    final code = json['code'] as int?;
+    final msg = (json['message'] as String? ?? json['msg'] as String? ?? '').trim();
+    // 服务器返回明确错误时才抛异常（code 500 等），其他情况视为发送成功
+    if (code != null && code >= 400) {
+      throw Exception(msg.isNotEmpty ? msg : '验证码发送失败');
+    }
   }
 
   @override

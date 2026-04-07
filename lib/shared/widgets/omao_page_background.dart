@@ -94,6 +94,22 @@ class _OmaoBackdrop extends StatelessWidget {
                         ),
                       ),
                     ),
+                    // Figma Rectangle 9292: white translucent overlay
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              const Color(0xFFCCCCF0).withValues(alpha: 0.2),
+                              const Color(0xFFFFFFFF),
+                            ],
+                            stops: const [0.0, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

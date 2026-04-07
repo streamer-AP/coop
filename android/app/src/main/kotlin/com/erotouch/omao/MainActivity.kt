@@ -1,4 +1,4 @@
-package com.example.omao_app
+package com.erotouch.omao
 
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine

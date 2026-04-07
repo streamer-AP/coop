@@ -24,6 +24,7 @@ class AccountSecurityScreen extends ConsumerWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
+          automaticallyImplyLeading: false,
           title: const Text(
             '账号与安全',
             style: TextStyle(
@@ -85,7 +86,7 @@ class AccountSecurityScreen extends ConsumerWidget {
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: Divider(
-                height: 24,
+                height: 1,
                 thickness: 0.5,
                 color: Color(0x668988AB),
               ),

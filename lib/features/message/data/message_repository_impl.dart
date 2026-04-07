@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/database/app_database.dart' as db;
+import '../../../core/logging/app_logger.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/database/daos/message_dao.dart';
@@ -34,6 +35,11 @@ class MessageRepositoryImpl implements MessageRepository {
 
       final data = json['data'];
       final payload = _resolveDataList(data);
+      AppLogger().info(
+        '[MessageSync] resolvedPayload: '
+        '${payload == null ? 'null' : 'length=${payload.length}'}, '
+        'rawDataType=${data?.runtimeType}',
+      );
       if (payload == null) {
         return;
       }
@@ -43,8 +49,16 @@ class MessageRepositoryImpl implements MessageRepository {
         final remote = _parseRemoteMessage(item, fallbackTime: requestTime);
         if (remote != null) {
           remoteById[remote.serverId] = remote;
+        } else {
+          AppLogger().warning(
+            '[MessageSync] failed to parse item: $item',
+          );
         }
       }
+
+      AppLogger().info(
+        '[MessageSync] parsed ${remoteById.length}/${payload.length} messages',
+      );
 
       if (remoteById.isEmpty) {
         return;
@@ -126,9 +140,19 @@ class MessageRepositoryImpl implements MessageRepository {
       }
 
       try {
+        AppLogger().info(
+          '[MessageSync] attempt: query=$query',
+        );
         final json = await _apiClient.get(
           ApiEndpoints.messages,
           queryParameters: query,
+        );
+        AppLogger().info(
+          '[MessageSync] response: code=${json['code']}, '
+          'dataType=${json['data']?.runtimeType}, '
+          'message=${json['message']}, '
+          'dataKeys=${json['data'] is Map ? (json['data'] as Map).keys.toList() : 'N/A'}, '
+          'dataLength=${json['data'] is List ? (json['data'] as List).length : 'N/A'}',
         );
         if (_isSuccessCode(json['code'])) {
           return json;

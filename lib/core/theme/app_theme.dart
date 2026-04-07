@@ -50,13 +50,14 @@ class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: true,
         titleTextStyle: TextStyle(
-          color: const Color(0xFF1C1B1F),
+          color: const Color(0xFF000000),
           fontSize: 18,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
+          letterSpacing: 1.8,
           fontFamily: _appChineseFontFamily,
           fontFamilyFallback: _chineseFontFallback,
         ),
-        iconTheme: const IconThemeData(color: Color(0xFF1C1B1F)),
+        iconTheme: const IconThemeData(color: Color(0xFF000000)),
       ),
       tabBarTheme: TabBarThemeData(
         labelColor: AppColors.primary,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_icons.dart';
 
 /// Full-screen QR / barcode scanner.
 /// Returns the scanned string via `Navigator.pop(context, value)`.
@@ -29,11 +30,33 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
+        centerTitle: true,
+        automaticallyImplyLeading: false,
         title: const Text('扫描设备码'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: Center(
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: AppIcons.icon(
+                    AppIcons.arrowLeft,
+                    size: 20,
+                    color: const Color(0xFF000000),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
+        leadingWidth: 56,
       ),
       body: Stack(
         children: [

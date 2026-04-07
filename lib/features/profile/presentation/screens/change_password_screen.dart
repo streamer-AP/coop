@@ -20,6 +20,7 @@ class ChangePasswordScreen extends ConsumerWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
+          automaticallyImplyLeading: false,
           title: const Text(
             '修改方式',
             style: TextStyle(
@@ -147,6 +148,7 @@ class _OriginalPasswordScreenState
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
+          automaticallyImplyLeading: false,
           title: const Text(
             '原密码修改',
             style: TextStyle(

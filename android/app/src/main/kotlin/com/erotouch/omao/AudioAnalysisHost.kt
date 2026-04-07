@@ -1,4 +1,4 @@
-package com.example.omao_app
+package com.erotouch.omao
 
 import android.media.MediaCodec
 import android.media.MediaExtractor
